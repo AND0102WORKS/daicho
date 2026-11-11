@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>発注書</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#F6F5F1;--card:#fff;--ink:#1E2A32;--sub:#55616B;--line:#DAD7CE;--acc:#0F5E63;--ok:#1F6B45;--ok-bg:#E3F0E8;--warn:#A8321A;--warn-bg:#FBE9E4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Yu Gothic UI",system-ui,sans-serif;font-size:14.5px;line-height:1.6}
+.sheet{max-width:760px;margin:16px auto 60px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px 28px 24px}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:.1em}
+.no{color:var(--sub);font-size:13px}
+.hd{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:18px 0;font-size:14px}
+.hd .k{color:var(--sub);font-size:12px}
+.hd .v{font-weight:700}
+.to{font-size:18px;font-weight:700;margin:14px 0 2px}
+table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13.5px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--sub);font-weight:600;background:#FBFAF7}
+td.r,th.r{text-align:right;white-space:nowrap}
+tr.cut td{color:var(--sub);text-decoration:line-through}
+.tot{margin-top:12px;display:flex;justify-content:flex-end;gap:24px;font-size:15px}
+.tot b{font-size:18px}
+.memo{margin-top:16px;padding:12px;background:#FBFAF7;border-radius:8px;white-space:pre-wrap;font-size:13.5px}
+.act{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--line);margin:24px -28px -24px;padding:14px 28px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.act input{flex:1;min-width:160px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:15px}
+.btn{padding:10px 18px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;font-size:15px;font-weight:700}
+.btn.sec{background:var(--card);color:var(--acc)}
+.ok{background:var(--ok-bg);color:var(--ok);padding:10px 14px;border-radius:8px;font-weight:700}
+.err{background:var(--warn-bg);color:var(--warn);padding:12px;border-radius:8px}
+.from{margin-top:22px;font-size:12.5px;color:var(--sub);border-top:1px dashed var(--line);padding-top:10px}
+@media print{ body{background:#fff} .sheet{border:0;margin:0;max-width:none} .act{display:none} }
+</style>
+</head>
+<body>
+<div class="sheet" id="sheet">読み込み中…</div>
+<script>
+const SB_URL='https://stcvyehefqnrxibanlxg.supabase.co', SB_KEY='sb_publishable_ZZelNGtUNXLpXs7j4Nd_zw_XFYwI3fx';
+const sb=window.supabase.createClient(SB_URL,SB_KEY);
+const token=new URLSearchParams(location.search).get('t')||'';
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const yen=v=>'¥'+Math.round(v||0).toLocaleString('ja-JP');
+const WD=['日','月','火','水','木','金','土'];
+const md=s=>s?`${s.slice(0,4)}年${+s.slice(5,7)}月${+s.slice(8,10)}日（${WD[new Date(s.slice(0,10)+'T00:00:00').getDay()]}）`:'—';
+let O=null;
+async function load(){
+  const el=document.getElementById('sheet');
+  if(!token){ el.innerHTML='<div class="err">このページは発注元から送られた専用のリンクで開いてください。</div>'; return; }
+  const {data,error}=await sb.rpc('order_view',{p_token:token});
+  if(error||!data||!data.length){ el.innerHTML='<div class="err">発注書が見つかりません。リンクを確認してください。</div>'; return; }
+  O=data[0]; const ls=O.lines||[];
+  const sub=ls.reduce((a,l)=>a+Math.round((+l.qty||0)*(+l.price||0)),0), tax=Math.round(sub*0.1);
+  const acc=O.st==='承諾'||O.st==='完了'||O.st==='請求済';
+  el.innerHTML=`<h1>発注書</h1><div class="no">No. ${esc(O.order_no||'')}</div>
+    <div class="to">${esc(O.who)} 様</div>
+    <div class="hd">
+      <div><div class="k">現場</div><div class="v">${esc(O.prop)}</div>${O.addr?`<div>${esc(O.addr)}</div>`:''}</div>
+      <div><div class="k">工期</div><div class="v">${md(O.start_date)}${O.end_date&&O.end_date!==O.start_date?`<br>〜 ${md(O.end_date)}`:''}</div></div>
+      <div><div class="k">工事区分</div><div class="v">${esc(O.kind)}</div></div>
+      <div><div class="k">依頼元</div><div class="v">${esc(O.client||'')}</div></div>
+    </div>
+    ${O.naiyo?`<div class="memo">${esc(O.naiyo)}</div>`:''}
+    <table><thead><tr><th>場所</th><th>内容</th><th class="r">数量</th><th>単位</th><th class="r">単価</th><th class="r">金額</th></tr></thead><tbody>
+      ${ls.map(l=>`<tr class="${+l.qty>0?'':'cut'}"><td>${esc(l.spec||'')}</td><td>${esc(l.name)}${l.memo?`<div style="color:var(--sub);font-size:12px">${esc(l.memo)}</div>`:''}</td>
+        <td class="r">${+l.qty||0}</td><td>${esc(l.unit||'式')}</td><td class="r">${yen(l.price)}</td><td class="r">${yen((+l.qty||0)*(+l.price||0))}</td></tr>`).join('')||'<tr><td colspan="6">（明細なし）</td></tr>'}
+    </tbody></table>
+    <div class="tot"><span>税抜 ${yen(sub)}</span><span>消費税 ${yen(tax)}</span><b>税込 ${yen(sub+tax)}</b></div>
+    ${O.memo?`<div class="memo">${esc(O.memo)}</div>`:''}
+    <div class="from">発注元：アンドワークス株式会社　東京都江戸川区　／　この発注書の内容で承諾いただける場合は、下のお名前を入れて「承諾する」を押してください。承諾の日時が発注元に記録されます。</div>
+    <div class="act">${acc?`<span class="ok">承諾済み　${O.accepted_at?new Date(O.accepted_at).toLocaleString('ja-JP'):''}</span>`
+      :`<input id="by" placeholder="お名前" value="${esc(O.who)}"><button class="btn" id="accept">承諾する</button>`}
+      <button class="btn sec" onclick="window.print()">印刷・PDF</button></div>`;
+  const b=document.getElementById('accept');
+  if(b)b.onclick=async()=>{ b.disabled=true; const {error}=await sb.rpc('order_accept',{p_token:token,p_by:document.getElementById('by').value}); if(error){alert('承諾を記録できませんでした：'+error.message); b.disabled=false; return;} load(); };
+}
+load();
+</script>
+</body>
+</html>

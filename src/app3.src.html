@@ -1,0 +1,3083 @@
+<title>Aチーム統合台帳</title>
+<meta name="claude:viewport-fit-sides" content="true">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ground:#F6F5F1; --card:#FFFFFF; --card2:#FBFAF7; --ink:#1E2A32; --sub:#55616B;
+  --line:#DAD7CE; --line2:#ECEAE3; --acc:#0F5E63; --acc-ink:#FFFFFF;
+  --warn:#A8321A; --warn-bg:#FBE9E4; --ok:#1F6B45; --ok-bg:#E3F0E8;
+  --c-step:#E7D8F0; --c-crea:#CFE3EE; --c-buddy:#F3E2C7; --c-pres:#D8E9D4;
+  --c-nz:#F6D9D9; --c-izumi:#E2E4CF; --c-other:#E6E4DD;
+  --gut:max(16px, env(safe-area-inset-left,0px));
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--ground);color:var(--ink);
+  font-family:'Zen Kaku Gothic New',system-ui,sans-serif;-webkit-text-size-adjust:100%}
+body{padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{padding:0 var(--gut) 40px}
+h1,h2,h3,h4{margin:0;font-weight:900;letter-spacing:.01em}
+p{margin:0}
+.note{font-size:12px;color:var(--sub);line-height:1.7;margin-top:8px}
+.top{position:sticky;top:0;z-index:30;background:var(--card);border-bottom:1px solid var(--line);
+  padding:9px var(--gut);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{font-weight:900;font-size:15px;line-height:1.25}
+.brand small{display:block;font-size:11px;color:var(--sub);font-weight:500}
+.tabs{display:flex;gap:2px;flex-wrap:wrap}
+.tabs button{border:none;background:transparent;padding:8px 11px;border-radius:8px;font-weight:700;
+  color:var(--sub);min-height:36px;font-size:13.5px;cursor:pointer;font-family:inherit}
+.tabs button.on{background:var(--acc);color:var(--acc-ink)}
+.src{margin-left:auto;font-size:11px;color:var(--sub);text-align:right;line-height:1.5}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0 10px}
+.bar h2{font-size:17px;margin-right:4px}
+.kpi{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.kpi .k{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 13px;min-width:112px}
+.kpi .k small{display:block;font-size:10.5px;color:var(--sub);margin-bottom:1px}
+.kpi .k b{font-size:17px;font-variant-numeric:tabular-nums}
+select,input,textarea{font-family:inherit;font-size:13.5px;color:var(--ink)}
+select,input[type=text],input[type=search],input[type=number],input[type=date],input[type=month]{
+  height:36px;border:1.5px solid var(--line);border-radius:8px;padding:0 9px;background:var(--card)}
+input[type=number]{text-align:right;font-variant-numeric:tabular-nums;
+  appearance:textfield;-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+@keyframes chgflash{0%{background:#FDE9A9}70%{background:#FDF3D4}100%{background:transparent}}
+table.ln tr.chg td{animation:chgflash 1.6s ease-out}
+label.fl{display:block;font-size:11px;color:var(--sub);font-weight:700;margin:0 0 3px}
+.btn{height:36px;padding:0 13px;border-radius:8px;border:1.5px solid var(--ink);background:var(--card);
+  font-weight:700;font-size:13.5px;cursor:pointer;font-family:inherit;color:var(--ink)}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.btn.small{height:30px;padding:0 9px;font-size:12.5px;border-color:var(--line)}
+.btn.danger{border-color:var(--warn);color:var(--warn)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.tw{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--card);max-height:70vh}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+thead th{position:sticky;top:0;z-index:2;background:var(--card2);text-align:left;padding:8px 9px;
+  font-size:11.5px;color:var(--sub);border-bottom:1px solid var(--line);white-space:nowrap}
+tbody td{padding:7px 9px;border-bottom:1px solid var(--line2);vertical-align:middle;white-space:nowrap}
+tbody tr:hover td{background:var(--card2)}
+tbody tr.on td{background:var(--ok-bg)}
+td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+.cl{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.st{display:inline-block;padding:1px 8px;border-radius:6px;font-size:11.5px;font-weight:700;
+  background:var(--line2);white-space:nowrap}
+.st.done{background:var(--ok-bg);color:var(--ok)}
+.st.wip{background:#FFF1D6}
+.st.new{background:var(--warn-bg);color:var(--warn)}
+.flag{display:inline-block;font-size:10.5px;font-weight:700;color:var(--warn);background:var(--warn-bg);
+  border-radius:4px;padding:0 5px;margin-right:3px}
+/* board */
+.boardwrap{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--card);max-height:72vh}
+table.bd{font-size:12px;table-layout:fixed;--col:86px;--slot:30px;--slots:1}
+table.bd th,table.bd td{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:0;vertical-align:top;overflow:hidden}
+table.bd thead th{padding:4px 2px;text-align:center;width:var(--col);font-size:11px}
+table.bd thead th b{font-size:13px;color:var(--ink)}
+table.bd thead th small{display:block;font-size:10px;font-weight:400;color:var(--sub)}
+table.bd thead th.sat{background:#EAF1F6}table.bd thead th.sun{background:#F8EDED}
+table.bd thead th.nm,table.bd tbody th.nm{width:112px}
+table.bd tbody th.nm{position:sticky;left:0;z-index:3;background:var(--ground);text-align:left;
+  padding:6px 8px;font-weight:700;min-width:104px;width:104px;border-right:1px solid var(--line);font-size:12.5px}
+table.bd tbody th.nm small{display:block;font-weight:400;color:var(--sub);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td.c{width:var(--col);height:calc(var(--slots) * var(--slot) + 6px);padding:2px;position:relative}
+table.bd th.sm,table.bd td.sm{width:54px;text-align:center;background:var(--ground);font-weight:700}
+.more{position:absolute;right:3px;bottom:2px;font-size:10px;font-weight:700;color:var(--warn);background:var(--warn-bg);border-radius:4px;padding:0 4px;line-height:1.5}
+td.c.off{background:repeating-linear-gradient(135deg,#F1EFEA,#F1EFEA 5px,#E8E5DE 5px,#E8E5DE 10px)}
+td.c.ok{outline:2px dashed var(--acc);outline-offset:-2px;background:var(--card2)}
+td.c.ng{outline:2px dashed var(--warn);outline-offset:-2px;background:var(--warn-bg)}
+.chip{display:block;width:100%;text-align:left;border:none;border-radius:6px;padding:2px 4px;
+  height:calc(var(--slot) - 2px);margin-bottom:2px;overflow:hidden;
+  font-family:inherit;font-size:11px;line-height:1.3;cursor:grab;color:var(--ink)}
+.chip.sel{outline:2px solid var(--ink);outline-offset:-2px}
+.chip.drag{opacity:.35}
+.chip .p{display:block;font-weight:700;font-size:10.5px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip .y{display:block;font-size:9.5px;line-height:1.25;color:var(--sub);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.legend{display:flex;gap:11px;flex-wrap:wrap;font-size:12px;color:var(--sub);margin-bottom:9px;align-items:center}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+/* 工程を組む */
+.cases{flex:0 0 290px;width:290px;max-height:72vh;overflow:auto;display:flex;flex-direction:column;gap:5px}
+.ci{flex:0 0 auto;display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);
+  border-radius:9px;padding:7px 9px;font-family:inherit;cursor:pointer;color:var(--ink)}
+.ci.sel{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc) inset}
+.ci b{display:block;font-size:12.5px;margin:3px 0 1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ci small{display:block;font-size:11px;color:var(--sub)}
+.ci .nf{color:var(--warn);font-weight:700}
+td.pc{width:var(--col);height:42px;padding:2px;cursor:pointer}
+td.pc.off{background:repeating-linear-gradient(135deg,#F1EFEA,#F1EFEA 5px,#E8E5DE 5px,#E8E5DE 10px)}
+td.pc.busy{background:#FBEFE6}
+td.pc.ok{outline:2px dashed var(--acc);outline-offset:-2px;background:var(--card2)}
+td.pc.ng{outline:2px dashed var(--warn);outline-offset:-2px;background:var(--warn-bg)}
+.chip.pc .y{font-size:10px}
+.kneed{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+.kk{border:1px solid var(--line);border-radius:999px;padding:3px 11px;font-size:12px;font-weight:700;
+  font-family:inherit;color:var(--ink);cursor:pointer}
+.kk.on{opacity:.55;cursor:default}
+@media (max-width:980px){.cases{flex:1 1 auto;width:100%;max-height:260px}}
+/* 工事管理の日程表 */
+.kenrow{display:flex;gap:3px;flex-wrap:wrap}
+.kd{flex:1 1 34px;min-width:34px;border:1px solid var(--line2);border-radius:6px;padding:3px 2px;
+  text-align:center;background:var(--card2)}
+.kd.we{background:#F2F0EA}
+.kd.has{background:var(--ok-bg);border-color:var(--ok)}
+.kd b{display:block;font-size:12px}
+.kd small{display:block;font-size:9.5px;color:var(--sub)}
+.kd span{display:block;font-size:13px;font-weight:900;color:var(--ok);min-height:17px}
+/* drawer */
+.layout{display:flex;gap:12px;align-items:flex-start}
+.layout .main{flex:1;min-width:0}
+.drawer{width:380px;flex:0 0 380px;position:sticky;top:62px;max-height:calc(100vh - 76px);overflow:auto;
+  background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.drawer h3{font-size:15px;margin-bottom:2px}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.fg .full{grid-column:1/-1}
+.fg input,.fg select{width:100%}
+.pl{margin-top:12px;border-top:1px solid var(--line2);padding-top:10px}
+.prow{display:grid;grid-template-columns:58px 1fr 118px 14px 118px 84px 26px;gap:5px;align-items:center;margin-bottom:5px}
+.prow .tl{text-align:center;color:var(--sub);font-size:12px}
+.prow.np{grid-template-columns:70px 1fr 128px 14px 128px 26px}
+.chip .cont{display:inline-block;font-size:9.5px;color:var(--sub);margin-left:3px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .h{font-size:11px;font-weight:700;color:var(--sub);text-align:center;padding:2px 0}
+.cal .d{min-height:88px;border:1px solid var(--line2);border-radius:8px;background:var(--card);padding:4px 5px}
+.cal .d.we{background:#F7F5F0}.cal .d.out{opacity:.35}.cal .d.today{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.cal .d b{display:block;font-size:12px;margin-bottom:3px}.cal .d b small{font-weight:400;color:var(--sub);margin-left:3px}
+.cal .ev{display:block;width:100%;text-align:left;border:none;border-radius:5px;padding:2px 4px;margin-bottom:2px;
+  font-size:11px;line-height:1.3;cursor:pointer;font-family:inherit;color:var(--ink)}
+.cal .ev .w{display:block;font-size:10px;color:var(--sub)}
+.cal .ev.nd{background:var(--warn-bg);color:var(--warn)}
+.cal .d .flag{margin-top:2px}
+.pending{outline:2px dashed var(--acc);outline-offset:-2px}
+.prow select,.prow input{height:32px;font-size:12.5px;width:100%;padding:0 6px}
+.prow .x{border:none;background:none;color:var(--warn);font-weight:900;cursor:pointer;font-size:15px;padding:0}
+.tot{display:flex;justify-content:space-between;font-size:13px;padding:3px 0}
+.tot b{font-variant-numeric:tabular-nums}
+.tip{position:fixed;z-index:90;pointer-events:none;background:var(--ink);color:var(--ground);
+  border-radius:9px;padding:8px 11px;font-size:12px;line-height:1.55;max-width:320px;
+  box-shadow:0 12px 32px rgba(30,42,50,.34)}
+.tip b{display:block;font-size:13.5px;margin-bottom:3px;line-height:1.35}
+.tip .s{color:#BFCBD1}
+.tip .w{color:#BFCBD1;margin-top:3px;display:block}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--ground);
+  padding:9px 15px;border-radius:9px;font-size:13px;z-index:70;display:flex;gap:12px;align-items:center;
+  box-shadow:0 8px 28px rgba(30,42,50,.3)}
+.toast button{background:none;border:none;color:var(--ground);text-decoration:underline;font-weight:700;
+  cursor:pointer;font-family:inherit;font-size:13px}
+.ask{position:fixed;inset:0;z-index:80;background:rgba(30,42,50,.34);display:flex;align-items:center;
+  justify-content:center;padding:16px}
+.askbox{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:380px;width:100%;
+  padding:16px;box-shadow:0 18px 50px rgba(30,42,50,.22)}
+.askbox h4{margin:0 0 6px;font-size:15px}
+.askbox ul{margin:0 0 14px;padding-left:18px;font-size:13px;color:var(--warn);line-height:1.7}
+.askbtn{display:flex;gap:8px;justify-content:flex-end}
+.ck{border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:8px;padding:9px 11px;
+  background:var(--card);margin-bottom:7px}
+.ck .t{display:inline-block;font-size:10.5px;font-weight:700;color:var(--warn);background:var(--warn-bg);
+  border-radius:4px;padding:1px 6px;margin-right:6px}
+.ck .d{font-size:12px;color:var(--sub);margin-top:3px;line-height:1.6}
+.day{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:10px 12px;margin-bottom:8px}
+.day h4{font-size:13px;margin-bottom:6px}
+.day .it{display:flex;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line2);font-size:12.5px}
+.day .it:first-of-type{border-top:none}
+.grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 発注 */
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:none;background:var(--card);padding:0 13px;height:36px;font-weight:700;font-size:13.5px;
+  font-family:inherit;color:var(--sub);cursor:pointer}
+.seg button.on{background:var(--acc);color:var(--acc-ink)}
+.lnw{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--card);max-height:68vh}
+table.ln{font-size:12.5px;min-width:1260px}
+table.ln tbody td{padding:4px 6px}
+table.ln input,table.ln select{height:30px;font-size:12.5px;padding:0 6px;width:100%}
+table.ln input[type=checkbox]{width:16px;height:16px;padding:0;accent-color:var(--acc)}
+table.ln td.n{width:30px;text-align:center}
+table.ln th.nmcol,table.ln td.nmcol{min-width:230px}
+table.ln .x{border:none;background:none;color:var(--warn);font-weight:900;cursor:pointer;font-size:15px;padding:0}
+table.ln .x.pk{color:var(--sub);font-weight:600;font-size:11px;margin-left:3px;border:1px solid var(--line);border-radius:4px;padding:1px 4px;vertical-align:middle}
+table.ln .x.pk:hover{color:var(--ink);border-color:var(--ink)}
+table.ln tr.ghead td{background:#F3EFE7;border-top:2px solid var(--line);padding:6px 8px}
+table.ln td.rn{color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;padding-right:4px}
+.ocol{display:inline-flex;gap:6px;flex-wrap:wrap;margin-left:6px}
+.ocell{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:12px;cursor:pointer}
+.ocell:hover{border-color:var(--ink)}
+table.ln tr.ghead+tr td{border-top:none}
+.selbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--ok-bg);border:1px solid var(--ok);
+  border-radius:9px;padding:8px 12px;margin:0 0 8px;font-size:13px;position:sticky;top:6px;z-index:5;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.selbar b{font-variant-numeric:tabular-nums}
+.empty{text-align:center;color:var(--sub);padding:26px 14px;font-size:13px;line-height:1.9}
+.cutbox{margin-bottom:10px;background:var(--warn-bg);border-color:#E7BCB0}
+.cutbox h3{color:var(--warn)}
+.cutbox td{text-decoration:line-through;text-decoration-color:#C9907F}
+.cutbox td.note{text-decoration:none}
+table.ln tr.cutln{background:var(--warn-bg)}
+table.ln tr.cutln .li{color:var(--sub);background:transparent;border-color:#E7BCB0}
+table.ln tr.cutln td.nmcol .li{text-decoration:line-through;text-decoration-color:#C9907F}
+.cutbadge{background:#C9907F;white-space:nowrap}
+.lnk{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.dwsec{display:flex;align-items:baseline;gap:8px;padding:6px 0 2px;border-bottom:1px solid var(--line);font-size:13px}
+/* 工程表の旗 */
+.ftag{display:inline-block;font-size:10px;line-height:1;padding:3px 9px 3px 6px;color:#fff;font-weight:700;white-space:nowrap;
+  clip-path:polygon(0 0,100% 0,86% 50%,100% 100%,0 100%);border-radius:2px 0 0 2px;margin:2px 0 0;vertical-align:middle}
+.ftag.r{background:#C8372D}.ftag.b{background:#2F6DB5}.ftag.y{background:#E0A800;color:#2B2B2B}
+.ftag.off{background:#D5D1C9;color:#fff}
+table.bd th .ftag{display:block;margin:3px auto 0;width:max-content}
+table.bd th.fd-r,table.bd td.fd-r{box-shadow:inset 3px 0 0 #C8372D;background:#FBECEA}
+table.bd th.fd-b,table.bd td.fd-b{box-shadow:inset 3px 0 0 #2F6DB5;background:#E8F0FA}
+table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#FBF3D6}
+.flagline{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;font-size:12.5px}
+.flagline .fi{display:inline-flex;gap:6px;align-items:center}
+.fdot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:2px;vertical-align:middle}
+.btn .cnt{display:inline-block;min-width:16px;padding:0 5px;margin-left:5px;border-radius:9px;background:rgba(255,255,255,.28);font-size:10.5px;line-height:16px;text-align:center}
+.fdot.r{background:#C8372D}.fdot.b{background:#2F6DB5}.fdot.y{background:#E0A800}
+.ob{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:640px;width:100%;
+  padding:22px 24px;max-height:86vh;overflow:auto;box-shadow:0 18px 50px rgba(30,42,50,.22)}
+.ob h3{font-size:18px;text-align:center;letter-spacing:.34em;margin-bottom:16px}
+.ob .meta{display:grid;grid-template-columns:82px 1fr;gap:3px 10px;font-size:12.5px;margin-bottom:12px;line-height:1.6}
+.ob .meta b{color:var(--sub);font-weight:700}
+.ob table{font-size:12.5px;margin-bottom:10px}
+.ob .amt{text-align:right;font-size:15px;font-weight:900;font-variant-numeric:tabular-nums;margin:0}
+.dlg{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:470px;width:100%;
+  padding:18px;max-height:88vh;overflow:auto;box-shadow:0 18px 50px rgba(30,42,50,.22)}
+.dlg h4{margin:0 0 10px;font-size:15px}
+.dlg textarea{width:100%;height:168px;border:1.5px solid var(--line);border-radius:8px;padding:8px;
+  font-size:12.5px;line-height:1.7;font-family:ui-monospace,SFMono-Regular,monospace;color:var(--ink)}
+@media (max-width:980px){
+  .layout{flex-direction:column}
+  .drawer{width:100%;flex:1 1 auto;position:static;max-height:none}
+}
+</style>
+<div class="top">
+  <div class="brand">Aチーム統合台帳 <small>案件管理 ＋ 完工予定 ＋ スケジュール管理 を1つに／テストモデル v3</small></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="src" id="src"></div>
+</div>
+<div class="wrap"><div id="main"></div></div>
+<script>
+const M = /*__MODEL__*/;
+/* ================= state ================= */
+const KEY='aw-ledger-v3';
+let DB=null, undoStack=[];
+let reseeded=false;
+function load(){
+  try{const s=localStorage.getItem(KEY);
+    if(s){const d=JSON.parse(s);
+      if(d&&d.seed===M.seed){DB=d; migrate(); return;}
+      reseeded=!!d;   // 元データが入れ替わったので、保存してあった分は捨てる
+    }}catch(e){}
+  reset(true);
+}
+function migrate(){
+  if(!DB.clients)DB.clients=JSON.parse(JSON.stringify(M.clients));
+  if(!DB.vendors)DB.vendors=JSON.parse(JSON.stringify(M.vendors));
+  if(DB.terms){ // 旧版で請求タブから直した締日を引き継ぐ
+    Object.entries(DB.terms).forEach(([k,v])=>{const c=DB.clients.find(x=>x.name===k);
+      if(c){c.close=v.close;c.site=v.site;}});
+    delete DB.terms;
+  }
+  if(!DB.basis)DB.basis='完工';
+  DB.seed=M.seed;
+  DB.cases.forEach(c=>{ if(!c.ord)c.ord='済'; });
+  if(!DB.recv)DB.recv={};
+  if(!DB.off){ DB.off={}; Object.keys(M.off||{}).forEach(nm=>{ DB.off[nm]={'2026-10':(M.off[nm]||[]).slice()}; }); }
+  if(!DB.paid)DB.paid={};
+  if(!DB.lines)DB.lines=[];
+  if(!DB.orders)DB.orders=[];
+  if(DB.lseq==null)DB.lseq=0;
+  if(DB.oseq==null)DB.oseq=0;
+  if(!DB.prices)DB.prices=[];
+  if(DB.prseq==null)DB.prseq=0;
+  /* 運用中フラグ：元データで発注(未)だった分＝いま生きている現場。過去の完工案件は false */
+  if(DB.cases.some(c=>c.live==null)){
+    const LIVE=new Set(M.cases.filter(c=>(c.ord||'未')==='未').map(c=>c.id));
+    DB.cases.forEach(c=>{ if(c.live==null)c.live=LIVE.has(c.id)||!!c.recv; });
+  }
+  /* 備考に入っていた「希望 11/15」「起算 11/15」を、希望日・起算日の欄に移す */
+  if(DB.cases.some(c=>c.want==null||c.kisan==null)){
+    const pick=(t,lab)=>{
+      const m=new RegExp(lab+'[\\s　]*(\\d{1,2})[月\\/](\\d{1,2})').exec(String(t||''));
+      if(!m)return '';
+      const mo=+m[1], dd=+m[2];
+      if(!(mo>=1&&mo<=12&&dd>=1&&dd<=31))return '';
+      return `${mo>=5?2026:2027}-${String(mo).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+    };
+    DB.cases.forEach(c=>{
+      if(c.want==null)c.want=pick(c.memo,'希望');
+      if(c.kisan==null)c.kisan=pick(c.memo,'起算');
+    });
+  }
+  /* 発注書の「鍵交換」「設備保証」チェック。備考に入っている分を欄に起こす */
+  DB.cases.forEach(c=>{
+    if(c.keyx==null)c.keyx=/鍵交換/.test(String(c.memo||''))?'有':'';
+    if(c.warr==null)c.warr=/設備保証/.test(String(c.memo||''))?'有':'';
+  });
+}
+function reset(quiet){
+  DB={cases:JSON.parse(JSON.stringify(M.cases)).map(c=>Object.assign(c,{live:(c.ord||'未')==='未'})),
+      procs:JSON.parse(JSON.stringify(M.procs)),
+      seed:M.seed,
+      clients:JSON.parse(JSON.stringify(M.clients)),
+      vendors:JSON.parse(JSON.stringify(M.vendors)),basis:'完工',
+      recv:{},paid:{},lines:[],orders:[],prices:[],lseq:0,oseq:0,prseq:0,
+      seq:M.cases.length,pseq:M.procs.length};
+  migrate();
+  if(!quiet){save();render();toast('元データに戻した');}
+}
+/* ===== 保存：Artifact のデータベース（共有）が正。localStorage はこの端末の控え =====
+   複数人で同時に使うので、レコード（案件・工程・明細・発注）ごとに更新時刻 _u を持ち、
+   保存前に共有側を読んでレコード単位で新しい方を残す。消したものは tomb（墓標）に残して復活を防ぐ。
+   1 doc は 256KB までなので、id のハッシュで固定のかたまりに分ける（並び順が変わっても同じ doc に入る）。 */
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
+  /* 変更の印（_u）と消した印（墓標）は保存のたびに即つける。書き込みだけ少し遅らせる。
+     遅らせている間に他の端末の保存が届いても、消した行が戻ったり新しい行が「既知」扱いになったりしない */
+  if(LDB){ try{ const d=stampChanges(); d.forEach(x=>dirtySet.add(x)); alog('save',[...d].join(',')+' tomb='+Object.keys(DB.tomb||{}).length); }catch(e){ alog('save ERR',e&&e.message); } }
+  dbSaveSoon();
+}
+const dirtySet=new Set();
+/* 診断ログ（この端末の localStorage に最新80件）。マスタ画面の #admin で見られる */
+const AWLOG=(()=>{try{return JSON.parse(localStorage.getItem('aw-log')||'[]');}catch(e){return [];}})();
+function alog(ev,x){ try{ AWLOG.push([new Date().toISOString().slice(5,19),DEV,ev,x==null?'':String(x).slice(0,160)]); while(AWLOG.length>80)AWLOG.shift(); localStorage.setItem('aw-log',JSON.stringify(AWLOG)); }catch(e){} }
+/* 書き込み済みの各docの t。自分の書き込みの反射（同じ t）は取り込まない */
+const wroteT={};
+const LCOL='ledger', FMT=2, NC=8, NP=8, NL=4;
+let LDB=null, dbSaveTimer=null, dbBusy=false, dbDirty=false, dbState='', dbSubs=[], recLast={}, metaLast='';
+/* この端末が一度でも見たレコード id（コレクション別）。手元から消えたら墓標を立てる根拠。recLast とは別に持つ */
+const known={cases:new Set(),procs:new Set(),lines:new Set(),orders:new Set()};
+const knowAll=()=>Object.keys(COLS).forEach(c=>(DB[c]||[]).forEach(r=>{ if(r&&r.id)known[c].add(r.id); }));
+/* この端末の印。新しく作る id の末尾に付けて、他の端末と id がぶつからないようにする */
+const DEV=(()=>{try{let d=localStorage.getItem('aw-dev'); if(!d){d='-'+Math.random().toString(36).slice(2,5); localStorage.setItem('aw-dev',d);} return d;}catch(e){return '-'+Math.random().toString(36).slice(2,5);}})();
+const hid=(id,n)=>{let h=0; const t=String(id); for(let i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))>>>0; return h%n;};
+const COLS={cases:['cases',NC],procs:['procs',NP],lines:['lines',NL],orders:['orders',1]};
+const docName=(c,k)=>c+'2_'+k;
+/* _u を除いた中身の指紋（変わったかどうかの判定用） */
+const sig=r=>{const o={}; Object.keys(r).forEach(k=>{if(k!=='_u')o[k]=r[k];}); return JSON.stringify(o);};
+/* 変わったレコードに _u を打ち、消えたレコードを墓標に入れる。戻り値＝書き直す doc 名 */
+function stampChanges(){
+  const dirty=new Set(); const now=Date.now(); DB.tomb=DB.tomb||{};
+  Object.keys(COLS).forEach(c=>{const [nm,n]=COLS[c]; const arr=DB[c]||[]; const seen=new Set();
+    arr.forEach(r=>{ if(!r.id)return; seen.add(r.id); const k=c+':'+r.id, sg=sig(r);
+      known[c].add(r.id);
+      if(recLast[k]!==sg){ r._u=now; if(DB.tomb[r.id])delete DB.tomb[r.id];   /* 戻した・作り直した分は墓標から外す */
+        recLast[k]=sg; dirty.add(docName(nm,hid(r.id,n))); } });
+    known[c].forEach(id=>{ if(!seen.has(id)){ DB.tomb[id]=now; known[c].delete(id); delete recLast[c+':'+id]; dirty.add(docName(nm,hid(id,n))); } });
+  });
+  /* 90日より古い墓標は捨てる */
+  Object.keys(DB.tomb).forEach(id=>{ if(now-DB.tomb[id]>90*86400000)delete DB.tomb[id]; });
+  const m=metaObj(); const ms=JSON.stringify(m); if(ms!==metaLast){dirty.add('meta'); }
+  return dirty;
+}
+function metaObj(){
+  return {fmt:FMT,seed:DB.seed,basis:DB.basis,recv:DB.recv||{},paid:DB.paid||{},off:DB.off||{},
+    vendors:DB.vendors||[],clients:DB.clients||[],prices:DB.prices||[],
+    seq:DB.seq,pseq:DB.pseq,lseq:DB.lseq||0,oseq:DB.oseq||0,prseq:DB.prseq||0,tomb:DB.tomb||{}};
+}
+/* 共有側のレコード群を手元に合流させる。新しい _u が勝つ。墓標より古いものは消える。戻り値＝手元が変わったか */
+function mergeInto(c,remoteArr){
+  const tomb=DB.tomb||{}; const arr=DB[c]||[]; const local=new Map(arr.map(r=>[r.id,r]));
+  let changed=false; const add=[];
+  (remoteArr||[]).forEach(r=>{ if(!r||!r.id)return;
+    if(tomb[r.id]&&tomb[r.id]>=(r._u||0))return;              /* こちらで消した */
+    const l=local.get(r.id);
+    if(!l){ add.push(r); known[c].add(r.id); changed=true; }
+    else if((r._u||0)>(l._u||0)&&sig(r)!==sig(l)){ Object.keys(l).forEach(k=>delete l[k]); Object.assign(l,r); changed=true; }
+    else if((r._u||0)>(l._u||0)) l._u=r._u;
+  });
+  if(add.length){ if(c==='cases')DB[c]=add.concat(arr); else DB[c]=arr.concat(add); }
+  return changed;
+}
+/* 共有側の墓標を取り込む：相手が消したものを手元からも消す */
+function mergeTomb(remoteTomb){
+  if(!remoteTomb)return false; DB.tomb=DB.tomb||{}; let changed=false;
+  Object.keys(remoteTomb).forEach(id=>{ if(!(DB.tomb[id]>=remoteTomb[id]))DB.tomb[id]=remoteTomb[id]; });
+  Object.keys(COLS).forEach(c=>{ const arr=DB[c]||[]; const keep=arr.filter(r=>!(DB.tomb[r.id]&&DB.tomb[r.id]>=(r._u||0)));
+    if(keep.length!==arr.length){ DB[c]=keep; changed=true; } });
+  return changed;
+}
+function mergeMeta(rm){
+  if(!rm)return false; let changed=false;
+  ['seq','pseq','lseq','oseq','prseq'].forEach(k=>{ if((+rm[k]||0)>(+DB[k]||0)){DB[k]=+rm[k]; changed=true;} });
+  if(mergeTomb(rm.tomb))changed=true;
+  /* マスタ・入金・休み・計上基準は「新しく保存した方」を採る */
+  if(rm.savedAt&&(!DB.metaAt||rm.savedAt>DB.metaAt)){
+    ['basis','recv','paid','off','vendors','clients','prices'].forEach(k=>{ if(rm[k]!==undefined&&JSON.stringify(rm[k])!==JSON.stringify(DB[k])){DB[k]=rm[k]; changed=true;} });
+    DB.metaAt=rm.savedAt;
+  }
+  return changed;
+}
+const snapData=s=>(s&&s.exists===false)?null:((s&&typeof s.data==='function')?s.data():((s&&s.data)||null));
+function dbSaveSoon(){ dbDirty=true; clearTimeout(dbSaveTimer); dbSaveTimer=setTimeout(dbSaveNow,600); }
+async function dbSaveNow(){
+  if(!LDB||!dbDirty)return;
+  if(dbBusy){ dbSaveSoon(); return; }
+  dbBusy=true; dbDirty=false; let remoteChanged=false; let dirty=new Set();
+  try{
+    dirty=stampChanges(); dirtySet.forEach(d=>dirty.add(d)); dirtySet.clear(); const col=LDB.collection(LCOL);
+    const names=[...dirty].filter(n=>n!=='meta').sort();
+    for(const nm of names){
+      const [c,k]=nm.split('2_'); const n=COLS[c][1];
+      const ref=col.doc(nm); const cur=snapData(await ref.get());
+      if(cur&&cur.a&&mergeInto(c,cur.a))remoteChanged=true;
+      const part=(DB[c]||[]).filter(r=>hid(r.id,n)===+k);
+      part.forEach(r=>{recLast[c+':'+r.id]=sig(r);});
+      const t=Date.now(); wroteT[nm]=t;
+      try{ await ref.set({a:part,t}); alog('set '+nm,part.length+'件'); }catch(e){ alog('set ERR '+nm,(e&&e.code)+' '+(e&&e.message)); throw e; }
+    }
+    if(dirty.has('meta')){
+      const ref=col.doc('meta'); const cur=snapData(await ref.get());
+      if(cur&&mergeMeta(cur))remoteChanged=true;
+      const m=metaObj(); m.savedAt=new Date().toISOString(); DB.metaAt=m.savedAt;
+      try{ await ref.set(m); alog('set meta','tomb='+Object.keys(m.tomb||{}).length); }catch(e){ alog('set ERR meta',(e&&e.code)+' '+(e&&e.message)); throw e; }
+      metaLast=JSON.stringify(metaObj());
+    }
+    if(names.length||dirty.has('meta'))dbState='保存した '+new Date().toTimeString().slice(0,5);
+  }catch(e){
+    dbDirty=true; try{ dirty.forEach(d=>dirtySet.add(d)); }catch(_){ }
+    dbState='保存できていない：'+String((e&&e.code)||(e&&e.message)||e);
+    toast('共有保存に失敗した（'+String((e&&e.code)||e)+'）。この端末には残っている');
+  }finally{ dbBusy=false; }
+  const el=document.getElementById('dbState'); if(el)el.textContent=dbState;
+  if(remoteChanged){ try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){} renderIdle(); }
+}
+/* 消した行を共有保存からも直接消す（合流ロジックを通さない保険）。墓標も meta に直接足す */
+async function purgeShared(c,ids){
+  if(!LDB||!ids||!ids.length)return;
+  const [nm,n]=COLS[c]; const col=LDB.collection(LCOL); const set=new Set(ids); const now=Date.now();
+  DB.tomb=DB.tomb||{}; ids.forEach(id=>{ DB.tomb[id]=now; known[c].delete(id); delete recLast[c+':'+id]; });
+  const ks=[...new Set(ids.map(id=>hid(id,n)))];
+  try{
+    for(const k of ks){ const ref=col.doc(docName(nm,k)); const cur=snapData(await ref.get()); if(!cur||!cur.a)continue;
+      const a=cur.a.filter(r=>!(r&&set.has(r.id))); if(a.length===cur.a.length)continue;
+      const t=Date.now(); wroteT[docName(nm,k)]=t; await ref.set({a,t}); alog('purge '+docName(nm,k),(cur.a.length-a.length)+'件消した'); }
+    const mref=col.doc('meta'); const cm=snapData(await mref.get());
+    if(cm){ cm.tomb=cm.tomb||{}; ids.forEach(id=>{ cm.tomb[id]=now; }); await mref.set(cm); alog('purge meta','tomb='+Object.keys(cm.tomb).length); }
+  }catch(e){ alog('purge ERR',(e&&e.code)+' '+(e&&e.message)); toast('共有保存から消せなかった（'+String((e&&e.code)||e)+'）'); }
+}
+/* 他の人の変更を取り込んだあとの再描画。入力中なら手を止めるまで待つ */
+let idleTimer=null;
+function renderIdle(){
+  clearTimeout(idleTimer);
+  const a=document.activeElement, typing=a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!a.closest('.ask');
+  if(typing||document.querySelector('.ask')){ idleTimer=setTimeout(renderIdle,3000); return; }
+  render();
+}
+function rememberAll(){
+  recLast={}; Object.keys(COLS).forEach(c=>(DB[c]||[]).forEach(r=>{ if(r.id)recLast[c+':'+r.id]=sig(r); }));
+  knowAll();
+  metaLast=JSON.stringify(metaObj());
+}
+/* 起動時：共有保存を読む。無ければこの端末の分を共有に移す（最初の1回だけ）。古い形式（fmt1）なら読んで新形式で書き直す */
+async function dbLoad(){
+  if(!LDB)return;
+  const col=LDB.collection(LCOL);
+  const snap=await (typeof col.get==='function'?col.get():typeof col.getDocs==='function'?col.getDocs():typeof col.list==='function'?col.list():Promise.reject(new Error('collection に get が無い')));
+  const arr=Array.isArray(snap)?snap:((snap&&(snap.docs||snap.documents||snap.items))||[]);
+  const got={}; arr.forEach(d=>{const data=snapData(d); if(d&&d.id&&data)got[d.id]=data;});
+  const meta=got.meta;
+  if(meta&&meta.seed===M.seed){
+    const local=DB;
+    if(meta.fmt===FMT){
+      DB={cases:[],procs:[],lines:[],orders:[],seed:meta.seed,basis:meta.basis,recv:meta.recv||{},paid:meta.paid||{},off:meta.off||{},
+          vendors:meta.vendors||[],clients:meta.clients||[],prices:meta.prices||[],tomb:meta.tomb||{},metaAt:meta.savedAt||'',
+          seq:meta.seq,pseq:meta.pseq,lseq:meta.lseq||0,oseq:meta.oseq||0,prseq:meta.prseq||0};
+      /* 墓標（誰かが消した印）より古いレコードは読まない。他の端末が消す前の状態を書き戻していても復活させない */
+      const tb=DB.tomb||{}; const seenId={};
+      Object.keys(COLS).forEach(c=>{const [nm,n]=COLS[c]; for(let k=0;k<n;k++){const d=got[docName(nm,k)]; if(d&&d.a)d.a.forEach(r=>{
+        if(!r||!r.id)return; if(tb[r.id]&&tb[r.id]>=(r._u||0))return; if(seenId[c+':'+r.id])return; seenId[c+':'+r.id]=1; DB[c].push(r);});}});
+      /* 案件は新しいものが上に来るように（_u が無いもの＝元データは元の並び） */
+      DB.cases.sort((x,y)=>(y._u||0)-(x._u||0));
+      migrate(); rememberAll();
+      dbState='共有保存を読んだ（'+(meta.savedAt?meta.savedAt.slice(0,16).replace('T',' '):'')+'）';
+      alog('load fmt2','docs='+Object.keys(got).length+' lines='+DB.lines.length+' tomb='+Object.keys(DB.tomb).length);
+    }else{
+      /* fmt1（分割が並び順）→ 読んで fmt2 で書き直す */
+      const cases=[],procs=[];
+      for(let i=0;i<(meta.nCases||0);i++)(got['cases_'+i]&&got['cases_'+i].a||[]).forEach(x=>cases.push(x));
+      for(let i=0;i<(meta.nProcs||0);i++)(got['procs_'+i]&&got['procs_'+i].a||[]).forEach(x=>procs.push(x));
+      DB={cases,procs,seed:meta.seed,basis:meta.basis,recv:meta.recv||{},paid:meta.paid||{},off:meta.off||{},
+          vendors:meta.vendors||[],clients:meta.clients||[],prices:meta.prices||[],tomb:{},
+          seq:meta.seq,pseq:meta.pseq,lseq:meta.lseq||0,oseq:meta.oseq||0,prseq:meta.prseq||0,
+          lines:(got.lines&&got.lines.a)||[],orders:(got.orders&&got.orders.a)||[]};
+      migrate(); recLast={}; metaLast='';
+      dbDirty=true; await dbSaveNow();
+      dbState='共有保存を新しい形式に直した';
+    }
+    try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
+    if(local&&JSON.stringify(local.cases.map(c=>c.id).sort())!==JSON.stringify(DB.cases.map(c=>c.id).sort()))toast('共有保存のデータに切り替えた（この端末の分とは別）');
+  }else{
+    /* 共有保存がまだ無い：いま開いている端末のデータを正として写す */
+    alog('load NONE','docs='+Object.keys(got).length+' meta='+(meta?'seed違い':'無し'));
+    recLast={}; metaLast=''; DB.tomb={};
+    dbDirty=true; await dbSaveNow();
+    if(!/失敗|できていない/.test(dbState))toast('この端末のデータを共有保存に移した。他の端末でも同じものが見える');
+  }
+  undoStack.length=0; lastSnapKey=null;
+  render();
+  dbSubscribe();
+}
+/* 他の人の保存を受け取る。自分の書き込みの反射（hasPendingWrites）は無視 */
+function dbSubscribe(){
+  if(!LDB||dbSubs.length)return;
+  const col=LDB.collection(LCOL);
+  const names=[]; Object.keys(COLS).forEach(c=>{const [nm,n]=COLS[c]; for(let k=0;k<n;k++)names.push([c,docName(nm,k)]);});
+  names.forEach(([c,nm])=>{
+    try{ dbSubs.push(col.doc(nm).onSnapshot(s=>{
+      if(!s||(s.metadata&&s.metadata.hasPendingWrites))return;
+      const d=snapData(s); if(!d||!d.a)return;
+      if(d.t&&wroteT[nm]===d.t)return;                       /* 自分が書いたものの反射 */
+      if(mergeInto(c,d.a)){ d.a.forEach(r=>{ if(!r||!r.id)return; const l=(DB[c]||[]).find(x=>x.id===r.id); if(l)recLast[c+':'+r.id]=sig(l); });
+        try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){} renderIdle(); }
+    },e=>{ dbState='同期が切れた（'+String(e&&e.code)+'）。開き直すと戻る'; })); }catch(e){}
+  });
+  try{ dbSubs.push(col.doc('meta').onSnapshot(s=>{
+    if(!s||(s.metadata&&s.metadata.hasPendingWrites))return;
+    const d=snapData(s); if(!d)return;
+    if(mergeMeta(d)){ metaLast=JSON.stringify(metaObj()); try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){} renderIdle(); }
+  })); }catch(e){}
+}
+/* 発注番号 AW-H0001 は全員で1本の連番。共有側の counter を短いロックで取って増やす */
+async function allocOrderNo(){
+  if(LDB){
+    const ref=LDB.collection(LCOL).doc('counter');
+    for(let i=0;i<12;i++){
+      let r=null; try{ r=await ref.acquire({holder:DEV,ttlMs:1500}); }catch(e){ r=null; }
+      if(r&&r.acquired){
+        const d=snapData(await ref.get())||{};
+        const n=Math.max(+d.oseq||0, +DB.oseq||0)+1;
+        await ref.set({oseq:n}); DB.oseq=n; return n;
+      }
+      if(r===null)break;   /* acquire が無い環境 */
+      await new Promise(res=>setTimeout(res,400+Math.random()*400));
+    }
+    /* ロックが取れなかった：共有の番号を読んで +1（まれに重なる可能性は残る） */
+    try{ const d=snapData(await ref.get())||{}; const n=Math.max(+d.oseq||0,+DB.oseq||0)+1; await ref.set({oseq:n}); DB.oseq=n; toast('発注番号の採番でロックが取れなかった。番号が重なっていないか発注一覧で確認'); return n; }catch(e){}
+  }
+  DB.oseq=(DB.oseq||0)+1; return DB.oseq;
+}
+/* 1手戻し。案件・工程・明細・発注・マスタ・入金を丸ごと取る。
+   key を渡すと「同じ欄を続けて直している」間は1回分にまとめる（Tabで流す入力が1手ずつ戻らないように） */
+let lastSnapKey=null;
+function snap(key){
+  if(key&&key===lastSnapKey)return;
+  lastSnapKey=key||null;
+  undoStack.push(JSON.stringify({c:DB.cases,p:DB.procs,l:DB.lines||[],o:DB.orders||[],
+    pr:DB.prices||[],v:DB.vendors||[],cl:DB.clients||[],rv:DB.recv||{},pd:DB.paid||{}}));
+  if(undoStack.length>40)undoStack.shift();}
+function undo(){if(!undoStack.length)return; const o=JSON.parse(undoStack.pop()); lastSnapKey=null;
+  DB.cases=o.c; DB.procs=o.p; if(o.l)DB.lines=o.l; if(o.o)DB.orders=o.o;
+  if(o.pr)DB.prices=o.pr; if(o.v)DB.vendors=o.v; if(o.cl)DB.clients=o.cl; if(o.rv)DB.recv=o.rv; if(o.pd)DB.paid=o.pd;
+  save(); render(); toast('元に戻した');}
+load();
+window.addEventListener('beforeunload',()=>{ if(dbDirty&&LDB){ clearTimeout(dbSaveTimer); dbSaveNow(); } });
+
+/* ================= helpers ================= */
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const yen=v=>'¥'+Math.round(v||0).toLocaleString('ja-JP');
+const CC={'ステップ・スリー':'--c-step','クレアスレント':'--c-crea','バディ':'--c-buddy',
+          'プレステージプランニング':'--c-pres','日本財託':'--c-nz','イズミリフォーム':'--c-izumi'};
+const col=c=>`var(${CC[c]||'--c-other'})`;
+const WD=['日','月','火','水','木','金','土'];
+const ym=d=>d?d.slice(0,7):'';
+const md=d=>d?(+d.slice(5,7))+'/'+(+d.slice(8,10)):'';
+const wdOf=d=>d?WD[new Date(d+'T00:00:00').getDay()]:'';
+/* 職人の休み：DB.off[名前][YYYY-MM] = [日, 日, …] */
+const offDays=(who,m)=>((DB&&DB.off&&DB.off[who])||{})[m]||[];
+const isOff=(who,ds)=>!!ds&&offDays(who,ym(ds)).includes(+ds.slice(8,10));
+const mlabel=m=>(+m.slice(5,7))+'月';
+const fmtD=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const THIS_M=fmtD(new Date()).slice(0,7);
+const addM=(m,n)=>{let y=+m.slice(0,4),mo=+m.slice(5,7)+n; while(mo>12){mo-=12;y++;} while(mo<1){mo+=12;y--;} return `${y}-${String(mo).padStart(2,'0')}`;};
+const monthRange=(a,b)=>{const o=[]; for(let m=a;m<=b;m=addM(m,1))o.push(m); return o;};
+/* 月の選択肢：期首（2026-05）から今月＋6か月まで。固定の配列にしない（年が変わると出なくなる） */
+const MONTHS=monthRange('2026-05', addM(THIS_M, 6) > '2027-04' ? addM(THIS_M, 6) : '2027-04');
+/* 請求・支払・月次の列：期首から来月まで */
+const MS_LIST=()=>monthRange('2026-05', addM(THIS_M,1));
+const byId=()=>Object.fromEntries(DB.cases.map(c=>[c.id,c]));
+/* 「終わっている」案件の定義はここ1か所。発注の「終わっている」は OFIN */
+const DONE_ST=['完工','報告済','請求済'];
+const isDone=c=>!!c&&DONE_ST.indexOf(c.st)>=0;
+const OFIN=['完了','請求済'];
+/* 完工日を入れる／消す。報告済・請求済は温存。消したら「発注書送付」まで戻す */
+function setDone(c,d){
+  if(!c)return;
+  c.done=d||'';
+  if(d){ if(!isDone(c))c.st='完工'; }
+  else if(c.st==='完工')c.st='発注書送付';
+}
+const procsOf=id=>DB.procs.filter(p=>p.case===id);
+const costOf=id=>procsOf(id).reduce((a,p)=>a+(+p.amt||0),0);
+const salesOf=c=>Math.round(((+c.sales||0)+(+c.add||0))*1.1);
+const grossOf=c=>salesOf(c)-costOf(c);
+const planOf=c=>c.done||c.plan||'';
+/* 案件の並び替え。起算日・完了希望日は空欄を後ろに回す */
+const SORTS=['起算日が近い順','完了希望日が近い順','完了予定が近い順','受注が古い順','新しい順'];
+function sortCases(list,mode){
+  if(mode==='新しい順')
+    return list.slice().sort((a,b)=>(b.plan||b.bill||'').localeCompare(a.plan||a.bill||''));
+  const key=c=>mode==='起算日が近い順'?(c.kisan||'')
+             :mode==='完了希望日が近い順'?(c.want||'')
+             :mode==='完了予定が近い順'?(planOf(c)||'')
+             :(c.bill||'');
+  return list.slice().sort((a,b)=>{
+    const x=key(a), y=key(b);
+    if(!x&&!y)return (a.prop||'').localeCompare(b.prop||'');
+    if(!x)return 1; if(!y)return -1;
+    return x===y?(a.prop||'').localeCompare(b.prop||''):x.localeCompare(y);
+  });
+}
+/* ---- 期間（開始〜終了）。end が無い／開始以前なら1日 ---- */
+const endOf=p=>(p.end&&p.date&&p.end>p.date)?p.end:(p.date||'');
+const onDay=(p,ds)=>!!p.date&&ds>=p.date&&ds<=endOf(p);
+const spanDays=p=>{if(!p.date)return[];const out=[];const d=new Date(p.date+'T00:00:00'),e=new Date(endOf(p)+'T00:00:00');
+  let i=0;while(d<=e&&i<62){out.push(fmtD(d));d.setDate(d.getDate()+1);i++;}return out;};
+const spanLabel=p=>p.date?(endOf(p)>p.date?md(p.date)+'〜'+md(endOf(p)):md(p.date)):'';
+const spanLen=p=>spanDays(p).length;
+const lastDayOf=ps=>ps.map(endOf).filter(Boolean).sort().pop()||'';
+const addDays=(ds,n)=>{const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return fmtD(d);};
+const spanInMonth=(p,m)=>!!p.date&&p.date.slice(0,7)<=m&&endOf(p).slice(0,7)>=m;
+/* 同じ業者が同じ日に別の現場（期間の重なり） */
+const clash=(pid,who,days)=>DB.procs.some(x=>x.id!==pid&&x.who===who&&!isInsp(x.kind)&&x.date&&days.some(d=>onDay(x,d)));
+const CLIENTS=()=>DB.clients.map(c=>c.name);
+const VENDORS=()=>DB.vendors.map(v=>v.name);
+const clientOf=nm=>DB.clients.find(c=>c.name===nm);
+const vendorOf=nm=>DB.vendors.find(v=>v.name===nm);
+/* 同名を作らない。「新しい発注先」「新しい発注先 2」… */
+const uniqName=(base,list)=>{let n=base,i=2; while(list.some(x=>x.name===n))n=base+' '+(i++); return n;};
+/* 発注先の改名：工程・明細・発注・単価表の参照も追随 */
+function renameVendor(old,nw){
+  if(!old||!nw||old===nw)return;
+  DB.procs.forEach(p=>{if(p.who===old)p.who=nw;});
+  (DB.lines||[]).forEach(l=>{if(l.who===old)l.who=nw;});
+  (DB.orders||[]).forEach(o=>{if(o.who===old)o.who=nw;});
+  (DB.prices||[]).forEach(x=>{if(x.who===old)x.who=nw;});
+  if(DB.off&&DB.off[old]){DB.off[nw]=DB.off[old]; delete DB.off[old];}
+}
+/* 顧客の改名：案件・単価表・入金の記録も追随 */
+function renameClient(old,nw){
+  if(!old||!nw||old===nw)return;
+  DB.cases.forEach(x=>{if(x.client===old)x.client=nw;});
+  (DB.prices||[]).forEach(x=>{if(x.client===old)x.client=nw;});
+  ['recv','paid'].forEach(k=>{const o=DB[k]||{}; Object.keys(o).forEach(key=>{ if(key.indexOf(old+'|')===0){o[nw+key.slice(old.length)]=o[key]; delete o[key];} });});
+}
+/* 参照されている発注先・顧客は消せない */
+const vendorRefs=nm=>DB.procs.filter(p=>p.who===nm).length+(DB.lines||[]).filter(l=>l.who===nm).length+(DB.orders||[]).filter(o=>o.who===nm).length+(DB.prices||[]).filter(x=>x.who===nm).length;
+const clientRefs=nm=>DB.cases.filter(c=>c.client===nm).length+(DB.prices||[]).filter(x=>x.client===nm).length;
+const isClient=nm=>!!clientOf(nm);
+const isVendor=nm=>!!vendorOf(nm);
+const VTYPES=['専属','外注','経費'];
+const SEN=M.senzoku;
+const STATUS=M.status;
+const stCls=s=>s==='完工'||s==='報告済'?'done':(s==='新規案件'||s==='現調済'||s==='見積提出'?'new':'wip');
+const KINDS=['清掃のみ','工事一式','鍵交換','入居中修繕','その他'];
+const PKINDS=['内装','水道設備','電気設備','清掃','リペア補修','AW検査','鍵交換'];
+const KCOL={'内装':'#EADFC8','水道設備':'#CCE2EC','電気設備':'#F7E3A8','清掃':'#D7E9D3',
+            'リペア補修':'#E9DAEE','AW検査':'#F6D6D0','鍵交換':'#DCDCD2'};
+const kcol=k=>KCOL[k]||'var(--c-other)';
+/* 旧データは「工事」「検査」のまま。選択肢に残して、直すのは手作業で */
+const kindOpts=k=>opts(PKINDS,k)+(k&&PKINDS.indexOf(k)<0?`<option selected>${esc(k)}</option>`:'');
+const SEKO=['内装','水道設備','電気設備','リペア補修','工事'];   // 施工（清掃より前）
+/* 発注内容の文章から、必要そうな工程区分を拾う */
+const KIND_RULES=[
+ ['鍵交換',/鍵交換|シリンダー|キー交換/],
+ ['内装',/クロス|壁紙|貼替|貼り替|ＣＦ|CF|クッションフロア|フロアタイル|レイフロア|タイル|フローリング|床|巾木|襖|ふすま|畳|シート貼|内装/],
+ ['水道設備',/水栓|ウォシュレット|便座|トイレ|浴室|シャワー|給湯|排水|混合栓|洗面|パッキン|シーリング|洗濯パン|ポップアップ|トラップ|水廻|水回/],
+ ['電気設備',/手元灯|照明|スイッチ|コンセント|電気|インターホン|換気扇|レンジフード|人感センサー|ダウンライト|分電盤|タイマー/],
+ ['リペア補修',/リペア|補修|下地|蝶番|建具|キズ|傷|欠け|パテ|塗装|固定|台座|窓枠|扉交換|枠/],
+ ['清掃',/清掃|クリーニング|洗浄|WAX|ワックス|剝離|剥離|ヤニ|修繕|残置/],
+];
+const KORDER=['内装','水道設備','電気設備','リペア補修','清掃','鍵交換','AW検査'];
+function needKinds(c){
+  const t=[c.memo||'', c.items||''].join(' ');
+  let out=[];
+  KIND_RULES.forEach(([k,re])=>{ if(re.test(t)&&out.indexOf(k)<0)out.push(k); });
+  if(c.keyx==='有'&&out.indexOf('鍵交換')<0)out.push('鍵交換');   /* 発注書に鍵交換の記載あり */
+  if(!out.length){ if(c.kind==='清掃のみ')out.push('清掃'); else if(c.kind==='鍵交換')out.push('鍵交換'); }
+  if(out.length&&out.indexOf('清掃')<0&&c.kind!=='鍵交換')out.push('清掃');
+  if(out.length&&out.indexOf('AW検査')<0)out.push('AW検査');
+  return KORDER.filter(k=>out.indexOf(k)>=0);
+}
+const isSeko=k=>SEKO.indexOf(k)>=0;
+const isInsp=k=>k==='AW検査'||k==='検査';                        // 清掃より後
+
+/* ---- 締日サイクル ---- */
+const eom=(y,m)=>new Date(y,m,0).getDate();
+const iso=(y,m,d)=>`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+const termOf=c=>clientOf(c)||{close:31,site:30};
+const vtermOf=v=>vendorOf(v)||{close:30,site:30};
+const isEom=t=>(+t.close||31)>=28;
+/** 締め月 m（例 2026-10）の対象期間 [from,to] */
+function cycle(client,m){
+  const t=termOf(client), y=+m.slice(0,4), mo=+m.slice(5,7);
+  if(isEom(t)) return [iso(y,mo,1),iso(y,mo,eom(y,mo))];
+  const py=mo===1?y-1:y, pm=mo===1?12:mo-1;
+  return [iso(py,pm,Math.min(+t.close+1,eom(py,pm))), iso(y,mo,Math.min(+t.close,eom(y,mo)))];
+}
+/** 入金予定日＝翌月末＋（サイト−30）日。いまの請求一覧の式と同じ */
+function dueOf(client,m){
+  const t=termOf(client), y=+m.slice(0,4), mo=+m.slice(5,7);
+  const d=new Date(y,mo+1,0); d.setDate(d.getDate()+Math.max(0,(+t.site||30)-30));
+  return fmtD(d);
+}
+/** 計上基準に応じて、この案件がどの締め月に乗るか */
+function cycMonth(c){
+  if(DB.basis==='請求') return ym(c.bill);
+  const d=c.done||c.plan||''; if(!d||d<'2020')return '';
+  const t=termOf(c.client); if(isEom(t)) return d.slice(0,7);
+  let y=+d.slice(0,4), mo=+d.slice(5,7);
+  if(+d.slice(8,10)>+t.close){mo++; if(mo>12){mo=1;y++;}}
+  return `${y}-${String(mo).padStart(2,'0')}`;
+}
+const basisLabel=()=>DB.basis==='完工'?'完工日':'請求月';
+
+let toastT=null;
+function toast(msg,fn,label){
+  const old=document.getElementById('toast'); if(old)old.remove();
+  const el=document.createElement('div'); el.id='toast'; el.className='toast';
+  el.innerHTML=`<span>${esc(msg)}</span>`;
+  if(fn){const b=document.createElement('button');b.textContent=label||'元に戻す';b.onclick=()=>{el.remove();fn();};el.appendChild(b);}
+  document.body.appendChild(el); clearTimeout(toastT); toastT=setTimeout(()=>el.remove(),6000);
+}
+const vendorSel=v=>{
+  const g={}; DB.vendors.forEach(x=>{(g[x.type||'外注']=g[x.type||'外注']||[]).push(x.name);});
+  return `<option value=""${v?'':' selected'}>（未定）</option>`+
+    VTYPES.filter(t=>g[t]&&g[t].length).map(t=>`<optgroup label="${t}">`+
+      g[t].map(n=>`<option value="${esc(n)}"${n===v?' selected':''}>${esc(n)}</option>`).join('')+'</optgroup>').join('')+
+    (v&&!isVendor(v)?`<optgroup label="マスタ外"><option selected>${esc(v)}</option></optgroup>`:'');
+};
+const opts=(arr,v,blank)=>(blank?`<option value=""${v?'':' selected'}>${esc(blank)}</option>`:'')+
+  arr.map(o=>`<option value="${esc(o)}"${o===v?' selected':''}>${esc(o)}</option>`).join('');
+/* 値はそのまま、画面に出す文字だけ差し替える（「すべて」が何のすべてか分かるように） */
+const optsL=(arr,v,lab)=>arr.map(o=>
+  `<option value="${esc(o)}"${o===v?' selected':''}>${esc((lab&&lab[o])||o)}</option>`).join('');
+const mlab=m=>(m.slice(0,4)==='2027'?'27年':'')+(+m.slice(5,7))+'月';
+const mopts=(v,extra)=>(extra||[]).map(o=>`<option value="${esc(o)}"${o===v?' selected':''}>${esc(o)}</option>`).join('')
+  +MONTHS.map(m=>`<option value="${m}"${m===v?' selected':''}>${mlab(m)}</option>`).join('');
+
+/* ================= 検証 ================= */
+function issues(){
+  const out=[]; const B=byId(); const seen={};
+  DB.cases.forEach(c=>{
+    const cost=costOf(c.id), sales=salesOf(c), ps=procsOf(c.id);
+    if(sales>0&&cost===0) out.push({k:'原価なし',c:c.id,t:`${c.prop}`,d:`売上 ${yen(sales)} に対して発注が1件も入っていない。粗利が過大に出る`});
+    if(sales>0&&cost>sales) out.push({k:'赤字',c:c.id,t:`${c.prop}`,d:`売上 ${yen(sales)} ＜ 原価 ${yen(cost)}（${yen(cost-sales)} の持ち出し）`});
+    if(sales>0&&!c.bill) out.push({k:'請求月なし',c:c.id,t:`${c.prop}`,d:`売上 ${yen(sales)} が請求一覧に出てこない`});
+    if(!c.done&&(c.bill||salesOf(c)>0)) out.push({k:'完工日なし',c:c.id,t:`${c.prop}`,
+      d:'完工基準にしたので、完工日が入らないと売上がどの月にも乗らない'});
+    if(c.client&&!isClient(c.client)) out.push({k:'顧客マスタ外',c:c.id,t:`${c.prop}`,d:`「${c.client}」は顧客マスタに無い`});
+    if(c.want&&c.plan&&c.plan>c.want&&!c.done) out.push({k:'希望日に遅れる',c:c.id,t:`${c.prop}`,
+      d:`依頼元の希望 ${md(c.want)} に対して、弊社の完了予定が ${md(c.plan)}`});
+    if(c.live&&(c.ord||'未')==='未'&&!c.want) out.push({k:'希望日なし',c:c.id,t:`${c.prop}`,
+      d:'依頼元の完了希望日が入っていない。工程を組む順番が決められない'});
+    if(c.keyx==='有'&&!procsOf(c.id).some(p=>p.kind==='鍵交換')&&!c.done)
+      out.push({k:'鍵交換の手配なし',c:c.id,t:`${c.prop}`,
+        d:'発注書に鍵交換の記載があるのに、鍵交換の工程が入っていない'});
+    if(c.done&&(c.done<'2020-01-01'||c.done>'2030-01-01'))
+      out.push({k:'完工日が壊れている',c:c.id,t:`${c.prop}`,d:`完工日が「${c.done}」。手入力のミスがそのまま残っている`});
+
+    ps.forEach(p=>{
+      if(p.who&&!isVendor(p.who)) out.push({k:'発注先マスタ外',c:c.id,t:`${c.prop}`,d:`「${p.who}」は発注先マスタに無い。支払一覧・支払通知書に出ない`});
+      if(p.who&&!p.date) out.push({k:'予定日なし',c:c.id,t:`${c.prop}`,d:`${p.who} の${p.kind}に予定日が入っていない`});
+      if(p.who&&!p.amt&&!isInsp(p.kind)) out.push({k:'金額なし',c:c.id,t:`${c.prop}`,d:`${p.who} の${p.kind}に発注金額が入っていない`});
+    });
+    const k=ps.filter(p=>isSeko(p.kind)&&p.date), s=ps.filter(p=>p.kind==='清掃'&&p.date);
+    const v=ps.filter(p=>isInsp(p.kind)&&p.date);
+    if(k.length&&s.length){
+      const lk=k.map(endOf).sort().pop(), fs=s.map(p=>p.date).sort()[0];
+      if(fs<lk) out.push({k:'順序',c:c.id,t:`${c.prop}`,d:`清掃 ${md(fs)} が工事 ${md(lk)} より前（先行清掃なら正常）`});
+    }
+    if(s.length&&v.length){
+      const ls=s.map(endOf).sort().pop(), fv=v.map(p=>p.date).sort()[0];
+      if(fv<ls) out.push({k:'順序',c:c.id,t:`${c.prop}`,d:`AW検査 ${md(fv)} が清掃 ${md(ls)} より前`});
+    }
+    ps.forEach(p=>{ if(p.kind&&PKINDS.indexOf(p.kind)<0)
+      out.push({k:'区分が旧のまま',c:c.id,t:`${c.prop}`,d:`「${p.kind}」は旧区分。内装／水道設備／電気設備／リペア補修 のどれかに直す`}); });
+    const key=(c.prop||'').replace(/[\s　・（）()]/g,'').toLowerCase();
+    if(key){ if(seen[key]) out.push({k:'物件名重複',c:c.id,t:`${c.prop}`,d:`同じ物件名の案件が他にもある（${seen[key]}）。二重計上でないか確認`}); else seen[key]=c.id; }
+  });
+  // 休みの日に手配が入っている（10月のみ休みデータあり）
+  DB.procs.forEach(p=>{
+    if(!p.who||!p.date)return;
+    const hit=spanDays(p).find(d=>isOff(p.who,d));
+    if(hit)
+      out.push({k:'休みに手配',c:p.case,t:`${p.who} ${md(hit)}`,
+        d:`スケジュール管理では休みの日に、台帳では ${(B[p.case]||{}).prop||'現場'} の${p.kind}が入っている`});
+  });
+  // 同一職人が同日2現場
+  const slot={};
+  DB.procs.forEach(p=>{ if(!p.who||!p.date||SEN.indexOf(p.who)<0||isInsp(p.kind))return;
+    spanDays(p).forEach(d=>{const k=p.who+'|'+d; (slot[k]=slot[k]||[]).push(p);}); });
+  Object.entries(slot).forEach(([k,ps])=>{ if(ps.length<2)return;
+    const [who,d]=k.split('|');
+    if(new Set(ps.map(p=>p.case)).size<2)return;
+    out.push({k:'1日2現場',c:ps[0].case,t:`${who} ${md(d)}`,d:ps.map(p=>(B[p.case]||{}).prop).join(' ／ ')});
+  });
+  return out;
+}
+
+/* ================= 受注受付の取り込み =================
+   叩き台「受注受付」の行を、Claudeの定期タスクが inbox に書く。
+   この画面は inbox を読んで、まだ台帳に無い分だけ案件にする。 */
+let DBX=null, INBOX=null, inboxMsg='', PRICEIN=null;
+const nkey=s=>{let t=String(s||''); try{t=t.normalize('NFKC');}catch(e){} return t.replace(/[\s　・（）()＜＞<>　＿_-]/g,'').toLowerCase();};   /* 全角英数も半角に寄せて比べる */
+function inboxKind(t){
+  const s=String(t||'');
+  if(/鍵交換|シリンダー/.test(s))return '鍵交換';
+  if(/入居中/.test(s))return '入居中修繕';
+  for(const k of ['内装','水道設備','電気設備','リペア補修'])
+    if((KIND_RULES.find(r=>r[0]===k)||[])[1].test(s))return '工事一式';
+  if(/清掃|クリーニング|洗浄/.test(s))return '清掃のみ';
+  return 'その他';
+}
+function pendingInbox(){
+  if(!INBOX)return [];
+  return INBOX.filter(r=>r.key&&!DB.cases.some(c=>c.recv===r.key));
+}
+async function openInbox(){
+  if(typeof claude==='undefined'||!claude||typeof claude.use!=='function'){
+    inboxMsg='この画面では受注受付の取り込みが使えない（claude.use が無い）'; render(); return; }
+  try{ DBX=await claude.use('db'); }
+  catch(e){ DBX=null; inboxMsg='データベースを開けなかった：'+String((e&&e.message)||e); render(); return; }
+  if(!DBX){ inboxMsg='データベースにつながらなかった（claude.ai でサインインして開く必要がある）'; render(); return; }
+  LDB=DBX;
+  try{ await dbLoad(); }catch(e){ dbState='共有保存を読めなかった：'+String((e&&e.code)||(e&&e.message)||e); toast(dbState); }
+  await reloadInbox();
+}
+async function reloadInbox(){
+  try{
+    const col=DBX.collection('inbox');
+    const snap=await (typeof col.get==='function'?col.get():
+      typeof col.getDocs==='function'?col.getDocs():
+      typeof col.list==='function'?col.list():Promise.reject(new Error('collection に get が無い')));
+    const arr=Array.isArray(snap)?snap:((snap&&(snap.docs||snap.documents||snap.items))||[]);
+    INBOX=arr.map(d=>{
+      const data=(d&&typeof d.data==='function')?d.data():((d&&d.data)||d||{});
+      return Object.assign({},data,{_id:(d&&d.id)||data.caseNo||data.key||''});
+    }).filter(r=>r&&r.key);
+    inboxMsg='';
+    try{ autoMergeInbox(); }catch(e){}
+  }catch(e){ INBOX=[]; inboxMsg='受注受付を読めなかった：'+String((e&&e.message)||e); }
+  try{
+    const c2=DBX.collection('pricebook');
+    const s2=await (typeof c2.get==='function'?c2.get():
+      typeof c2.getDocs==='function'?c2.getDocs():Promise.reject(new Error('no get')));
+    const a2=Array.isArray(s2)?s2:((s2&&(s2.docs||s2.documents||s2.items))||[]);
+    PRICEIN=a2.map(d=>{
+      const data=(d&&typeof d.data==='function')?d.data():((d&&d.data)||d||{});
+      return Object.assign({},data,{_id:(d&&d.id)||''});
+    }).filter(r=>r&&r.name);
+  }catch(e){ PRICEIN=[]; }
+  render();
+}
+/* 単価表のうち、まだマスタに入っていないもの */
+function pendingPrices(){
+  if(!PRICEIN)return [];
+  return PRICEIN.filter(r=>!DB.prices.some(p=>priceKey(p.name)===priceKey(r.name)
+    &&(p.unit||'式')===(r.unit||'式')&&(p.client||'')===(r.client||'')));
+}
+function importPrices(){
+  const rows=pendingPrices(); if(!rows.length){toast('新しい単価は無い');return;}
+  snap();
+  rows.forEach(r=>{DB.prseq++;
+    DB.prices.push({id:'PR'+DB.prseq+DEV,name:r.name,kind:r.kind||guessKind(r.name),unit:r.unit||'式',
+      price:+r.price||0,who:r.who||'',client:r.client||'',memo:r.memo||''});});
+  save(); render();
+  const z=rows.filter(r=>!(+r.price)).length;
+  toast(`単価表から ${rows.length}件 取り込んだ${z?`（うち${z}件は単価未設定）`:''}`, undo);
+}
+/* 受注受付1行の情報を既存案件に流し込む。空欄だけ埋める（手で直した値は守る） */
+const inboxProp=r=>[r.prop||'',r.room||''].filter(Boolean).join(' ').trim();
+const inboxMemo=r=>[r.memo||'', r.moveIn?('次回入居 '+r.moveIn):'', r.items?('削除/追加 '+r.items):''].filter(Boolean).join(' / ');
+function mergeInboxRow(r,c){
+  const memo=inboxMemo(r);
+  c.recv=r.key; c.live=true;
+  if(!c.client&&r.client)c.client=r.client;
+  if(!c.sales&&+r.net)c.sales=+r.net;
+  if(!c.want&&r.plan)c.want=r.plan;
+  if(!c.kisan&&r.moveIn)c.kisan=r.moveIn;   /* 次回入居日＝家賃の起算。財託は空で入ってくる */
+  if(/鍵交換/.test(memo))c.keyx='有';
+  if(/設備保証/.test(memo))c.warr='有';
+  if(!c.bill&&r.recvDate)c.bill=r.recvDate.slice(0,7)+'-01';
+  if(memo&&(c.memo||'').indexOf(memo)<0)c.memo=[c.memo||'',memo].filter(Boolean).join(' / ');
+  c.items=r.items||c.items||'';
+}
+/* 合流先の候補。過去の完工済みには合流させない（同じ部屋の2回目が前回に吸われるのを防ぐ） */
+function inboxMatch(r,exactOnly){
+  const byRecv=DB.cases.find(x=>x.recv===r.key); if(byRecv)return byRecv;
+  const key=nkey(inboxProp(r))||nkey(r.prop); if(!key)return null;
+  const cand=DB.cases.filter(x=>x.live&&!x.done&&!x.recv);
+  return cand.find(x=>nkey(x.prop)===key)
+      ||(exactOnly?null:cand.find(x=>{const k=nkey(x.prop); return k&&k.length>=4&&(k.indexOf(key)>=0||key.indexOf(k)>=0);}))
+      ||null;
+}
+/* 起動時：物件名がぴったり一致する運用中の案件には自動で合流する。新規作成は人がボタンで */
+/* 依頼元の明細が二重に入っている案件を直す（以前の版の同期の穴で、入れ直した分が積み上がったもの）。
+   依頼元の行数より多ければ、いちばん新しい取り込み（id の番号が大きい方）だけ残して、残りに墓標を立てる */
+function healPO(cid){
+  const want=poRowsOf(cid).length; if(!want)return 0;
+  const rows=poLinesOf(cid).filter(l=>!l.order); if(rows.length<=want)return 0;
+  const keep=new Set(rows.slice().sort((a,b)=>lnum(b.id)-lnum(a.id)||String(b.id).localeCompare(String(a.id))).slice(0,want).map(l=>l.id));
+  const drop=rows.filter(l=>!keep.has(l.id)); if(!drop.length)return 0;
+  DB.lines=DB.lines.filter(l=>keep.has(l.id)||!(l.case===cid&&l.src==='PO'&&!l.order));
+  purgeShared('lines',drop.map(l=>l.id));
+  return drop.length;
+}
+function healAllPO(){
+  let n=0, cs=0; DB.cases.forEach(c=>{ if(!c.recv)return; const d=healPO(c.id); if(d){n+=d;cs++;} });
+  if(n){ save(); toast(`二重に入っていた依頼元の明細 ${n}行（${cs}案件）を片づけた`); }
+  return n;
+}
+function autoMergeInbox(){
+  healAllPO();
+  const rows=pendingInbox().filter(r=>inboxMatch(r,true));
+  if(!rows.length)return 0;
+  snap();
+  rows.forEach(r=>mergeInboxRow(r,inboxMatch(r,true)));
+  save();
+  toast(`受注受付 ${rows.length}件を、同じ物件名の案件に自動で合流させた（金額・起算日・希望日・明細）`, undo);
+  return rows.length;
+}
+function importInbox(){
+  const rows=pendingInbox(); if(!rows.length){toast('新しい行は無い');return;}
+  snap();
+  let add=0, mrg=0;
+  rows.forEach(r=>{
+    const prop=inboxProp(r);
+    const memo=inboxMemo(r);
+    let c=inboxMatch(r,false);
+    if(c){
+      mergeInboxRow(r,c);
+      mrg++;
+    }else{
+      DB.seq++;
+      DB.cases.unshift({id:'R'+DB.seq+DEV,client:r.client||'',prop:prop||'（物件未入力）',
+        kind:inboxKind((r.items||'')+' '+(r.memo||'')),st:'受注',ord:'未',live:true,
+        src:'受注受付',recv:r.key,caseNo:r.caseNo||'',
+        sales:+r.net||0,add:0,bill:r.recvDate?r.recvDate.slice(0,7)+'-01':'',
+        kisan:r.moveIn||'',want:r.plan||'',plan:'',done:'',
+        keyx:/鍵交換/.test(memo)?'有':'',warr:/設備保証/.test(memo)?'有':'',
+        report:'',photo:'',memo,items:r.items||''});
+      add++;
+    }
+  });
+  save(); render();
+  toast(`受注受付から ${add}件を新規、${mrg}件を既存に合流させた`, undo);
+}
+function inboxBanner(){
+  if(tab!=='ledger'&&tab!=='order')return '';
+  const p=pendingInbox();
+  let msg, sty='margin:12px 0 0', btn='', sub='';
+  if(inboxMsg){ msg=inboxMsg; sty+=';background:var(--warn-bg);border-color:var(--warn)'; }
+  else if(INBOX===null){ msg='受注受付を確認中…'; sty+=';background:var(--card2);border-color:var(--line)'; }
+  else if(!p.length){ msg=`受注受付 ${INBOX.length}件：未取り込みなし`; sty+=';background:var(--card2);border-color:var(--line)'; }
+  else{
+    msg=`受注受付から ${p.length}件 未取り込み`;
+    sub=`<span class="grow note" style="margin:0">${esc(p.slice(0,3).map(r=>[r.client,r.prop,r.room].filter(Boolean).join(' ')).join('／'))}${p.length>3?' ほか':''}</span>`;
+    btn='<button class="btn small primary" id="impInbox">取り込む</button>';
+  }
+  return `<div class="selbar" style="${sty}"><b>${esc(msg)}</b>${sub||'<span class="grow"></span>'}${btn}
+    <button class="btn small" id="reloadInbox">読み直す</button></div>`;
+}
+
+/* ================= 発注 =================
+   業者の見積を原価明細に落とす → 行を選んで業者ごとに発注する。
+   コンクルーとの違い：見積フェーズなし／列は半分／工事内容は明細から自動 */
+const OSTS=['下書き','送付済','承諾','完了','請求済'];
+const OLSORTS=['工期が近い順','起算日が近い順','完了希望日が近い順','発注日が早い順','発注No順'];
+const OSTC={'下書き':'','送付済':'wip','承諾':'wip','完了':'done','請求済':'done'};
+const UNITS=['式','m','㎡','枚','個','箇所','台','本','日','人工'];
+const lineAmt=l=>Math.round((+l.qty||0)*(+l.price||0));   /* 原価（業者に払う） */
+const lineSell=l=>Math.round((+l.qty||0)*(+l.sell||0));   /* 販売（依頼元からもらう） */
+const lnum=id=>{const m=/^L(\d+)/.exec(String(id||'')); return m?+m[1]:0;};
+/* 明細は依頼元の行番号（no）の順、無ければ作った順（id の番号）。共有保存は id のハッシュで箱分けしているので、読んだままだと順が崩れる */
+const lineKey=l=>(l.no!=null&&l.no!==''?+l.no:1e9+lnum(l.id));
+const linesOf=cid=>DB.lines.filter(l=>l.case===cid).sort((a,b)=>lineKey(a)-lineKey(b)||String(a.id).localeCompare(String(b.id)));
+const ordersOf=cid=>DB.orders.filter(o=>o.case===cid);
+const orderLines=oid=>DB.lines.filter(l=>l.order===oid);
+const orderAmt=o=>orderLines(o.id).reduce((a,l)=>a+lineAmt(l),0);
+/* kintoneは半角カタカナ（ｸﾛｽ・ｺｰｷﾝｸﾞ）なので、全角に直してから判定する */
+const wide=s=>{try{return String(s||'').normalize('NFKC');}catch(e){return String(s||'');}};
+/* 工程ではない行（経費・自社取り分）。区分は空のままにして、人に決めてもらう */
+const NOKIND=/諸経費|写真撮影|撮影費|消臭|仮設照明|運搬|駐車|産廃|廃棄物処理費|管理費/;
+function guessKind(name){
+  const t=wide(name);
+  if(NOKIND.test(t))return '';
+  if(/コーキング|シーリング打替|菊割れ|パッキン/.test(t))
+    return /菊割れ|パッキン|排水/.test(t)?'水道設備':'リペア補修';
+  if(/網戸|面格子|サッシ|レール交換/.test(t))return 'リペア補修';
+  for(let i=0;i<KIND_RULES.length;i++){ if(KIND_RULES[i][1].test(t))return KIND_RULES[i][0]; }
+  return '';
+}
+const SAMPLE='【追加】洗面扉パテ処理\t1\t式\t8,000\t扉交換しない場合\n'+
+  '洗濯置扉交換(枠ごと)\t1\t式\t71,000\t折れ戸タイプ\n'+
+  'ボード下地調整\t1\t式\t20,000\t2箇所\n'+
+  '浴室乾燥機交換(手間)\t1\t式\t20,000\tBS-763H2→BS-133HM-2\n'+
+  '【追加】洗面扉シート貼り(表裏)\t5\tm\t6,000\t片面2.5㎡の裏表';
+function parseLines(txt){
+  return String(txt||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s0=>{
+    /* 桁区切りのカンマは先に外す（8,000 が 8 と 000 に割れるのを防ぐ） */
+    const s=s0.replace(/(\d),(?=\d{3}(\D|$))/g,'$1');
+    const c=s.split(/\t|,|、|\s{2,}/).map(x=>x.trim()).filter(x=>x!=='');
+    const name=c[0]||''; let qty=1,unit='式',price=0,memo='';
+    const nums=[];
+    c.slice(1).forEach(x=>{const v=+String(x).replace(/[,¥￥円\s]/g,'');
+      if(/\d/.test(x)&&!isNaN(v))nums.push(v);});
+    if(nums.length>=2){qty=nums[0];price=nums[nums.length-1];}
+    else if(nums.length===1){price=nums[0];}
+    const u=c.find(x=>UNITS.indexOf(x)>=0); if(u)unit=u;
+    const tail=c[c.length-1];
+    if(tail&&tail!==name&&tail!==unit&&!/^[\d,¥￥円\s.]+$/.test(tail))memo=tail;
+    return {name,qty,unit,price,memo};
+  }).filter(r=>r.name);
+}
+function addLines(cid,rows,noSnap){
+  if(!noSnap)snap();
+  rows.forEach(r=>{DB.lseq++;
+    const q=(r.qty===''||r.qty==null)?1:(+r.qty||0);   /* 数量0は0のまま（＝見積のみで発注されなかった行） */
+    DB.lines.push({id:'L'+DB.lseq+DEV,case:cid,name:r.name,spec:r.spec||'',qty:q,unit:r.unit||'式',no:(r.no!=null?r.no:DB.lseq),
+      sell:+r.sell||0,price:+r.price||0,kind:r.kind||'',who:'',memo:r.memo||'',   /* 区分は自動で当てない。人が「区分をつける」で決める */
+      cut:r.cut?1:0,src:r.src||'',order:''});});
+  save();
+}
+/* 依頼元の発注書（kintoneの見積テーブル／ANDPADの発注書）の明細を入れる。販売価格として入る */
+function poRowsOf(cid){
+  const c=DB.cases.find(x=>x.id===cid); if(!c||!c.recv||!INBOX)return [];
+  const d=INBOX.find(r=>r.key===c.recv);
+  return (d&&Array.isArray(d.poLines))?d.poLines:[];
+}
+/* 依頼元に落とされた行。cut フラグが本命。古いデータ用に数量0も拾う */
+const isCut=r=>!!r.cut||!(+r.qty>0);
+const poLive=rows=>rows.filter(r=>!isCut(r));
+const poCut =rows=>rows.filter(r=>isCut(r));
+const poLinesOf=cid=>DB.lines.filter(l=>l.case===cid&&l.src==='PO');
+function importPO(cid){
+  const all=poRowsOf(cid);
+  if(!all.length){toast('依頼元の明細が来ていない');return;}
+  /* 2回目以降は「入れ直し」：発注に出していない取り込み行を消してから入れる。発注済の行はそのまま */
+  healPO(cid);
+  const had=poLinesOf(cid), keep=had.filter(l=>l.order);
+  snap();
+  if(had.length){ const ids=had.filter(l=>!l.order).map(l=>l.id); DB.lines=DB.lines.filter(l=>!(l.case===cid&&l.src==='PO'&&!l.order)); purgeShared('lines',ids); }
+  /* 古い版で入れた同じ行（src が無い）も、依頼元の行と名称・場所が同じなら消して入れ直す */
+  const poKey=new Set(all.map(r=>(r.name||'')+'|'+(r.place||'')));
+  DB.lines=DB.lines.filter(l=>!(l.case===cid&&!l.order&&!l.src&&poKey.has((l.name||'')+'|'+(l.spec||''))));
+  const dup=r=>keep.some(l=>l.name===(r.name||'')&&(l.spec||'')===(r.place||''));
+  /* 落とされた行も明細に入れる。数量0・金額0で、発注には出せない形にする */
+  const rows=all.map((r,i)=>[r,i]).filter(([r])=>!dup(r)).map(([r,i])=>{const c=isCut(r);
+    return {name:r.name||'', spec:r.place||'', qty:c?0:r.qty, unit:r.unit||'式', no:i+1,
+      sell:c?0:r.price, price:0, memo:r.memo||'', cut:c?1:0, src:'PO'};});
+  addLines(cid, rows, true);
+  render();
+  const z=rows.filter(r=>r.cut).length;
+  toast(`${had.length?'依頼元の明細を入れ直した':'依頼元の明細を入れた'}（${rows.length}行${z?`、うち${z}行は依頼元が落とした項目`:''}${keep.length?`。発注済の${keep.length}行はそのまま`:''}）`, undo);
+}
+function vOrder(){
+  return '<div class="bar"><h2>発注</h2>'+
+    '<div class="seg"><button data-ov="make" class="'+(oView==='make'?'on':'')+'">発注をつくる</button>'+
+    '<button data-ov="list" class="'+(oView==='list'?'on':'')+'">発注一覧</button></div>'+
+    '<span class="note" style="margin:0">依頼元の発注書を明細に落とす → 行を選んで業者ごとに発注する。'+
+    '「工程を組む」で決めた業者・期間が発注に最初から入る（直せる）。工程が無ければ発注から1本できる</span></div>'+
+    (oView==='make'?vOrderMake():vOrderList());
+}
+function vOrderMake(){
+  const DONE=DONE_ST;
+  let list=DB.cases.filter(c=>
+    (oFilter==='すべて'||c.live)&&
+    (oFilter==='すべて'?true:
+     oFilter==='発注前（未）'?(c.ord||'未')==='未':
+     DONE.indexOf(c.st)<0)&&
+    (!oQ||(c.prop+c.client).toLowerCase().includes(oQ.toLowerCase())));
+  list=sortCases(list,oSort);
+  const sel=oCase?DB.cases.find(x=>x.id===oCase):null;
+  if(sel){ if(!list.some(c=>c.id===oCase))list=[sel,...list]; }
+  else oCase=(list[0]||{}).id||null;
+  const c=DB.cases.find(x=>x.id===oCase);
+  const left=`<div class="cases">${list.slice(0,300).map(x=>{
+    const ln=linesOf(x.id).length, od=ordersOf(x.id).length;
+    return `<button class="ci ${oCase===x.id?'sel':''}" data-oc="${x.id}">
+      <span class="cl" style="background:${col(x.client)}">${esc(x.client||'—')}</span>
+      <b>${esc(x.prop||'（物件未入力）')}</b>
+      <small>${ln?ln+'明細':'<span class="nf">明細なし</span>'}　${od?od+'発注':'発注なし'}</small>
+      <small>${x.kisan?'起算 '+md(x.kisan):'起算 —'}　${x.want?'希望 '+md(x.want):'希望 —'}${
+        x.plan?'　予定 '+md(x.plan):''}</small></button>`;}).join('')||'<p class="note">該当なし</p>'}
+    ${list.length>300?'<p class="note">先頭300件</p>':''}</div>`;
+  return `<div class="bar" style="margin-top:0">
+      <select id="oFilter" title="案件の絞り込み">${optsL(['発注前（未）','進行中','すべて'],oFilter,
+        {'すべて':'案件：すべて'})}</select>
+      <select id="oSort" title="並び替え">${optsL(SORTS,oSort,{})}</select>
+      <input type="search" id="oQ" placeholder="物件名で探す" value="${esc(oQ)}" style="min-width:170px">
+      <span class="note" style="margin:0">${list.length}件</span>
+      <select id="oJump" title="案件を選ぶ" style="max-width:360px;font-weight:600">${
+        list.slice(0,300).map(x=>`<option value="${x.id}"${x.id===oCase?' selected':''}>${esc((x.client||'—')+'　'+(x.prop||'（物件未入力）'))}</option>`).join('')}</select>
+      <span class="grow"></span>
+      <button class="btn small" id="oHide">${oHide?'案件を一覧で見る':'一覧をたたむ'}</button></div>
+    <div class="layout">${oHide?'':left}<div class="main">${c?orderPanel(c):'<div class="card">左で案件を選ぶ。</div>'}</div></div>`;
+}
+/* 明細を工程区分ごとの大項目にまとめる。区分なしは先頭（先に決めてもらう）。発注済の行も同じ区分の下に並ぶ */
+function lineGroups(ls){
+  const order=['',...PKINDS], m={};
+  ls.forEach(l=>{const k=l.kind&&PKINDS.indexOf(l.kind)>=0?l.kind:(l.kind||''); (m[k]=m[k]||[]).push(l);});
+  const keys=Object.keys(m).sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib)||a.localeCompare(b,'ja');});
+  return keys.map(k=>({kind:k,rows:m[k]}));
+}
+/* 大項目の見出し行：区分名・行数・原価、未発注の行があれば 発注先 と「この区分で発注を作る」 */
+function groupHead(c,g){
+  const free=g.rows.filter(l=>!l.order), done=g.rows.filter(l=>l.order);
+  const amt=free.reduce((a,l)=>a+lineAmt(l),0);
+  const gs=g.rows.reduce((a,l)=>a+lineSell(l),0), gc=g.rows.reduce((a,l)=>a+lineAmt(l),0);
+  const oids=[...new Set(done.map(l=>l.order))];
+  const ocol=oids.map(id=>{const o=DB.orders.find(x=>x.id===id); if(!o)return '';
+    return `<span class="ocell" data-osheet="${o.id}" title="発注書を開く"><b>${esc(o.who||'業者未定')}</b> <span class="st ${OSTC[o.st]}">${esc(o.st)}</span> ${yen(orderAmt(o))}</span>`;}).join('');
+  const whos=[...new Set(free.map(l=>l.who).filter(Boolean))];
+  const allSel=free.length&&free.every(l=>oSel[l.id]);
+  const k=g.kind;
+  return `<tr class="ghead" data-g="${esc(k)}"><td></td><td class="n">${free.length?`<input type="checkbox" class="gchk" ${allSel?'checked':''} title="この区分の行を全部選ぶ">`:''}</td>
+    <td colspan="12"><div class="bar" style="margin:0;gap:8px">
+      ${k?`<span class="cl" style="background:${kcol(k)};font-size:12.5px">${esc(k)}</span>`:`<b style="color:var(--warn)">区分なし</b><span class="note" style="margin:0">行をチェックして下の「区分をつける」で分ける</span>`}
+      <span class="note" style="margin:0">${g.rows.length}行　販売 ${yen(gs)}　原価 ${gc?yen(gc):'—'}　粗利 ${gs?yen(gs-gc):'—'}${free.length&&done.length?`　未発注 ${free.length}行 ${yen(amt)}`:''}</span>
+      ${ocol?`<span class="ocol">${ocol}</span>`:''}
+      ${k&&free.length?`<span class="grow"></span>
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px">発注先
+          <select class="gwho" style="height:26px;font-size:12px">${vendorSel(whos.length===1?whos[0]:'')}</select></label>
+        <button class="btn small primary" data-gord="${esc(k)}">この区分で発注を作る（${free.length}行）</button>`:''}
+    </div></td></tr>`;
+}
+function orderPanel(c){
+  const ls=linesOf(c.id);
+  const free=ls.filter(l=>!l.order);               /* 数量0の行（依頼元が落とした項目）も発注に載せられる */
+  const selIds=free.filter(l=>oSel[l.id]).map(l=>l.id);
+  const selAmt=free.filter(l=>oSel[l.id]).reduce((a,l)=>a+lineAmt(l),0);
+  const cost=ls.reduce((a,l)=>a+lineAmt(l),0);
+  const sellSum=ls.reduce((a,l)=>a+lineSell(l),0);
+  const sales=salesOf(c), ods=ordersOf(c.id), po=poRowsOf(c.id);
+  const head=`<div class="card" style="margin-bottom:10px">
+    <div class="bar" style="margin:0 0 7px">
+      <h3 style="font-size:16px;margin:0">${esc(c.prop||'（物件未入力）')}</h3>
+      <span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span>
+      <span class="st ${stCls(c.st)}">${esc(c.st)}</span>
+      <button class="btn small" data-open="${c.id}">台帳で開く</button>
+      <button class="btn small" data-pcopen="${c.id}">工程を組む</button>
+</div>
+    <div class="kpi" style="margin:0">
+      <div class="k"><small>売上 税抜（受注受付）</small><b>${yen(c.sales||0)}</b></div>
+      <div class="k"><small>明細の販売計</small><b style="color:${
+        sellSum&&c.sales&&sellSum!==(+c.sales)?'var(--warn)':'inherit'}">${sellSum?yen(sellSum):'—'}</b></div>
+      <div class="k"><small>明細の原価計</small><b>${cost?yen(cost):'—'}</b></div>
+      <div class="k"><small>粗利</small><b style="color:${(c.sales||0)-cost<0?'var(--warn)':'var(--ok)'}">${
+        c.sales?yen((+c.sales)-cost):'—'}</b></div>
+      <div class="k"><small>粗利率</small><b>${c.sales?Math.round(((+c.sales)-cost)/(+c.sales)*1000)/10+'%':'—'}</b></div>
+    </div>${c.memo?`<p class="note">${esc(c.memo)}</p>`:''}
+    ${sellSum&&c.sales&&sellSum!==(+c.sales)?`<p class="note" style="color:var(--warn)">
+      明細の販売計 ${yen(sellSum)} が、受注受付の売上税抜 ${yen(c.sales)} と ${yen(Math.abs(sellSum-(+c.sales)))} 違う</p>`:''}</div>`;
+  const tools=`<div class="bar" style="margin:0 0 8px">
+    <h3 style="font-size:14px;margin:0">明細</h3>
+    ${po.length?`<button class="btn small ${poLinesOf(c.id).length?'':'primary'}" id="impPO">${poLinesOf(c.id).length?'依頼元の発注書を入れ直す':'依頼元の発注書を取り込む'}（${po.length}行）</button>`:''}
+    <button class="btn small" id="impLines">業者見積を貼り付けて取り込む</button>
+    <button class="btn small" id="addLine">1行足す</button>
+    ${ls.length?'':'<button class="btn small" id="sampleLines">例を入れる</button>'}
+    ${ls.filter(l=>!l.order&&!l.price&&+l.qty>0).length?`<button class="btn small" id="applyPrice">単価表から原価を入れる（${ls.filter(l=>!l.order&&!l.price&&+l.qty>0).length}行）</button>`:''}
+    <span class="note" style="margin:0">販売＝依頼元からもらう／原価＝業者に払う</span>
+    <span class="grow"></span>
+    ${ls.filter(l=>!l.order).length?'<button class="btn small danger" id="clearLines">明細を全部消す</button>':''}
+    ${(n=>n?`<span class="note" style="margin:0;color:var(--warn)">取り消し線の${n}行は依頼元が落とした項目（見積には出したが発注になっていない）。現場で改めて提案しないこと</span>`:'')(ls.filter(l=>!(+l.qty>0)).length)}</div>`;
+  let rowNo=0;
+  const table=ls.length?`<div class="lnw"><table class="ln"><thead><tr>
+      <th class="r" style="width:34px">No</th><th style="width:30px"></th><th style="width:110px">場所</th><th class="nmcol">名称</th>
+      <th style="width:104px">工程区分</th>
+      <th class="r" style="width:62px">数量</th><th style="width:58px">単位</th>
+      <th class="r" style="width:82px">販売単価</th><th class="r" style="width:80px">販売</th>
+      <th class="r" style="width:104px">原価単価</th><th class="r" style="width:80px">原価</th>
+      <th class="r" style="width:74px">粗利</th>
+      <th style="width:130px">備考</th><th style="width:26px"></th></tr></thead><tbody>
+    ${lineGroups(ls).map(g=>groupHead(c,g)+g.rows.map(l=>{const o=l.order?DB.orders.find(x=>x.id===l.order):null;
+      const sv=lineSell(l), cs=lineAmt(l), cut=!(+l.qty>0);   /* 数量0＝発注に出せない行。cut は由来の印 */
+      return `<tr data-l="${l.id}" class="${cut?'cutln':''}${oSel[l.id]&&!l.order?' on':''}">
+      <td class="r rn">${++rowNo}</td>
+      <td class="n">${l.order?'':`<input type="checkbox" class="lchk" ${oSel[l.id]?'checked':''}>`}</td>
+      <td><input type="text" class="li" data-lf="spec" value="${esc(l.spec||'')}"></td>
+      <td class="nmcol" style="white-space:nowrap"><input type="text" class="li" data-lf="name" value="${esc(l.name)}"${cut?' style="width:calc(100% - 78px)"':''}>${
+        cut?`<span class="cl cutbadge" style="margin-left:4px">${l.cut?'依頼元が削除':'数量0'}</span>`:''}</td>
+      <td>${l.order?`<span class="st ${OSTC[o?o.st:'下書き']}" title="${esc(l.who||'')}">${esc(o?o.no:'発注済')}</span>`
+        :`<select class="li" data-lf="kind"${l.kind?'':' style="border-color:var(--warn)"'}>${opts(PKINDS,l.kind,'（区分なし）')}</select>`}</td>
+      <td><input type="number" class="li" data-lf="qty" value="${l.qty}" step="0.1"></td>
+      <td><select class="li" data-lf="unit">${opts(UNITS,l.unit)}</select></td>
+      <td><input type="number" class="li" data-lf="sell" value="${l.sell||0}"></td>
+      <td class="r">${sv?yen(sv):'—'}</td>
+      <td style="white-space:nowrap"><input type="number" class="li" data-lf="price" value="${l.price||0}" style="width:calc(100% - 24px)">${
+        l.order?'':`<button class="x pk" data-pick="${l.id}" title="単価表から選ぶ／登録する">表</button>`}</td>
+      <td class="r">${cs?yen(cs):'—'}</td>
+      <td class="r" style="color:${sv&&sv-cs<0?'var(--warn)':'var(--sub)'}">${sv?yen(sv-cs):'—'}</td>
+      <td><input type="text" class="li" data-lf="memo" value="${esc(l.memo||'')}"></td>
+      <td>${l.order?'':`<button class="x" data-dell="${l.id}">×</button>`}</td></tr>`;}).join('')).join('')}
+    </tbody></table></div>`
+    :`<div class="card empty">この案件の明細はまだ無い。<br>
+        ${poLive(po).length?`依頼元の発注書が ${poLive(po).length}行 届いている。上のボタンで取り込める。`
+          :'業者から来た見積を貼り付けるか、1行ずつ足す。'}</div>`;
+  const selSell=free.filter(l=>oSel[l.id]).reduce((a,l)=>a+lineSell(l),0);
+  const bar=selIds.length?`<div class="selbar">
+      <b>${selIds.length}行 選択　販売 ${yen(selSell)}　原価 ${yen(selAmt)}</b>
+      <label style="display:inline-flex;align-items:center;gap:4px;font-size:12.5px">区分をつける
+        <select id="selKind"><option value="">（選ぶ）</option>${opts(PKINDS,'')}</select></label>
+      <span class="grow"></span>
+      <button class="btn small primary" id="mkOrder">この行で発注を作る</button>
+      <button class="btn small danger" id="delSel">選択した行を消す</button>
+      <button class="btn small" id="clrSel">選択をやめる</button></div>`:'';
+  const olist=ods.length?`<div class="bar" style="margin:16px 0 8px">
+      <h3 style="font-size:14px;margin:0">この案件の発注</h3>
+      <span class="note" style="margin:0">合計 ${yen(ods.reduce((a,o)=>a+orderAmt(o),0))}（税抜）</span></div>
+    <div class="tw"><table><thead><tr><th>発注No</th><th>工程区分</th><th>発注先</th><th>工期</th>
+      <th class="r">税抜</th><th class="r">税込</th><th>状態</th><th></th></tr></thead><tbody>
+      ${ods.map(o=>{const a=orderAmt(o);
+        return `<tr><td>${esc(o.no)}</td>
+        <td><span class="cl" style="background:${kcol(o.kind)}">${esc(o.kind)}</span></td>
+        <td>${esc(o.who||'業者未定')}</td><td>${o.start?spanLabel({date:o.start,end:o.end}):'—'}</td>
+        <td class="r">${yen(a)}</td><td class="r">${yen(Math.round(a*1.1))}</td>
+        <td><span class="st ${OSTC[o.st]}">${esc(o.st)}</span></td>
+        <td><button class="btn small" data-osheet="${o.id}">発注書</button>
+          ${OSTS.indexOf(o.st)<OSTS.length-1?`<button class="btn small" data-onext="${o.id}">${
+            o.st==='下書き'?'送る':o.st==='送付済'?'承諾':o.st==='承諾'?'完了':'請求済'}</button>`:''}
+          <button class="btn small danger" data-odel="${o.id}">取消</button></td></tr>`;}).join('')}
+    </tbody></table></div>`:'';
+  return head+tools+bar+table+olist;
+}
+function vOrderList(){
+  const FIN=OFIN;
+  let list=DB.orders.slice();
+  if(oSt==='未完了')list=list.filter(o=>FIN.indexOf(o.st)<0);
+  else if(oSt!=='すべて')list=list.filter(o=>o.st===oSt);
+  if(oMonth!=='すべて')list=list.filter(o=>!o.start||spanInMonth({date:o.start,end:o.end},oMonth));
+  const B0=byId();
+  const ok=o=>oLSort==='工期が近い順'?(o.start||'')
+           :oLSort==='発注日が早い順'?(o.sent||'')
+           :oLSort==='起算日が近い順'?((B0[o.case]||{}).kisan||'')
+           :oLSort==='完了希望日が近い順'?((B0[o.case]||{}).want||''):'';
+  if(oLSort==='発注No順')list.sort((a,b)=>(a.no||'').localeCompare(b.no||''));
+  else list.sort((a,b)=>{const x=ok(a),y=ok(b);
+    if(!x&&!y)return (a.no||'').localeCompare(b.no||'');
+    if(!x)return 1; if(!y)return -1;
+    return x===y?(a.no||'').localeCompare(b.no||''):x.localeCompare(y);});
+  const B=B0, tot=list.reduce((a,o)=>a+orderAmt(o),0);
+  return `<div class="bar" style="margin-top:0">
+      <select id="oMonth" title="工期の月で絞る">${optsL(['すべて'],oMonth,{'すべて':'工期：すべての月'})}${
+        MONTHS.map(m=>`<option value="${m}"${m===oMonth?' selected':''}>工期 ${mlab(m)}</option>`).join('')}</select>
+      <select id="oSt" title="発注の状態で絞る">${optsL(['未完了','すべて',...OSTS],oSt,
+        {'未完了':'状態：未完了だけ','すべて':'状態：すべて'})}</select>
+      <select id="oLSort" title="並び替え">${optsL(OLSORTS,oLSort,{})}</select>
+      <span class="note" style="margin:0">${list.length}件　合計 ${yen(tot)}（税抜）
+        <br>開いたときは必ず「今月・未完了」。支払済みの列は、支払いを使い始めるまで出さない</span></div>
+    <div class="tw"><table><thead><tr><th>発注No</th><th>発注名</th><th>発注先</th><th>工程区分</th>
+      <th>工期</th><th class="r">税抜</th><th>状態</th><th></th></tr></thead><tbody>
+    ${list.map(o=>{const c=B[o.case]||{};
+      return `<tr><td>${esc(o.no)}</td>
+      <td><button class="btn small" data-ocopen="${o.case}"
+        style="border:none;padding:0;background:none;text-decoration:underline;height:auto">${esc(o.name||c.prop||'—')}</button></td>
+      <td>${esc(o.who||'業者未定')}</td>
+      <td><span class="cl" style="background:${kcol(o.kind)}">${esc(o.kind)}</span></td>
+      <td>${o.start?spanLabel({date:o.start,end:o.end}):'—'}</td>
+      <td class="r">${yen(orderAmt(o))}</td>
+      <td><span class="st ${OSTC[o.st]}">${esc(o.st)}</span></td>
+      <td><button class="btn small" data-osheet="${o.id}">発注書</button></td></tr>`;}).join('')
+      ||'<tr><td colspan="8" class="note" style="padding:20px">該当なし。発注をつくるとここに並ぶ。</td></tr>'}
+    </tbody></table></div>`;
+}
+function askImport(cid){
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg"><h4>業者見積を貼り付けて取り込む</h4>
+    <p class="note" style="margin:0 0 8px">1行＝1明細。タブかカンマで区切る。<br>
+      並びは「名称／数量／単位／単価／備考」。数量と単位は省いてよい。</p>
+    <textarea id="impT" placeholder="${esc(SAMPLE)}"></textarea>
+    <p class="note">取り込んだあと、工程区分は名称から自動で当てる。違っていれば表で直す。</p>
+    <div class="askbtn" style="margin-top:10px">
+      <button class="btn small" id="askNo">やめる</button>
+      <button class="btn small primary" id="askYes">取り込む</button></div></div>`;
+  document.body.appendChild(el);
+  el.querySelector('#askNo').onclick=()=>el.remove();
+  el.querySelector('#askYes').onclick=()=>{
+    const t=el.querySelector('#impT').value; el.remove();
+    const rows=parseLines(t);
+    if(!rows.length){toast('読み取れる行が無かった');return;}
+    addLines(cid,rows); render(); toast(`${rows.length}行 取り込んだ`, undo);};
+  setTimeout(()=>{const t=el.querySelector('#impT'); if(t)t.focus();},0);
+}
+function askOrder(cid,who0){
+  const c=DB.cases.find(x=>x.id===cid); if(!c)return;
+  const ids=linesOf(cid).filter(l=>!l.order&&oSel[l.id]).map(l=>l.id);
+  if(!ids.length){toast('行を選ぶ');return;}
+  const sel=DB.lines.filter(l=>ids.indexOf(l.id)>=0);
+  const amt=sel.reduce((a,l)=>a+lineAmt(l),0);
+  const kinds=[...new Set(sel.map(l=>l.kind))];
+  const base=c.plan||c.done||'';
+  /* 「工程を組む」で決めた工程（まだ発注に紐づいていないもの）。区分が合うものを最初から選んでおく */
+  const freeP=procsOf(cid).filter(p=>!p.order&&!isInsp(p.kind));
+  const whos=[...new Set(sel.map(l=>l.who).filter(Boolean))];
+  const who1=who0||(whos.length===1?whos[0]:'');
+  const k1=kinds.filter(Boolean)[0]||'';
+  const pick=(who1&&freeP.find(p=>p.who===who1))||freeP.find(p=>p.kind===k1&&(!p.who||!who1||p.who===who1))||freeP.find(p=>p.kind===k1)||freeP.find(p=>p.who&&p.date)||freeP[0]||null;
+  const vd=who1?vendorOf(who1):null;
+  const P=p=>p?{who:p.who||who1,kind:p.kind,start:p.date||base,end:p.end||p.date||base}
+              :{who:who1,kind:k1||(vd&&vd.defKind)||'内装',start:base,end:base};
+  const f0=P(pick);
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg"><h4>発注を作る</h4>
+    <p class="note" style="margin:0 0 10px">${esc(c.prop||'現場')}　${ids.length}行
+      ${yen(amt)}（税抜）／税込 ${yen(Math.round(amt*1.1))}</p>
+    <div class="fg">
+      <div class="full"><label class="fl">工程から引く（「工程を組む」で決めた業者・日程）</label>
+        <select id="oqProc"><option value="">（工程を使わない。新しく1本作る）</option>${
+          freeP.map(p=>`<option value="${p.id}"${pick&&pick.id===p.id?' selected':''}>${esc(p.kind)}／${esc(p.who||'業者未定')}／${p.date?spanLabel(p):'日未定'}</option>`).join('')}</select>
+        ${freeP.length?'':'<span class="note">この案件にはまだ工程が無い。先に「工程を組む」で業者と日程を決めると、ここに自動で入る</span>'}</div>
+      <div class="full"><label class="fl">発注先</label><select id="oqWho">${vendorSel(f0.who)}</select></div>
+      <div><label class="fl">工程区分</label><select id="oqKind">${opts(PKINDS,f0.kind)}</select></div>
+      <div><label class="fl">回答期限</label><input type="date" id="oqDue" value="${f0.start?addDays(f0.start,-1):''}"></div>
+      <div><label class="fl">着工日 <span class="note" style="margin:0">工程の期間が入っている。直せる</span></label><input type="date" id="oqS" value="${f0.start}"></div>
+      <div><label class="fl">完工日</label><input type="date" id="oqE" value="${f0.end}"></div>
+      <div class="full"><label class="fl">工事内容（明細から作った。直せる）</label>
+        <input type="text" id="oqNaiyo" value="${esc(sel.map(l=>l.name).join('、'))}"></div>
+      <div class="full"><label class="fl">伝達事項・備考</label>
+        <input type="text" id="oqMemo" value="${esc(c.client||'')}"></div>
+    </div>
+    ${kinds.filter(Boolean).length>1?`<p class="note" style="color:var(--warn)">選んだ行の工程区分が ${esc(kinds.filter(Boolean).join('・'))} に分かれている。1つにまとめてよいか確認</p>`:''}
+    ${whos.length>1?`<p class="note" style="color:var(--warn)">選んだ行の発注先が ${esc(whos.join('・'))} に分かれている。業者ごとに分けるなら「やめる」で戻り、明細の上の業者ごとのボタンから作る</p>`:''}
+    <div class="askbtn" style="margin-top:14px">
+      <button class="btn small" id="askNo">やめる</button>
+      <button class="btn small primary" id="askYes">発注を作る</button></div></div>`;
+  document.body.appendChild(el);
+  el.querySelector('#askNo').onclick=()=>el.remove();
+  /* 工程を選び直したら、業者・区分・期間をその工程の値に差し替える */
+  el.querySelector('#oqProc').onchange=ev=>{
+    const p=DB.procs.find(x=>x.id===ev.target.value), v=P(p);
+    el.querySelector('#oqWho').innerHTML=vendorSel(v.who);
+    el.querySelector('#oqKind').value=v.kind;
+    el.querySelector('#oqS').value=v.start; el.querySelector('#oqE').value=v.end;
+    el.querySelector('#oqDue').value=v.start?addDays(v.start,-1):'';};
+  el.querySelector('#askYes').onclick=()=>{
+    const f={who:el.querySelector('#oqWho').value,
+             kind:el.querySelector('#oqKind').value,
+             due:el.querySelector('#oqDue').value,
+             start:el.querySelector('#oqS').value,
+             end:el.querySelector('#oqE').value,
+             naiyo:el.querySelector('#oqNaiyo').value,
+             memo:el.querySelector('#oqMemo').value,
+             proc:el.querySelector('#oqProc').value};
+    if(f.end&&f.start&&f.end<=f.start)f.end='';
+    el.remove(); createOrder(cid,ids,f);};
+}
+async function createOrder(cid,ids,f,quiet){
+  const c=DB.cases.find(x=>x.id===cid);
+  if(!quiet)snap();
+  const n=await allocOrderNo();
+  const oid='O'+n+DEV, no='AW-H'+String(n).padStart(4,'0');
+  const amt=DB.lines.filter(l=>ids.indexOf(l.id)>=0).reduce((a,l)=>a+lineAmt(l),0);
+  DB.orders.push({id:oid,no,case:cid,who:f.who,kind:f.kind,start:f.start,end:f.end,due:f.due,
+    naiyo:f.naiyo,memo:f.memo,st:'下書き',sent:'',
+    name:`${c?c.prop||'':''} ${f.kind}_${f.who||'業者未定'}`.trim()});
+  DB.lines.forEach(l=>{ if(ids.indexOf(l.id)>=0){l.order=oid;l.who=f.who;l.kind=f.kind;} });
+  /* 「工程を組む」で作った工程があればそれに紐づける（期間を直していればそちらを正にする）。無ければ新しく1本作る */
+  const p=f.proc?DB.procs.find(x=>x.id===f.proc&&x.case===cid&&!x.order):null;
+  if(p){ p.order=oid; p.who=f.who; p.kind=f.kind; p.date=f.start; p.end=f.end; p.amt=Math.round(amt*1.1); }
+  else { DB.pseq++;
+    DB.procs.push({id:'Q'+DB.pseq+DEV,case:cid,kind:f.kind,who:f.who,date:f.start,end:f.end,
+      amt:Math.round(amt*1.1),month:'',prog:'',order:oid,auto:1}); }
+  recalcPlan(c);
+  oSel={}; if(quiet)return; save(); render();
+  toast(p?`${no} を作って、工程（${f.kind}／${f.who||'業者未定'}）に紐づけた`
+         :`${no} を作った。工程も1本できた（${f.kind}／${f.who||'業者未定'}）`, undo);
+}
+/* 完了予定日＝最後の工程の日。工程が1本も無ければ今の値を残す。完工済みは触らない */
+function recalcPlan(c){
+  if(!c||c.done||c.planManual)return;   /* 手で入れた完了予定は工程で上書きしない */
+  const d=lastDayOf(procsOf(c.id)); if(d)c.plan=d;
+}
+/* 発注の送付で '済' にした案件は、送付済以上の発注が1つも無くなったら '未' に戻す。手で '済' にしたものは触らない */
+function recalcOrd(c){
+  if(!c||c.ordBy!=='order')return;
+  const live=DB.orders.some(o=>o.case===c.id&&OSTS.indexOf(o.st)>=OSTS.indexOf('送付済'));
+  if(!live){c.ord='未'; delete c.ordBy;}
+}
+function nextOrderSt(oid){
+  const o=DB.orders.find(x=>x.id===oid); if(!o)return;
+  const i=OSTS.indexOf(o.st); if(i<0||i>=OSTS.length-1)return;
+  snap(); o.st=OSTS[i+1];
+  if(o.st==='送付済'){
+    o.sent=fmtD(new Date());
+    const c=DB.cases.find(x=>x.id===o.case);
+    if(c){ if(c.ord!=='済')c.ordBy='order'; c.ord='済'; if(STATUS.indexOf(c.st)<STATUS.indexOf('発注書送付'))c.st='発注書送付';}}
+  save(); render(); toast(`${o.no} を ${o.st} にした`, undo);
+}
+function delOrder(oid){
+  const o=DB.orders.find(x=>x.id===oid); if(!o)return;
+  snap();
+  DB.lines.forEach(l=>{ if(l.order===oid)l.order=''; });
+  let kept=0;
+  DB.procs=DB.procs.filter(p=>{ if(p.order!==oid)return true; if(p.auto)return false; p.order=''; kept++; return true; });
+  DB.orders=DB.orders.filter(x=>x.id!==oid);
+  const c=DB.cases.find(x=>x.id===o.case); recalcOrd(c); recalcPlan(c);
+  save(); render(); toast(`${o.no} を取り消した（明細は未発注に戻した${kept?'。工程を組むで作った工程は残してある':''}）`, undo);
+}
+function payTerm(v){
+  if(!v||!v.close)return '月末締め・翌月末払い';
+  const c=(+v.close>=28)?'末日':v.close+'日', s=(+v.site>=28||!v.site)?'末日':v.site+'日';
+  return `毎月${c}締め・翌月${s}払い`;
+}
+function orderSheet(oid){
+  const o=DB.orders.find(x=>x.id===oid); if(!o)return;
+  const c=DB.cases.find(x=>x.id===o.case)||{};
+  const ls=orderLines(oid), amt=ls.reduce((a,l)=>a+lineAmt(l),0);
+  const v=vendorOf(o.who)||{};
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="ob"><h3>発 注 書</h3>
+    <div class="meta">
+      <b>発注No</b><span>${esc(o.no)}</span>
+      <b>発注日</b><span>${esc(o.sent||'（未送付）')}</span>
+      <b>発注先</b><span>${esc(v.full||o.who||'業者未定')} 御中</span>
+      <b>件名</b><span>${esc(o.name||'')}</span>
+      <b>現場</b><span>${esc(c.prop||'')}</span>
+      <b>工期</b><span>${o.start?spanLabel({date:o.start,end:o.end}):'—'}</span>
+      <b>工事内容</b><span>${esc(o.naiyo||'—')}</span>
+      <b>伝達事項</b><span>${esc(o.memo||'—')}</span>
+      <b>回答期限</b><span>${esc(o.due||'—')}</span></div>
+    <table><thead><tr><th style="width:30px">No</th><th>明細名</th><th class="r">数量</th><th>単位</th>
+      <th class="r">単価</th><th class="r">金額</th><th>備考</th></tr></thead><tbody>
+      ${ls.map((l,i)=>`<tr><td>${i+1}</td><td>${esc(l.name)}${l.spec?'<br><small>'+esc(l.spec)+'</small>':''}</td>
+        <td class="r">${l.qty}</td><td>${esc(l.unit)}</td><td class="r">${yen(l.price)}</td>
+        <td class="r">${yen(lineAmt(l))}</td><td>${esc(l.memo||'')}</td></tr>`).join('')}
+    </tbody></table>
+    <p class="amt">小計 ${yen(amt)}　消費税 ${yen(Math.round(amt*0.1))}　合計 ${yen(Math.round(amt*1.1))}</p>
+    <p class="note">支払条件：${esc(payTerm(v))}<br>アンドワークス株式会社</p>
+    <div class="askbtn" style="margin-top:14px"><button class="btn small" id="askNo">閉じる</button></div></div>`;
+  document.body.appendChild(el);
+  el.querySelector('#askNo').onclick=()=>el.remove();
+}
+
+/* ================= tabs ================= */
+const TABS=[['ledger','案件台帳'],['order','発注'],['proc','工程を組む'],['board','手配ボード'],['kanko','完工予定'],['insp','検査カレンダー'],
+            ['bill','請求'],['pay','支払'],['pl','月次'],['master','マスタ'],['check','要確認']];
+let tab='ledger', selCase=null, selProc=null;
+let fClient='すべて', fMonth='すべて', fStatus='すべて', fQ='', bMonth=THIS_M, kMonth=THIS_M;
+let fScope='運用中';
+let iClient='日本財託', iMonth=addM(THIS_M,-1);   /* 請求は前月分を見ることが多い */
+let cMonth=THIS_M, cWho='すべて', pendStart=null, pHide=false;
+let pCase=null, pFilter='発注前（未）', pQ='', pShift=0, kView='すべて', pSort='起算日が近い順';
+let mTab='発注先', mQ='';
+let oCase=null, oFilter='発注前（未）', oQ='', oSel={}, oView='make', oMonth=THIS_M, oSt='未完了';
+let oHide=(()=>{try{return localStorage.getItem('aw-ohide')!=='0';}catch(e){return true;}})();   /* 発注画面で左の案件一覧をたたむ */
+let oSort='起算日が近い順', oLSort='工期が近い順';
+
+function renderTabs(){
+  /* タブの数字は運用中の案件ぶんだけ（案件単位で数える）。過去データの件数は要確認タブの中で見る */
+  const B=byId(); const seen=new Set();
+  issues().forEach(i=>{const c=B[i.c]; if(c&&c.live)seen.add(i.k+'|'+i.c);});
+  const n=seen.size;
+  document.getElementById('tabs').innerHTML=TABS.map(([k,l])=>
+    `<button class="${tab===k?'on':''}" data-t="${k}">${l}${k==='check'&&n?` <span style="opacity:.75">${n}</span>`:''}</button>`).join('');
+  document.getElementById('src').innerHTML=
+    `元データ：${esc(M.asof)}<br>運用中 ${DB.cases.filter(c=>c.live).length} 件／過去 ${DB.cases.filter(c=>!c.live).length} 件／工程 ${DB.procs.length} 件`+
+    `<br>（この画面の編集は元シートに書き戻しません）<br><span id="dbState">${esc(dbState||(LDB?'':'共有保存：未接続（この端末のみ）'))}</span>`;
+}
+
+/* ================= 案件台帳 ================= */
+function vLedger(){
+  const list=DB.cases.filter(c=>
+    (fScope==='過去データ込み'||c.live)&&
+    (fClient==='すべて'||c.client===fClient)&&
+    (fMonth==='すべて'||ym(c.bill)===fMonth||(fMonth==='未設定'&&!c.bill))&&
+    (fStatus==='すべて'||c.st===fStatus)&&
+    (!fQ||(c.prop+c.client+c.id).toLowerCase().includes(fQ.toLowerCase())));
+  const sales=list.reduce((a,c)=>a+salesOf(c),0), cost=list.reduce((a,c)=>a+costOf(c.id),0);
+  const clients=['すべて',...CLIENTS().filter(c=>DB.cases.some(x=>x.client===c)),
+    ...[...new Set(DB.cases.map(c=>c.client).filter(c=>c&&!isClient(c)))]];
+  return `<div class="bar">
+      <h2>案件台帳</h2>
+      <select id="fScope" title="表示する範囲">${optsL(['運用中','過去データ込み'],fScope,
+        {'運用中':'範囲：運用中だけ','過去データ込み':'範囲：過去データ込み'})}</select>
+      <select id="fMonth" title="請求月で絞る">${optsL(['すべて','未設定'],fMonth,
+        {'すべて':'請求月：すべて','未設定':'請求月：未設定'})}${
+        MONTHS.map(m=>`<option value="${m}"${m===fMonth?' selected':''}>請求 ${mlab(m)}</option>`).join('')}</select>
+      <select id="fClient" title="依頼元で絞る">${optsL(clients,fClient,{'すべて':'依頼元：すべて'})}</select>
+      <select id="fStatus" title="ステータスで絞る">${optsL(['すべて',...STATUS],fStatus,
+        {'すべて':'ステータス：すべて'})}</select>
+      <input type="search" id="fQ" placeholder="物件名で探す" value="${esc(fQ)}" style="min-width:170px">
+      <button class="btn primary" id="addCase">＋ 案件を追加</button>
+      ${canDl===false?'':'<button class="btn small" id="expCsv">CSVで出す</button>'}
+    </div>
+    <div class="kpi">
+      <div class="k"><small>件数</small><b>${list.length}</b></div>
+      <div class="k"><small>売上（税込）</small><b>${yen(sales)}</b></div>
+      <div class="k"><small>原価</small><b>${yen(cost)}</b></div>
+      <div class="k"><small>粗利</small><b>${yen(sales-cost)}</b></div>
+      <div class="k"><small>粗利率</small><b>${sales?((sales-cost)/sales*100).toFixed(1):'0.0'}%</b></div>
+    </div>
+    <div class="layout"><div class="main"><div class="tw"><table>
+      <thead><tr><th>顧客</th><th>物件</th><th>区分</th><th>ステータス</th>
+        <th class="r">売上</th><th class="r">原価</th><th class="r">粗利率</th>
+        <th>起算</th><th>希望<br><small>依頼元</small></th><th>完了予定<br><small>弊社</small></th>
+        <th>完了</th><th>請求月</th></tr></thead>
+      <tbody>${list.slice(0,400).map(c=>{
+        const s=salesOf(c), k=costOf(c.id);
+        return `<tr class="${selCase===c.id?'on':''}" data-c="${c.id}">
+          <td><span class="cl" style="background:${col(c.client)}">${esc(c.client||'（未設定）')}</span></td>
+          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis">${esc(c.prop||'（物件未入力）')}${
+            c.keyx==='有'?'<span class="st" style="margin-left:5px;background:#DCDCD2">鍵</span>':''}${
+            c.warr==='有'?'<span class="st" style="margin-left:3px;background:#F7E3A8">保証</span>':''}</td>
+          <td>${esc(c.kind)}</td>
+          <td><span class="st ${stCls(c.st)}">${esc(c.st)}</span>${
+            (c.ord||'未')==='未'?'<span class="flag" style="margin-left:4px">発注未</span>':''}</td>
+          <td class="r">${yen(s)}</td><td class="r">${k?yen(k):'<span class="flag">なし</span>'}</td>
+          <td class="r">${s?((s-k)/s*100).toFixed(0)+'%':'—'}</td>
+          <td>${c.kisan?md(c.kisan):'—'}</td>
+          <td>${c.want?md(c.want):'—'}</td>
+          <td>${c.plan?`<span${c.want&&c.plan>c.want?' class="flag"':''}>${md(c.plan)}</span>`:'—'}</td>
+          <td>${c.done?md(c.done):'<span class="flag">未</span>'}</td>
+          <td>${c.bill?mlabel(c.bill):'<span class="flag">未</span>'}</td></tr>`;}).join('')}
+      </tbody></table></div>
+      ${list.length>400?'<p class="note">先頭400件のみ表示。絞り込みを使ってほしい。</p>':''}
+      <p class="note">行をクリックすると右で中身を直せる。保存ボタンは無く、変えた瞬間に反映される。</p>
+    </div>${drawer()}</div>`;
+}
+
+/* ================= 右ドロワー（入力） ================= */
+function drawer(){
+  const c=DB.cases.find(x=>x.id===selCase);
+  if(!c) return `<div class="drawer"><h3>案件の中身</h3>
+    <p class="note">左の行をクリックすると、ここで顧客・物件・金額・ステータス・工程（誰にいつ何円で発注したか）を直せる。<br><br>
+    「＋ 案件を追加」で新しい案件を作れる。工程を足すと、手配ボードと完工予定と支払に自動で載る。</p></div>`;
+  const ps=procsOf(c.id), cost=costOf(c.id), s=salesOf(c);
+  return `<div class="drawer" id="dw">
+    <h3>${esc(c.prop||'（物件未入力）')}</h3>
+    <p class="note" style="margin-top:0">${esc(c.id)}</p>
+    <div class="dwsec"><b>いま決めること</b><span class="note" style="margin:0">日程・状態・金額</span></div>
+    <div class="fg" style="margin-top:6px">
+      <div><label class="fl"><i class="fdot r"></i>起算日（次回入居日）</label><input type="date" data-f="kisan" value="${esc(c.kisan||'')}"></div>
+      <div><label class="fl"><i class="fdot b"></i>完了希望日（依頼元）</label><input type="date" data-f="want" value="${esc(c.want||'')}"></div>
+      <div><label class="fl"><i class="fdot y"></i>完了予定日（弊社）<span class="note" style="margin:0">${c.planManual?'手入力':'工程の最終日から自動'}</span></label><input type="date" data-f="plan" value="${esc(c.plan||'')}"></div>
+      <div><label class="fl">完了日</label><input type="date" data-f="done" value="${esc(c.done||'')}"></div>
+      ${c.want&&c.plan&&c.plan>c.want?`<p class="note full" style="color:var(--warn);margin:0">
+        弊社の完了予定 ${md(c.plan)} が、依頼元の希望 ${md(c.want)} より後になっている</p>`:''}
+      <div><label class="fl">ステータス</label><select data-f="st">${opts(STATUS,c.st)}</select></div>
+      <div><label class="fl">発注</label><select data-f="ord">${opts(['未','済'],c.ord||'未')}</select></div>
+      <div><label class="fl">売上（税抜）</label><input type="number" data-f="sales" value="${c.sales||0}" step="100"></div>
+      <div><label class="fl">追加受注（税抜）</label><input type="number" data-f="add" value="${c.add||0}" step="100"></div>
+    </div>
+    <div class="dwsec" style="margin-top:12px"><b>案件の属性</b><span class="note" style="margin:0">変えることは少ない</span></div>
+    <div class="fg" style="margin-top:6px">
+      <div class="full"><label class="fl">物件名</label>
+        <input type="text" data-f="prop" value="${esc(c.prop)}"></div>
+      <div><label class="fl">顧客</label><select data-f="client">${opts(CLIENTS(),c.client,'（未設定）')}${
+        c.client&&!isClient(c.client)?`<option selected>${esc(c.client)}</option>`:''}</select></div>
+      <div><label class="fl">区分</label><select data-f="kind">${opts(KINDS,c.kind)}</select></div>
+      <div><label class="fl">鍵交換</label><select data-f="keyx">${opts(['','有'],c.keyx||'')}</select></div>
+      <div><label class="fl">設備保証</label><select data-f="warr">${opts(['','有'],c.warr||'')}</select></div>
+      <div><label class="fl">報告日</label><input type="date" data-f="report" value="${esc(c.report||'')}"></div>
+      <div><label class="fl">請求月</label><input type="month" data-f="bill" value="${esc(ym(c.bill))}"></div>
+      <div><label class="fl">写真UP</label><select data-f="photo">${opts(['済','未'],c.photo||'未')}</select></div>
+      <div class="full"><label class="fl">備考</label>
+        <input type="text" data-f="memo" value="${esc(c.memo||'')}"></div>
+    </div>
+    <div class="pl"><label class="fl">工程（発注）</label>
+      ${ps.map(p=>`<div class="prow" data-p="${p.id}">
+        <select data-pf="kind">${kindOpts(p.kind)}</select>
+        <select data-pf="who">${vendorSel(p.who)}</select>
+        <input type="date" data-pf="date" value="${esc(p.date||'')}" title="開始日">
+        <span class="tl">〜</span>
+        <input type="date" data-pf="end" value="${esc(p.end&&p.end>p.date?p.end:'')}" title="終了日（1日だけなら空欄）">
+        <input type="number" data-pf="amt" value="${p.amt||0}" step="100">
+        <button class="x" data-del="${p.id}" title="削除">×</button></div>`).join('')}
+      <button class="btn small" id="addProc">＋ 工程を足す</button>
+    </div>
+    <div class="pl">
+      <div class="tot"><span>売上（税込）</span><b>${yen(s)}</b></div>
+      <div class="tot"><span>原価</span><b>${yen(cost)}</b></div>
+      <div class="tot"><span>粗利</span><b>${yen(s-cost)}　${s?((s-cost)/s*100).toFixed(1)+'%':''}</b></div>
+    </div>
+    <div class="pl" style="display:flex;gap:7px">
+      <button class="btn small danger" id="delCase">この案件を削除</button>
+      <button class="btn small" id="closeDw">閉じる</button>
+    </div></div>`;
+}
+
+/* ================= 工程を組む ================= */
+const shiftM=(m,n)=>{let y=+m.slice(0,4),mo=+m.slice(5,7)+n;
+  while(mo>12){mo-=12;y++;} while(mo<1){mo+=12;y--;} return `${y}-${String(mo).padStart(2,'0')}`;};
+function procMonth(c,ps){
+  /* 工程の日付が無ければ、旗（完了希望→起算日→完了予定）の月を開く。それも無ければ今月 */
+  const d=ps.map(p=>p.date).filter(Boolean).sort()[0]||c.want||c.kisan||c.plan||c.done||c.bill||fmtD(new Date());
+  return shiftM(d.slice(0,7),pShift);
+}
+function vProc(){
+  const DONE=DONE_ST;
+  let list=DB.cases.filter(c=>
+    (pFilter==='すべて'?true:
+     pFilter==='発注前（未）'?(c.ord||'未')==='未':
+     pFilter==='発注済・進行中'?((c.ord||'未')==='済'&&DONE.indexOf(c.st)<0):
+     DONE.indexOf(c.st)>=0)&&
+    (!pQ||(c.prop+c.client).toLowerCase().includes(pQ.toLowerCase())));
+  list=sortCases(list,pSort);
+  // 選んでいる案件は、工程を足して絞り込みから外れても一覧に残す
+  const sel=pCase?DB.cases.find(x=>x.id===pCase):null;
+  if(sel){ if(!list.some(c=>c.id===pCase)) list=[sel,...list]; }
+  else pCase=(list[0]||{}).id||null;
+  const c=DB.cases.find(x=>x.id===pCase);
+  const mi=DB.cases.filter(x=>(x.ord||'未')==='未').length;
+  const noP=DB.cases.filter(x=>(x.ord||'未')==='未'&&!procsOf(x.id).length).length;
+  const left=`<div class="cases">${list.slice(0,300).map(x=>`
+    <button class="ci ${pCase===x.id?'sel':''}" data-pc="${x.id}">
+      <span class="cl" style="background:${col(x.client)}">${esc(x.client||'—')}</span>
+      <b>${esc(x.prop||'（物件未入力）')}</b>
+      <small>${(x.ord||'未')==='未'?'<span class="nf">発注 未</span>　':''}${esc(x.kind)}　${
+        procsOf(x.id).length?procsOf(x.id).length+'工程':'<span class="nf">工程なし</span>'}</small>
+      <small><i class="fdot r"></i>${x.kisan?md(x.kisan):'—'}　<i class="fdot b"></i>${x.want?md(x.want):'—'}　<i class="fdot y"></i>${
+        x.plan?md(x.plan):'—'}</small></button>`).join('')||'<p class="note">該当なし</p>'}
+    ${list.length>300?'<p class="note">先頭300件</p>':''}</div>`;
+  const idx=list.findIndex(x=>x.id===pCase);
+  const nav=pHide?`<button class="btn small" id="pPrevCase" ${idx>0?'':'disabled'}>◀ 前の案件</button>
+      <span class="note" style="margin:0">${idx>=0?(idx+1)+' / '+list.length:'—'}</span>
+      <button class="btn small" id="pNextCase" ${idx>=0&&idx<list.length-1?'':'disabled'}>次の案件 ▶</button>`:'';
+  return `<div class="bar"><h2>工程を組む</h2>
+      <button class="btn small" id="pHide" title="${pHide?'左の一覧を出す':'左の一覧を隠して工程表を広く使う'}">${pHide?'▶ 一覧を出す':'◀ 一覧を隠す'}</button>
+      <select id="pFilter" title="案件の絞り込み">${optsL(['発注前（未）','発注済・進行中','完工済','すべて'],pFilter,
+        {'すべて':'案件：すべて'})}</select>
+      <select id="pSort" title="並び替え">${optsL(SORTS,pSort,{})}</select>
+      <input type="search" id="pQ" placeholder="物件名で探す" value="${esc(pQ)}" style="min-width:170px">
+      ${nav}
+      <span class="note" style="margin:0">発注前（未） <b style="color:var(--warn)">${mi}件</b>／うち工程が1つも無い ${noP}件
+        <br>2026発注手配・完工予定（9月タブ）の発注列が「未」の行を取り込んである</span></div>
+    <div class="layout">${pHide?'':left}<div class="main">${c?procPanel(c):'<div class="card">'+(pHide?'該当する案件がない。絞り込みか検索を変える。':'左で案件を選ぶ。')+'</div>'}</div></div>`;
+}
+/* 工程表に立てる旗：起算日＝赤、依頼元の完了希望日＝青、弊社の完了予定日＝黄 */
+const FLAGS=[['kisan','起算日','r'],['want','完了希望','b'],['plan','完了予定','y']];
+const flagsOn=(c,ds)=>FLAGS.filter(f=>c[f[0]]&&c[f[0]]===ds);
+const flagHtml=(c,ds)=>flagsOn(c,ds).map(f=>`<span class="ftag ${f[2]}" title="${f[1]} ${md(ds)}">${f[1]}</span>`).join('');
+const flagCls=(c,ds)=>flagsOn(c,ds).map(f=>'fd-'+f[2]).join(' ');
+function flagLine(c,m){
+  return `<div class="flagline">${FLAGS.map(f=>{const v=c[f[0]];
+    return `<span class="fi"><span class="ftag ${f[2]}${v?'':' off'}">${f[1]}</span>${
+      v?`<b>${md(v)}</b>${ym(v)!==m?`<button class="btn small" data-pjump="${v.slice(0,7)}" title="その月の工程表へ">${+v.slice(5,7)}月へ</button>`:''}`
+       :'<span class="note" style="margin:0">—</span>'}</span>`;}).join('')}
+    <span class="note" style="margin:0 0 0 auto">発注が届くと自動で立つ。日付は案件台帳で直せる</span></div>`;
+}
+function procPanel(c){
+  const ps=procsOf(c.id).slice().sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
+  const m=procMonth(c,ps), D=daysIn(m), y=+m.slice(0,4), mo=+m.slice(5,7);
+  const sales=salesOf(c), cost=costOf(c.id);
+  const head=`<tr><th class="nm">工程</th>${Array.from({length:D},(_,i)=>{
+    const d=i+1,w=new Date(y,mo-1,d).getDay(), ds=iso(y,mo,d);
+    return `<th class="${w===6?'sat':w===0?'sun':''} ${flagCls(c,ds)}"><b>${d}</b><small>${WD[w]}</small>${flagHtml(c,ds)}</th>`;}).join('')}</tr>`;
+  const body=ps.map(p=>{
+    const off=new Set(SEN.indexOf(p.who)>=0?offDays(p.who,m):[]);
+    const tds=Array.from({length:D},(_,i)=>{
+      const d=i+1, ds=iso(y,mo,d), on=onDay(p,ds), first=p.date===ds;
+      const busy=!on&&p.who&&!isInsp(p.kind)&&clash(p.id,p.who,[ds]);
+      const pend=pendStart&&pendStart.pid===p.id&&pendStart.day===ds;
+      const cls=['pc',off.has(d)?'off':'',busy?'busy':'',pend?'pending':'',flagCls(c,ds)].filter(Boolean).join(' ');
+      return `<td class="${cls}" data-pid="${p.id}" data-day="${ds}">${on?
+        `<button class="chip pc ${selProc===p.id?'sel':''}" draggable="true" data-p="${p.id}"
+          style="background:${kcol(p.kind)}">
+          <span class="p">${esc(p.kind)}${first?'':'<span class="cont">続</span>'}</span>
+          <span class="y">${esc(p.who||'業者未定')}</span></button>`:''}</td>`;}).join('');
+    return `<tr><th class="nm">${esc(p.kind)}<small>${esc(p.who||'業者未定')}${
+      p.date?'　'+spanLabel(p):(p.memo?'　'+esc(p.memo):'')}</small></th>${tds}</tr>`;
+  }).join('');
+  const warn=[];
+  const k=ps.filter(p=>isSeko(p.kind)&&p.date), s=ps.filter(p=>p.kind==='清掃'&&p.date);
+  const v=ps.filter(p=>isInsp(p.kind)&&p.date);
+  if(k.length&&s.length){const lk=k.map(endOf).sort().pop(), fs=s.map(p=>p.date).sort()[0];
+    if(fs<lk)warn.push(`清掃 ${md(fs)} が工事 ${md(lk)} より前になっている`);}
+  if(s.length&&v.length){const ls=s.map(endOf).sort().pop(), fv=v.map(p=>p.date).sort()[0];
+    if(fv<ls)warn.push(`AW検査 ${md(fv)} が清掃 ${md(ls)} より前になっている`);}
+  ps.forEach(p=>{
+    if(!p.who)warn.push(`${p.kind}の業者が決まっていない`);
+    else if(!p.date)warn.push(`${p.who}（${p.kind}）の日付が決まっていない`);
+    else{
+      const offHit=SEN.indexOf(p.who)>=0?spanDays(p).find(d=>isOff(p.who,d)):null;
+      if(offHit)warn.push(`${p.who} は ${md(offHit)} が休み`);
+      if(!isInsp(p.kind)&&clash(p.id,p.who,spanDays(p)))
+        warn.push(`${p.who} は ${spanLabel(p)} に別の現場がある`);
+    }
+  });
+  return `<div class="card" style="margin-bottom:10px">
+      <div class="bar" style="margin:0 0 8px">
+        <h3 style="font-size:16px;margin:0">${esc(c.prop||'（物件未入力）')}</h3>
+        <span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span>
+        <span class="st ${stCls(c.st)}">${esc(c.st)}</span>
+        ${(c.ord||'未')==='未'?'<span class="flag">発注 未</span>':'<span class="st done">発注済</span>'}
+        ${(()=>{const un=ps.filter(p=>!p.order&&!isInsp(p.kind)), ready=un.filter(p=>p.who&&p.date);
+          return `<button class="btn small ${ready.length?'primary':''}" data-ocopen="${c.id}" style="margin-left:auto"
+            title="${ready.length?'業者と日程が決まった工程が'+ready.length+'件ある。発注の画面でその業者・期間が最初から入る':'工程に業者と日程を入れると、発注にそのまま引き継がれる'}">発注へ →${
+            ready.length?`<span class="cnt">${ready.length}</span>`:''}</button>`;})()}
+        <button class="btn small" data-open="${c.id}">案件台帳で開く</button></div>
+      ${c.memo?`<p class="note" style="margin:0 0 6px"><b>発注内容：</b>${esc(c.memo)}</p>`:''}
+      ${c.items?`<p class="note" style="margin:0 0 6px"><b>削除／追加項目：</b>${esc(c.items)}</p>`:''}
+      ${(()=>{let nk=needKinds(c); const guess=nk.length;
+        if(!nk.length)nk=KORDER;
+        const have=new Set(ps.map(x=>x.kind));
+        const miss=nk.filter(k=>!have.has(k));
+        return `<div class="kneed"><span class="note" style="margin:0">${guess?'必要そうな工程':'発注内容から読み取れない。工程を選ぶ'}</span>
+          ${nk.map(k=>have.has(k)
+            ? `<span class="kk on" style="background:${kcol(k)}">${esc(k)}　入力済</span>`
+            : `<button class="kk" data-addkind="${c.id}|${esc(k)}" style="background:${kcol(k)}">＋ ${esc(k)}</button>`).join('')}
+          ${miss.length>1?`<button class="btn small primary" data-addkinds="${c.id}">足りない${miss.length}件をまとめて作る</button>`:''}</div>`;})()}
+      <div class="kpi" style="margin-bottom:0">
+        <div class="k"><small>売上（税込）</small><b>${yen(sales)}</b></div>
+        <div class="k"><small>原価</small><b>${cost?yen(cost):'<span style="color:var(--warn)">未入力</span>'}</b></div>
+        <div class="k"><small>粗利</small><b>${yen(sales-cost)}${sales?`　${((sales-cost)/sales*100).toFixed(0)}%`:''}</b></div>
+        <div class="k"><small>完工予定日</small><b style="font-size:15px">${md(c.plan)||'—'}</b></div>
+        <div class="k"><small>完工日</small><b style="font-size:15px">${c.done?md(c.done):'未'}</b></div>
+      </div></div>
+    <div class="bar" style="margin-top:0">
+      <button class="btn small" id="pPrev">◀ 前の月</button>
+      <b style="font-size:14px">${y}年${mo}月</b>
+      <button class="btn small" id="pNext">次の月 ▶</button>
+      <span class="note" style="margin:0">開始日を押す→終了日を押すで期間が入る（同じ日を2回で1日）。バーのドラッグは期間ごと移動</span></div>
+    ${flagLine(c,m)}
+    ${ps.length?`<div class="legend"><span><i style="background:var(--card);border:1px solid var(--line)"></i>空き</span>
+      <span><i style="background:#FBEFE6"></i>その職人に別の現場がある</span>
+      <span><i style="background:repeating-linear-gradient(135deg,#F1EFEA,#F1EFEA 3px,#E8E5DE 3px,#E8E5DE 6px)"></i>休み</span>
+      ${[...new Set(ps.map(p=>p.kind))].map(k=>`<span><i style="background:${kcol(k)}"></i>${esc(k)}</span>`).join('')}</div>`:''}
+    <div class="boardwrap" style="max-height:none;margin-bottom:10px">
+      <table class="bd" style="width:${112+86*D}px"><thead>${head}</thead><tbody>${body||
+        `<tr><th class="nm"><small>工程なし</small></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">工程がまだ1つも無い。下の「＋ 工程を足す」から、工事・清掃・鍵交換・検査を足していく。旗の日を目安に組む。</td></tr>`}</tbody></table></div>
+    <div class="card">
+      <label class="fl">工程（誰に・いつからいつまで）</label>
+      <p class="note" style="margin:0 0 6px">日付は期間で入れる。1日だけなら終了日は空欄。上の表では「開始日をクリック→終了日をクリック」でも引ける（同じ日を2回押すとその日だけ）。金額は案件台帳で入れる。</p>
+      ${ps.map(p=>`<div class="prow np" data-p="${p.id}">
+        <select data-pf="kind">${kindOpts(p.kind)}</select>
+        <select data-pf="who">${vendorSel(p.who)}</select>
+        <input type="date" data-pf="date" value="${esc(p.date||'')}" title="開始日">
+        <span class="tl">〜</span>
+        <input type="date" data-pf="end" value="${esc(p.end&&p.end>p.date?p.end:'')}" title="終了日（1日だけなら空欄）">
+        <button class="x" data-del="${p.id}" title="削除">×</button></div>`).join('')}
+      <div style="display:flex;gap:7px;margin-top:8px">
+        <button class="btn small" id="addProc2">＋ 工程を足す</button>
+        <button class="btn small ${(c.ord||'未')==='未'?'primary':''}" data-ord="${c.id}">${
+          (c.ord||'未')==='未'?'発注書を送った':'発注を取り消す'}</button>
+        <button class="btn small ${c.done?'':'primary'}" data-done="${c.id}">${c.done?'完工を取り消す':'完工にする'}</button>
+      </div>
+      ${warn.length?`<div style="margin-top:12px">${[...new Set(warn)].map(w=>
+        `<div class="ck"><span class="t">要確認</span>${esc(w)}</div>`).join('')}</div>`:
+        '<p class="note" style="color:var(--ok)">この案件の工程に問題は見つからない。</p>'}
+    </div>`;
+}
+
+/* ================= 手配ボード ================= */
+const daysIn=m=>new Date(+m.slice(0,4),+m.slice(5,7),0).getDate();
+function boardRows(m){
+  const D=daysIn(m), B=byId();
+  const names=[...SEN,...[...new Set(DB.procs.filter(p=>p.who&&SEN.indexOf(p.who)<0&&spanInMonth(p,m))
+    .map(p=>p.who))]];
+  return names.map(nm=>{
+    const days={};
+    DB.procs.filter(p=>p.who===nm&&spanInMonth(p,m)).forEach(p=>{
+      spanDays(p).forEach(ds=>{ if(ym(ds)!==m)return; const d=+ds.slice(8,10); (days[d]=days[d]||[]).push(p);});});
+    return {name:nm,days,off:offDays(nm,m),sen:SEN.indexOf(nm)>=0};
+  });
+}
+function vBoard(){
+  const m=bMonth, D=daysIn(m), rows=boardRows(m), B=byId();
+  const y=+m.slice(0,4), mo=+m.slice(5,7);
+  // 1マスに入る最大件数（3件まで同じ高さでそろえ、超えた分は「+n」）
+  const MAXSLOT=3;
+  let peak=1; rows.forEach(w=>{for(let d=1;d<=D;d++){const k=(w.days[d]||[]).length; if(k>peak)peak=k;}});
+  const slots=Math.min(peak,MAXSLOT);
+  const head=`<tr><th class="nm">職人・業者</th>${Array.from({length:D},(_,i)=>{
+    const d=i+1, w=new Date(y,mo-1,d).getDay();
+    return `<th class="${w===6?'sat':w===0?'sun':''}"><b>${d}</b><small>${WD[w]}</small></th>`;}).join('')}<th class="sm">稼働</th></tr>`;
+  const body=rows.map(w=>{
+    let n=0;
+    const tds=Array.from({length:D},(_,i)=>{
+      const d=i+1, ds=`${m}-${String(d).padStart(2,'0')}`, off=w.off.includes(d);
+      const ps=w.days[d]||[]; n+=ps.length;
+      const attr=`data-who="${esc(w.name)}" data-day="${ds}"`;
+      const cls=['c',off?'off':''].filter(Boolean).join(' ');
+      const show=ps.slice(0,slots), rest=ps.length-show.length;
+      const inner=show.map(p=>{const c=B[p.case]||{};
+        return `<button class="chip ${selProc===p.id?'sel':''}" draggable="true" data-p="${p.id}"
+          style="background:${col(c.client)}">
+          <span class="p">${esc(c.prop||'（物件未入力）')}${p.date===ds?'':'<span class="cont">続</span>'}</span>
+          <span class="y">${esc(p.kind)}${p.amt?' '+yen(p.amt):''}</span></button>`;}).join('')
+        +(rest>0?`<span class="more">＋${rest}件</span>`:'');
+      return `<td class="${cls}" ${attr}>${inner}</td>`;
+    }).join('');
+    return `<tr><th class="nm">${esc(w.name)}<small>${w.sen?`<button class="lnk" data-off="${esc(w.name)}" title="この月の休みを入れる">休み${w.off.length}日${w.off.length?'：'+w.off.join(',') :''} ✎</button>`:'外注'}</small></th>${tds}<td class="sm">${n}</td></tr>`;
+  }).join('');
+  return `<div class="bar"><h2>手配ボード</h2>
+      <select id="bMonth" title="表示する月">${MONTHS.map(m=>`<option value="${m}"${m===bMonth?' selected':''}>${mlab(m)}の予定</option>`).join('')}</select>
+      <button class="btn small" id="undoBtn">ひとつ戻す</button>
+      ${location.hash==='#admin'?'<button class="btn small danger" id="resetBtn">元データに戻す（共有保存も10/20時点に戻る）</button>':'<span class="note" style="margin:0">「元データに戻す」は封印（共有保存ごと10/20時点に戻ってしまうため）</span>'}</div>
+    ${location.hash==='#admin'?`<div class="card" style="margin-top:10px"><h3 style="margin:0 0 6px">新しい台帳（v4）への移行</h3>
+      <p class="note">このボタンでいま画面にある全データ（案件・工程・明細・発注・マスタ・入金・支払・休み）を文字列としてコピーする。新しい台帳の初回画面に貼り付けると取り込まれる。Claude には渡さない。</p>
+      <button class="btn small primary" id="exportAll">全データをコピーする</button> <span id="exportMsg" class="note"></span></div>
+    <div class="card" style="margin-top:10px"><h3 style="margin:0 0 6px">診断ログ（この端末）　端末 ${esc(DEV)}　墓標 ${Object.keys(DB.tomb||{}).length}　状態 ${esc(dbState)}</h3>
+      <textarea readonly style="width:100%;height:260px;font:11px/1.4 ui-monospace,monospace">${esc(AWLOG.slice().reverse().map(r=>r.join('  ')).join('\n'))}</textarea></div>`:''}
+    <div class="legend">${Object.keys(CC).map(k=>`<span><i style="background:${col(k)}"></i>${esc(k)}</span>`).join('')}
+      <span><i style="background:var(--c-other)"></i>その他</span>
+      <span style="margin-left:6px">チップをドラッグすると別の職人・別の日に移せる（期間はそのまま平行移動）。「続」は前日からの続き</span></div>
+    <div class="boardwrap"><table class="bd" style="--slots:${slots};width:${112+86*D+54}px"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+    <p class="note">ここに出ているのは案件台帳の工程そのもの。動かすと台帳の予定日・担当も変わり、完工予定と支払にも同時に反映される。
+      休み（斜線）は2026年10月のスケジュール管理から取り込んだもの。</p>`;
+}
+
+/* ================= 完工予定 ================= */
+function vKanko(){
+  const m=kMonth, D=daysIn(m), y=+m.slice(0,4), mo=+m.slice(5,7);
+  const KEN=M.kensa||'藤森正則';
+  const all=DB.cases.filter(c=>ym(planOf(c))===m);
+  const insp=c=>procsOf(c.id).filter(p=>isInsp(p.kind));
+  const noArr=c=>{const ps=procsOf(c.id);
+    return !ps.length||ps.some(p=>!p.who||!p.date);};
+  const list=all.filter(c=>
+    kView==='すべて'?true:
+    kView==='検査が未手配'?insp(c).length===0:
+    kView==='手配が未完了'?noArr(c):
+    kView==='未完工'?!c.done:true);
+  const byDay={}; list.forEach(c=>{const d=planOf(c); (byDay[d]=byDay[d]||[]).push(c);});
+  const days=Object.keys(byDay).sort();
+  // 藤森の検査予定（この月）
+  const kenDays={};
+  DB.procs.filter(p=>isInsp(p.kind)&&ym(p.date)===m).forEach(p=>{
+    (kenDays[p.date]=kenDays[p.date]||[]).push(p);});
+  const kenN=Object.values(kenDays).reduce((a,x)=>a+x.length,0);
+  const B=byId();
+  return `<div class="bar"><h2>完工予定</h2>
+      <select id="kMonth" title="表示する月">${MONTHS.map(m=>`<option value="${m}"${m===kMonth?' selected':''}>${mlab(m)}の完工予定</option>`).join('')}</select>
+      <select id="kView" title="絞り込み">${optsL(['すべて','検査が未手配','手配が未完了','未完工'],kView,
+        {'すべて':'絞り込み：なし'})}</select>
+      <span class="note" style="margin:0">工事管理（${esc(KEN)}）の日程表としても使う</span></div>
+    <div class="kpi">
+      <div class="k"><small>この月の完工予定</small><b>${all.length}件</b></div>
+      <div class="k"><small>完工済</small><b>${all.filter(c=>c.done).length}件</b></div>
+      <div class="k"><small>AW検査あり</small><b>${all.filter(c=>insp(c).length).length}件</b></div>
+      <div class="k"><small>AW検査なし</small><b style="color:var(--warn)">${all.filter(c=>!insp(c).length).length}件</b></div>
+      <div class="k"><small>手配が未完了</small><b style="color:var(--warn)">${all.filter(noArr).length}件</b></div>
+      <div class="k"><small>${esc(KEN)}の検査予定</small><b>${kenN}件</b></div>
+    </div>
+    ${kenN?`<div class="card" style="margin-bottom:12px">
+      <h3 style="font-size:14px;margin-bottom:7px">${esc(KEN)}の${mo}月の検査予定</h3>
+      <div class="kenrow">${Array.from({length:D},(_,i)=>{
+        const d=i+1, ds=iso(y,mo,d), w=new Date(y,mo-1,d).getDay(), ks=kenDays[ds]||[];
+        return `<div class="kd ${ks.length?'has':''} ${w===0||w===6?'we':''}" title="${esc(ks.map(p=>(B[p.case]||{}).prop||'').join(' / '))}">
+          <b>${d}</b><small>${WD[w]}</small><span>${ks.length||''}</span></div>`;}).join('')}</div>
+      <p class="note">数字はその日の検査件数。いまは検査が工程として入っている案件だけが出る。</p></div>`:
+      `<div class="card" style="margin-bottom:12px"><p class="note" style="margin:0">
+      この月は${esc(KEN)}のAW検査が1件も工程に入っていないので、日程表が作れない。
+      下の「AW検査を足す」を押すと、その現場の清掃日に${esc(KEN)}のAW検査が入る。</p></div>`}
+    ${days.length?days.map(d=>{
+      const ks=(kenDays[d]||[]).length;
+      return `<div class="day"><h4>${md(d)}（${wdOf(d)}）　${byDay[d].length}件${
+        ks?`　<span class="st">${esc(KEN)}の検査 ${ks}件</span>`:''}</h4>
+      ${byDay[d].map(c=>{const ps=procsOf(c.id), iv=insp(c);
+        return `<div class="it">
+          <span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span>
+          <span class="grow">${esc(c.prop)}${ps.length?'':'<span class="flag" style="margin-left:6px">工程なし</span>'}${
+            ps.some(p=>!p.who)?'<span class="flag" style="margin-left:6px">業者未定</span>':''}${
+            ps.some(p=>p.who&&!p.date)?'<span class="flag" style="margin-left:6px">日付未定</span>':''}</span>
+          <span style="color:var(--sub);font-size:11.5px">${esc(ps.filter(p=>p.who&&!isInsp(p.kind)).map(p=>p.who+(p.date?' '+spanLabel(p):'')).join('・')||'—')}</span>
+          ${iv.length?`<span class="st done">検査 ${esc(iv[0].who||'担当未定')} ${md(iv[0].date)||'日未定'}</span>`
+            :`<button class="btn small" data-addins="${c.id}">AW検査を足す</button>`}
+          <button class="btn small ${c.done?'':'primary'}" data-done="${c.id}">${c.done?'完工 '+md(c.done):'完工にする'}</button>
+          <button class="btn small" data-pcopen="${c.id}">工程</button></div>`;}).join('')}
+      </div>`;}).join(''):'<div class="card">この条件に当てはまる案件はない。</div>'}
+    <p class="note">完工予定日は案件の最後の工程の日。「AW検査を足す」は清掃日と同じ日に${esc(KEN)}の検査を入れる（日付は工程タブで動かせる）。
+      「工程」を押すとその案件の工程タブへ飛ぶ。</p>`;
+}
+
+/* ================= 検査カレンダー ================= */
+function vInsp(){
+  const m=cMonth, y=+m.slice(0,4), mo=+m.slice(5,7), D=daysIn(m), B=byId();
+  const all=DB.procs.filter(p=>isInsp(p.kind));
+  const whos=[...new Set(all.map(p=>p.who).filter(Boolean))].sort();
+  const mine=all.filter(p=>cWho==='すべて'||p.who===cWho);
+  const inM=mine.filter(p=>ym(p.date)===m);
+  const byDay={}; inM.forEach(p=>{(byDay[p.date]=byDay[p.date]||[]).push(p);});
+  const noDate=mine.filter(p=>!p.date).map(p=>B[p.case]).filter(Boolean);
+  // この月に完工予定なのに検査が入っていない案件
+  const noInsp=DB.cases.filter(c=>ym(planOf(c))===m&&!procsOf(c.id).some(p=>isInsp(p.kind)));
+  const today=fmtD(new Date());
+  const first=new Date(y,mo-1,1).getDay();
+  const cells=[];
+  for(let i=0;i<first;i++)cells.push('<div class="d out"></div>');
+  for(let d=1;d<=D;d++){
+    const ds=iso(y,mo,d), w=new Date(y,mo-1,d).getDay(), ks=(byDay[ds]||[]);
+    const cleanOf=p=>{const c=procsOf(p.case).filter(x=>x.kind==='清掃'&&x.date).map(endOf).sort().pop();return c?'清掃 '+md(c):'';};
+    cells.push(`<div class="d ${w===0||w===6?'we':''} ${ds===today?'today':''}">
+      <b>${d}<small>${WD[w]}</small>${ks.length?`<small style="float:right;color:var(--ok);font-weight:900">${ks.length}件</small>`:''}</b>
+      ${ks.map(p=>{const c=B[p.case]||{};
+        return `<button class="ev" data-pcopen="${p.case}" style="background:${col(c.client)}" title="${esc(c.client||'')}">
+          ${esc(c.prop||'（物件未入力）')}<span class="w">${esc(cWho==='すべて'?(p.who||'担当未定')+'　':'')}${esc(cleanOf(p))}</span></button>`;}).join('')}
+    </div>`);
+  }
+  while(cells.length%7)cells.push('<div class="d out"></div>');
+  return `<div class="bar"><h2>検査カレンダー</h2>
+      <select id="cMonth" title="表示する月">${MONTHS.map(m=>`<option value="${m}"${m===cMonth?' selected':''}>${mlab(m)}の検査</option>`).join('')}</select>
+      <select id="cWho" title="検査の担当で絞る">${optsL(['すべて',...whos],cWho,{'すべて':'担当：すべて'})}</select>
+      <span class="note" style="margin:0">AW検査の予定だけを月表示。検査担当（${esc(whos.join('・')||'—')}）はここを見る</span></div>
+    <div class="kpi">
+      <div class="k"><small>この月の検査</small><b>${inM.length}件</b></div>
+      <div class="k"><small>検査担当</small><b>${whos.length}人</b></div>
+      <div class="k"><small>検査日が未定</small><b style="color:${noDate.length?'var(--warn)':'var(--ink)'}">${noDate.length}件</b></div>
+      <div class="k"><small>完工予定なのに検査なし</small><b style="color:${noInsp.length?'var(--warn)':'var(--ink)'}">${noInsp.length}件</b></div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="cal">${WD.map(w=>`<div class="h">${w}</div>`).join('')}${cells.join('')}</div>
+      <p class="note">カードの色は依頼元。押すとその案件の「工程を組む」へ飛ぶ。検査日は工程タブで動かす。</p>
+    </div>
+    ${noDate.length?`<div class="card" style="margin-bottom:12px"><h3 style="font-size:14px;margin-bottom:6px">検査は入っているが日付が未定</h3>
+      ${noDate.map(c=>`<div class="ck"><span class="t">日未定</span>${esc(c.prop)}　<button class="btn small" data-pcopen="${c.id}">工程</button></div>`).join('')}</div>`:''}
+    ${noInsp.length?`<div class="card"><h3 style="font-size:14px;margin-bottom:6px">${mo}月完工予定なのに検査が入っていない</h3>
+      ${noInsp.map(c=>`<div class="ck"><span class="t">検査なし</span><span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span>　${esc(c.prop)}　完工予定 ${md(planOf(c))}
+        　<button class="btn small" data-addins="${c.id}">AW検査を足す</button></div>`).join('')}</div>`:''}`;
+}
+
+/* ================= マスタ ================= */
+function usedBy(nm){return DB.procs.filter(p=>p.who===nm).length;}
+function oldKindOf(nm){return DB.procs.filter(p=>p.who===nm&&PKINDS.indexOf(p.kind)<0).length;}
+function offK(v){return DB.procs.filter(p=>p.who===v.name&&p.kind!==v.defKind).length;}
+function convertVendor(nm,quiet){
+  const v=vendorOf(nm); if(!v)return 0;
+  const hit=DB.procs.filter(p=>p.who===nm&&p.kind!==v.defKind&&PKINDS.indexOf(p.kind)<0);
+  if(!hit.length)return 0;
+  if(!quiet)snap();
+  hit.forEach(p=>{p.kind=v.defKind;});
+  return hit.length;
+}
+function convertAll(){
+  snap(); let n=0;
+  DB.vendors.forEach(v=>{n+=convertVendor(v.name,true);});
+  save(); render();
+  toast(n?`${n}件の区分を既定の区分に置き換えた`:'置き換える工程は無かった', n?undo:null);
+}
+function mBar(oldN){
+  return `<div class="bar"><h2>マスタ</h2>
+    <select id="mTab" title="どのマスタを出すか">${optsL(['発注先','顧客','単価'],mTab,
+      {'発注先':'発注先マスタ','顧客':'顧客マスタ','単価':'発注単価マスタ'})}</select>
+    <input type="search" id="mQ" placeholder="名前で探す" value="${esc(mQ)}" style="min-width:160px">
+    <button class="btn small" id="addRow">＋ 行を足す</button>
+    ${mTab==='単価'?'<button class="btn small" id="impPrice">貼り付けて取り込む</button>':''}
+    ${mTab==='単価'&&pendingPrices().length?`<button class="btn primary" id="impPriceDb">単価表を取り込む（${pendingPrices().length}件）</button>`:''}
+    ${mTab!=='単価'&&oldN?`<span class="note" style="margin:0">旧区分のまま残っている工程 <b style="color:var(--warn)">${oldN}件</b></span>
+      <button class="btn primary" id="convAll">既定の区分で一括置き換え</button>`:''}
+    ${mTab!=='単価'&&!oldN?'<span class="note" style="margin:0;color:var(--ok)">旧区分の工程は残っていない</span>':''}</div>`;
+}
+/* ---- 発注単価マスタ ---- */
+/* 表記ゆれを吸収してから照合する。貼替／張替／貼り替え／張り替え は同じ扱い */
+const priceKey=s=>wide(s).replace(/[\s　（）()・]/g,'')
+  .replace(/張り替え|貼り替え|張替え|貼替え|張替/g,'貼替').replace(/張り/g,'貼り')
+  .replace(/剝離/g,'剥離').toLowerCase();
+/* 依頼元ごとに呼び方が違うので、単価表の工事名に別名を持たせる（マスタの「別名」欄でも足せる） */
+const ALIASES={
+  'クロス貼替':['クロス張替','クロス貼り替え'],
+  'CF貼替':['CF張替','クッションフロア貼替','クッションフロア張替','クッションフロア','CF'],
+  'ソフト巾木':['巾木貼替','巾木張替','巾木交換'],
+  'エアコン機械洗浄':['エアコン洗浄','エアコン内部洗浄','エアコンクリーニング','AC内部洗浄','AC洗浄','エアコン分解洗浄'],
+  'コーキング打替':['コーキング','コーキング打ち替え','シーリング打替','シーリング打ち替え'],
+  '電球交換':['電球'],
+  'カーテンレール(W1800)':['カーテンレール交換','カーテンレール取付','カーテンレール新設'],
+  '給気口(レジスター)交換':['レジスター交換','レジスター','給気口交換'],
+  '洗濯パンエルボ':['エルボ交換','エルボ','洗濯エルボ'],
+  '冷蔵庫搬去処分':['冷蔵庫撤去','冷蔵庫処分','冷蔵庫搬出'],
+  '冷蔵庫背板貼り':['背板張り','背板貼り','背板'],
+  '網戸貼替(大)':['網戸張替','網戸貼替'],
+  'パッキン・コマ交換':['パッキン交換','コマ交換'],
+  'シングルレバー水栓交換':['シングルレバー'],
+  'ワックス剥離洗浄':['WAX剥離洗浄','ワックス剥離','WAX剥離'],
+  '引掛シーリング取り付け(丸型)':['引掛シーリング'],
+  '床鳴り止め取付':['床鳴り'],
+  'UB鏡裏取り':['鏡裏取り'],
+  'タオル掛け交換':['タオル掛け'],
+  'ペーパーホルダー交換':['ペーパーホルダー'],
+  '便座交換':['ウォシュレット交換','便座'],
+  '玄関ドアクローザー調整':['ドアクローザー調整','ドアクローザー'],
+  '照明引き紐交換':['引き紐交換','引き紐'],
+  'ドアスコープ交換':['ドアスコープ'],
+  'スイッチ交換':['スイッチ'],
+  'コンセント交換':['コンセント'],
+};
+const ALIASK={}; Object.keys(ALIASES).forEach(n=>{ALIASK[priceKey(n)]=ALIASES[n].map(priceKey);});
+/* 単価表1行が持つ照合キー：工事名＋別名欄＋既定の別名 */
+function priceKeys(p){
+  const k0=priceKey(p.name), ks=[k0];
+  String(p.alias||'').split(/[／/,、\n]/).forEach(a=>{const k=priceKey(a); if(k)ks.push(k);});
+  (ALIASK[k0]||[]).forEach(k=>ks.push(k));
+  return ks.filter(Boolean);
+}
+/** 明細の名称から発注単価を引く。業者指定の行が優先、無ければ共通の行 */
+function findPrice(name,who,unit,client){
+  const k=priceKey(name); if(!k)return null;
+  /* 1) 完全一致（別名込み） */
+  let hit=DB.prices.filter(p=>priceKeys(p).indexOf(k)>=0);
+  /* 2) 部分一致。名称が別名を含む（「キッチンコーキング」⊃「コーキング」）か、その逆。いちばん長く当たったものを採る */
+  if(!hit.length){
+    let best=0, cand=[];
+    DB.prices.forEach(p=>{
+      priceKeys(p).forEach(pk=>{
+        if(pk.length<3)return;
+        if(k.indexOf(pk)<0&&pk.indexOf(k)<0)return;
+        if(pk.length>best){best=pk.length;cand=[p];}
+        else if(pk.length===best&&cand.indexOf(p)<0)cand.push(p);
+      });
+    });
+    const names=cand.map(p=>p.name).filter((v,i,a)=>a.indexOf(v)===i);
+    if(names.length===1)hit=cand;           /* 候補が1種類に絞れたときだけ使う */
+  }
+  /* 依頼元が一致する単価を優先。無ければ依頼元を指定していない（共通の）単価 */
+  if(client){
+    const byCl=hit.filter(p=>p.client===client);
+    hit = byCl.length ? byCl : hit.filter(p=>!p.client);
+  }
+  if(hit.length>1&&unit){                       /* 同じ名前で単位違い（コーキング打替 m と 式） */
+    const byUnit=hit.filter(p=>(p.unit||'式')===unit);
+    if(byUnit.length)hit=byUnit;
+  }
+  return hit.find(p=>p.who&&p.who===who) || hit.find(p=>!p.who) || null;
+}
+function vPrice(){
+  const q=mQ.toLowerCase();
+  const list=DB.prices.filter(p=>!q||((p.name||'')+(p.alias||'')+(p.who||'')+(p.client||'')).toLowerCase().includes(q));
+  const used=DB.lines.filter(l=>l.price).length, miss=DB.lines.filter(l=>!l.price&&!l.order).length;
+  return `${mBar(0)}
+    ${list.length?`<div class="tw"><table><thead><tr>
+      <th>依頼元</th><th>工事名（明細の名称と照合）</th><th>別名（／で区切る）</th><th>工程区分</th><th>単位</th><th class="r">発注単価</th>
+      <th>発注先（空＝共通）</th><th>備考</th><th></th></tr></thead>
+    <tbody>${list.map(p=>`<tr data-pr="${esc(p.id)}">
+      <td><select class="mp" data-f="client" style="height:28px;font-size:12.5px;width:146px">${
+        opts(CLIENTS(),p.client||'','（共通）')}</select></td>
+      <td><input type="text" class="mp" data-f="name" value="${esc(p.name||'')}" style="width:220px;height:28px;font-size:12.5px"></td>
+      <td><input type="text" class="mp" data-f="alias" value="${esc(p.alias||'')}" placeholder="${esc((ALIASES[p.name]||[]).slice(0,2).join('／'))}"
+        title="既定の別名：${esc((ALIASES[p.name]||[]).join('／')||'なし')}" style="width:200px;height:28px;font-size:12px"></td>
+      <td><select class="mp" data-f="kind" style="height:28px;font-size:12.5px">${opts(PKINDS,p.kind,'（未設定）')}</select></td>
+      <td><select class="mp" data-f="unit" style="height:28px;font-size:12.5px">${opts(UNITS,p.unit||'式')}</select></td>
+      <td class="r"><input type="number" class="mp" data-f="price" value="${p.price||0}" placeholder="未設定"
+        style="width:92px;height:28px;font-size:12.5px;${p.price?'':'border-color:var(--warn);background:var(--warn-bg)'}"></td>
+      <td><select class="mp" data-f="who" style="height:28px;font-size:12.5px">${vendorSel(p.who||'')}</select></td>
+      <td><input type="text" class="mp" data-f="memo" value="${esc(p.memo||'')}" style="width:180px;height:28px;font-size:12px"></td>
+      <td><button class="btn small danger" data-delpr="${esc(p.id)}">削除</button></td></tr>`).join('')}
+    </tbody></table></div>`
+    :`<div class="card empty">発注単価がまだ登録されていない。<br>
+       「＋ 行を足す」で1行ずつ、または「貼り付けて取り込む」でまとめて入れる。</div>`}
+    <p class="note">ここに入れておくと、明細の名称が一致した行に<b>原価単価が自動で入ります</b>。
+      依頼元ごとに呼び方が違う（クレアス「エアコン洗浄」＝財託「エアコン機械洗浄」など）ので、<b>別名</b>を／区切りで足しておくとそれでも引けます。よくある言い換えは最初から入っています（別名欄の薄い文字）。
+      貼替／張替／貼り替え の違いは自動で吸収します。<br>
+      <b>依頼元ごとに単価表が違う</b>ので、案件の依頼元と一致する行が優先され、無ければ「（共通）」の行が使われます。
+      業者によって単価が違うものは「発注先」を指定した行を作ると、さらにそちらが優先されます。<br>
+      登録 ${DB.prices.length}件（うち<b style="color:var(--warn)">単価未設定 ${DB.prices.filter(p=>!p.price).length}件</b>）／
+      原価が入っている明細 ${used}件／原価が空の明細 ${miss}件</p>`;
+}
+function parsePrices(txt){
+  return String(txt||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s0=>{
+    const s=s0.replace(/(\d),(?=\d{3}(\D|$))/g,'$1');
+    const c=s.split(/\t|,|、|\s{2,}/).map(x=>x.trim()).filter(x=>x!=='');
+    const name=c[0]||''; let unit='式', price=0, who='', kind='', client='';
+    c.slice(1).forEach(x=>{
+      if(UNITS.indexOf(x)>=0){unit=x;return;}
+      if(PKINDS.indexOf(x)>=0){kind=x;return;}
+      const v=+String(x).replace(/[,¥￥円\s]/g,'');
+      if(/\d/.test(x)&&!isNaN(v)){price=v;return;}
+      if(isClient(x)){client=x;return;}
+      if(isVendor(x))who=x;
+    });
+    return {name,unit,price,who,client,kind:kind||guessKind(name)};
+  }).filter(r=>r.name&&r.price);
+}
+function askPriceImport(){
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg"><h4>発注単価を貼り付けて取り込む</h4>
+    <p class="note" style="margin:0 0 8px">1行＝1単価。タブかカンマで区切る。<br>
+      並びは「工事名／単位／単価」。業者名を足すとその業者専用になる。</p>
+    <textarea id="prT" placeholder="ｸﾛｽ貼替\t㎡\t850
+ﾙｰﾑｸﾘｰﾆﾝｸﾞ（1K・1R）\t式\t12000
+ｺｰｷﾝｸﾞ打替\t式\t1500
+ｻｰﾓ付水栓交換\t式\t22000\t日新設備"></textarea>
+    <p class="note">工程区分は工事名から自動で当てます。あとで表で直せます。</p>
+    <div class="askbtn" style="margin-top:10px">
+      <button class="btn small" id="askNo">やめる</button>
+      <button class="btn small primary" id="askYes">取り込む</button></div></div>`;
+  document.body.appendChild(el);
+  el.querySelector('#askNo').onclick=()=>el.remove();
+  el.querySelector('#askYes').onclick=()=>{
+    const t=el.querySelector('#prT').value; el.remove();
+    const rows=parsePrices(t);
+    if(!rows.length){toast('読み取れる行が無かった');return;}
+    snap(); rows.forEach(r=>{DB.prseq++;
+      DB.prices.push({id:'PR'+DB.prseq+DEV,name:r.name,kind:r.kind,unit:r.unit,price:r.price,who:r.who,client:r.client||'',memo:''});});
+    save(); render(); toast(`${rows.length}件の単価を入れた`, undo);};
+  setTimeout(()=>{const t=el.querySelector('#prT'); if(t)t.focus();},0);
+}
+/** 明細1行の原価単価を、単価表から選ぶ／単価表に登録する */
+function askPricePick(lid){
+  const l=DB.lines.find(x=>x.id===lid); if(!l)return;
+  const c=DB.cases.find(x=>x.id===l.case)||{}, cl=c.client||'';
+  const el=document.createElement('div'); el.className='ask';
+  const auto=findPrice(l.name,l.who,l.unit,cl);
+  el.innerHTML=`<div class="dlg" style="max-width:720px"><h4>原価単価を単価表から入れる</h4>
+    <p class="note" style="margin:0 0 8px">明細：<b>${esc(l.name||'（名称なし）')}</b>　${esc(l.unit||'')}　依頼元：${esc(cl||'—')}
+      ${auto?`　／ 自動照合の候補：<b>${esc(auto.name)}</b>${auto.price?` ${yen(auto.price)}`:'（単価未設定）'}`:''}</p>
+    <input type="text" id="ppQ" placeholder="工事名で絞り込む" value="${esc(l.name||'')}" style="width:100%;margin-bottom:6px">
+    <div class="tw" style="max-height:300px;overflow:auto"><table><thead><tr>
+      <th>依頼元</th><th>工事名</th><th>単位</th><th class="r">発注単価</th><th>発注先</th><th></th></tr></thead>
+      <tbody id="ppList"></tbody></table></div>
+    <label style="display:block;margin:8px 0 2px;font-size:12.5px"><input type="checkbox" id="ppAlias" checked>
+      選んだ単価の別名に「${esc(l.name||'')}」を登録する（次回から「単価表から原価を入れる」で自動で入る）</label>
+    <div class="bar" style="margin:10px 0 0;border-top:1px solid var(--line);padding-top:8px">
+      <span class="note" style="margin:0">表に無いときは新しく登録：</span>
+      <input type="number" id="ppNew" placeholder="単価" style="width:100px">
+      <button class="btn small" id="ppAdd">「${esc(l.name||'')}」を${esc(cl||'共通')}の単価表に登録して入れる</button></div>
+    <div class="askbtn" style="margin-top:10px"><button class="btn small" id="askNo">やめる</button></div></div>`;
+  document.body.appendChild(el);
+  const q=el.querySelector('#ppQ'), tb=el.querySelector('#ppList');
+  const draw=()=>{
+    const k=priceKey(q.value), raw=q.value.trim().toLowerCase();
+    /* 2文字ずつの共通部分で点を付けて似た順に並べる（「エアコン機械洗浄」→「エアコン洗浄」が上に来る） */
+    const grams=[]; for(let i=0;i+2<=k.length;i++)grams.push(k.slice(i,i+2));
+    const score=p=>{ if(!raw)return 1;
+      const ks=priceKeys(p); let best=0;
+      ks.forEach(pk=>{ if(pk.indexOf(k)>=0||k.indexOf(pk)>=0){best=Math.max(best,100);return;}
+        const n=grams.filter(g=>pk.indexOf(g)>=0).length; best=Math.max(best,n); });
+      if(!best&&((p.name||'')+(p.alias||'')).toLowerCase().includes(raw))best=1;
+      return best; };
+    let list=DB.prices.map(p=>[p,score(p)]).filter(x=>x[1]>0);
+    list.sort((a,b)=>(b[1]-a[1])||((b[0].client===cl)-(a[0].client===cl))||((!b[0].client)-(!a[0].client))||String(a[0].name).localeCompare(String(b[0].name),'ja'));
+    list=list.map(x=>x[0]);
+    tb.innerHTML=list.length?list.map(p=>`<tr data-pp="${esc(p.id)}" style="cursor:pointer;${auto&&auto.id===p.id?'background:var(--ok-bg,#eef7ee)':''}">
+      <td>${esc(p.client||'（共通）')}</td><td>${esc(p.name)}${p.alias?`<span class="note" style="margin:0 0 0 6px">${esc(p.alias)}</span>`:''}</td>
+      <td>${esc(p.unit||'式')}</td><td class="r">${p.price?yen(p.price):'<span style="color:var(--warn)">未設定</span>'}</td>
+      <td>${esc(p.who||'')}</td><td><button class="btn small primary" data-pp="${esc(p.id)}">入れる</button></td></tr>`).join('')
+      :`<tr><td colspan="6" class="note">合う行が無い。絞り込みを短くするか、下で新しく登録</td></tr>`;
+  };
+  draw(); q.oninput=draw;
+  el.querySelector('#askNo').onclick=()=>el.remove();
+  el.onclick=ev=>{
+    const t=ev.target.closest('[data-pp]'); if(!t)return;
+    const p=DB.prices.find(x=>x.id===t.dataset.pp); if(!p)return;
+    let price=+p.price||0;
+    if(!price){const v=prompt(`「${p.name}」の単価がまだ無い。単価を入れる（単価表にも保存）`,''); if(v===null)return; price=+String(v).replace(/[,¥￥円\s]/g,''); if(!(price>0))return;}
+    snap('pick');
+    if(!p.price)p.price=price;
+    l.price=price; if(!l.unit&&p.unit)l.unit=p.unit;
+    if(p.who&&!l.who){l.who=p.who; if(!l.kind){const vd=vendorOf(p.who); if(vd&&vd.defKind)l.kind=vd.defKind;}}
+    if(p.kind&&!l.kind)l.kind=p.kind;
+    if(el.querySelector('#ppAlias').checked&&l.name){
+      const k=priceKey(l.name);
+      if(k&&priceKeys(p).indexOf(k)<0)p.alias=(p.alias?p.alias+'／':'')+l.name.trim();
+    }
+    el.remove(); save(); render(); toast(`原価単価 ${yen(price)} を入れた（${p.name}）`, undo);
+  };
+  el.querySelector('#ppAdd').onclick=()=>{
+    const price=+el.querySelector('#ppNew').value; if(!(price>0)){toast('単価を入れてください');return;}
+    if(!l.name){toast('明細の名称が空');return;}
+    snap('pick'); DB.prseq++;
+    DB.prices.push({id:'PR'+DB.prseq+DEV,name:l.name.trim(),kind:l.kind||guessKind(l.name),unit:l.unit||'式',price,who:l.who||'',client:cl,memo:''});
+    l.price=price; el.remove(); save(); render(); toast(`単価表に登録して ${yen(price)} を入れた`, undo);
+  };
+  setTimeout(()=>q.focus(),0);
+}
+/** 明細の原価が空の行に、単価マスタから原価単価を入れる */
+function applyPrices(cid){
+  const cl=(DB.cases.find(x=>x.id===cid)||{}).client||'';
+  const ls=DB.lines.filter(l=>l.case===cid&&!l.order&&+l.qty>0);
+  let n=0, miss=[], todo=[];
+  snap();
+  ls.forEach(l=>{
+    if(l.price)return;
+    const p=findPrice(l.name,l.who,l.unit,cl);
+    if(p&&+p.price>0){l.price=+p.price; if(p.unit&&!l.unit)l.unit=p.unit; n++;}
+    else if(p){todo.push(l.name);}          /* 表にはあるが単価が空 */
+    else if(l.name)miss.push(l.name);
+  });
+  save(); render();
+  const tail=[todo.length?`${todo.length}行は単価未設定（${todo.slice(0,2).join('・')}${todo.length>2?' ほか':''}）`:'',
+              miss.length?`${miss.length}行は${cl?cl+'の':''}単価表に無い`:''].filter(Boolean).join('／');
+  toast(n?`${n}行に単価を入れた${tail?'／'+tail:''}`
+         :(DB.prices.length?(tail||'単価表に合う行が無かった'):'単価マスタがまだ空'), n?undo:null);
+}
+function vMaster(){
+  const q=mQ.toLowerCase();
+  const oldN=DB.procs.filter(p=>p.kind&&PKINDS.indexOf(p.kind)<0).length;
+  if(mTab==='単価')return vPrice();
+  if(mTab==='発注先'){
+    const list=DB.vendors.filter(v=>!q||(v.name+v.full+(v.inv||'')).toLowerCase().includes(q));
+    return `${mBar(oldN)}
+      <div class="tw"><table><thead><tr>
+        <th>入力名</th><th>正式名称</th><th>区分</th><th>既定の工程区分</th>
+        <th>登録番号（インボイス）</th><th class="r">締日</th><th class="r">サイト</th>
+        <th class="r">使用</th><th class="r">旧区分</th><th></th></tr></thead>
+      <tbody>${list.map(v=>{const used=usedBy(v.name), old=oldKindOf(v.name);
+        return `<tr data-v="${esc(v.name)}">
+        <td><input type="text" class="mv" data-f="name" value="${esc(v.name)}" style="width:148px;height:28px;font-size:12.5px">
+          ${v.src&&v.src!=='マスタ'?`<span class="flag" style="display:block;margin-top:2px">${esc(v.src)}</span>`:''}</td>
+        <td><input type="text" class="mv" data-f="full" value="${esc(v.full||'')}" style="width:200px;height:28px;font-size:12.5px"></td>
+        <td><select class="mv" data-f="type" style="height:28px;font-size:12.5px">${opts(VTYPES,v.type||'外注')}</select></td>
+        <td><select class="mv" data-f="defKind" style="height:28px;font-size:12.5px">${opts(PKINDS,v.defKind||'内装')}</select></td>
+        <td><input type="text" class="mv" data-f="inv" value="${esc(v.inv||'')}" placeholder="未取得"
+          style="width:158px;height:28px;font-size:12px;${v.inv?'':'border-color:var(--warn)'}"></td>
+        <td class="r"><input type="number" class="mv" data-f="close" value="${v.close||30}" min="1" max="31" style="width:56px;height:28px;font-size:12px"></td>
+        <td class="r"><input type="number" class="mv" data-f="site" value="${v.site||30}" min="0" max="120" style="width:56px;height:28px;font-size:12px"></td>
+        <td class="r">${used||'—'}</td>
+        <td class="r">${old?`<b style="color:var(--warn)">${old}</b>`:'—'}</td>
+        <td>${old?`<button class="btn small" data-conv="${esc(v.name)}">旧${old}件を直す</button> `:''}${
+            offK(v)?`<button class="btn small" data-convall="${esc(v.name)}">全${used}件を${esc(v.defKind)}に</button>`:''}${
+            used?'':`<button class="btn small danger" data-delv="${esc(v.name)}">削除</button>`}</td></tr>`;}).join('')}
+      </tbody></table></div>
+      <p class="note">「既定の工程区分」はその業者に発注したとき最初に入る区分。旧区分（工事・検査）のまま残っている工程は「旧◯件を直す」で置き換わる。
+        登録番号が空の発注先は、インボイスの仕入税額控除が取れない可能性がある（${DB.vendors.filter(v=>!v.inv).length}／${DB.vendors.length}件が空）。</p>`;
+  }
+  const list=DB.clients.filter(c=>!q||(c.name+c.full+(c.mail||'')).toLowerCase().includes(q));
+  return `${mBar(oldN)}
+    <div class="tw"><table><thead><tr>
+      <th>入力名</th><th>正式名称</th><th>請求方法</th><th class="r">締日</th><th class="r">サイト</th>
+      <th>送付先</th><th class="r">案件</th><th></th></tr></thead>
+    <tbody>${list.map(c=>{const used=DB.cases.filter(x=>x.client===c.name).length;
+      return `<tr data-cm="${esc(c.name)}">
+      <td><input type="text" class="mc" data-f="name" value="${esc(c.name)}" style="width:158px;height:28px;font-size:12.5px">
+        ${c.src&&c.src!=='マスタ'?`<span class="flag" style="display:block;margin-top:2px">${esc(c.src)}</span>`:''}</td>
+      <td><input type="text" class="mc" data-f="full" value="${esc(c.full||'')}" style="width:210px;height:28px;font-size:12.5px"></td>
+      <td><select class="mc" data-f="method" style="height:28px;font-size:12.5px">${opts(['先方規定','弊社仕様'],c.method||'弊社仕様')}</select></td>
+      <td class="r"><input type="number" class="mc" data-f="close" value="${c.close||31}" min="1" max="31" style="width:56px;height:28px;font-size:12px"></td>
+      <td class="r"><input type="number" class="mc" data-f="site" value="${c.site||30}" min="0" max="120" style="width:56px;height:28px;font-size:12px"></td>
+      <td><input type="text" class="mc" data-f="mail" value="${esc(c.mail||'')}" style="width:215px;height:28px;font-size:12px"></td>
+      <td class="r">${used||'—'}</td>
+      <td>${used?'':`<button class="btn small danger" data-delc="${esc(c.name)}">削除</button>`}</td></tr>`;}).join('')}
+    </tbody></table></div>
+    <p class="note">締日とサイトが請求期間と入金予定日を決める。月末締めは31、5日締めは5。
+      ${M.termNote&&M.termNote['日本財託']?`<br><span style="color:var(--warn)">※ ${esc(M.termNote['日本財託'])}。岸本さんに確認。</span>`:''}</p>`;
+}
+
+/* ================= 請求 ================= */
+function vBill(){
+  const rows={}, tot={}, bucket={};
+  DB.cases.forEach(c=>{const m=cycMonth(c); if(!m)return;
+    const k=c.client||'（未設定）'; rows[k]=rows[k]||{};
+    rows[k][m]=(rows[k][m]||0)+salesOf(c); tot[m]=(tot[m]||0)+salesOf(c);
+    (bucket[k+'|'+m]=bucket[k+'|'+m]||[]).push(c);});
+  const names=Object.keys(rows).sort((a,b)=>
+    Object.values(rows[b]).reduce((x,y)=>x+y,0)-Object.values(rows[a]).reduce((x,y)=>x+y,0));
+  const MS=MS_LIST();
+  if(names.indexOf(iClient)<0) iClient=names[0]||'';
+  const t=termOf(iClient), [f,to]=cycle(iClient,iMonth);
+  const items=(bucket[iClient+'|'+iMonth]||[]).slice().sort((a,b)=>
+    (a.done||a.plan||'').localeCompare(b.done||b.plan||''));
+  const sum=items.reduce((a,c)=>a+salesOf(c),0);
+  const noTerm=names.filter(n=>!isClient(n));
+  return `<div class="bar"><h2>請求</h2>
+      <span class="note" style="margin:0">計上基準</span>
+      <select id="basisSel" title="売上をどの日付で月に乗せるか">${optsL(['完工','請求'],DB.basis,{'完工':'計上：完工基準','請求':'計上：請求月基準'})}</select>
+      <span class="note" style="margin:0">${DB.basis==='完工'
+        ?'完工日が顧客ごとの締日のどちら側に入るかで請求月を決める'
+        :'案件管理のH列（請求月）をそのまま使う＝いまのシートと同じ'}</span></div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="bar" style="margin-top:0">
+        <h3 style="font-size:15px;margin:0">請求書の中身</h3>
+        <select id="iClient" title="請求先">${optsL(names,iClient,{})}</select>
+        <select id="iMonth" title="請求月">${MONTHS.map(m=>`<option value="${m}"${m===iMonth?' selected':''}>${mlab(m)}分</option>`).join('')}</select>
+        <span class="st">${isEom(t)?'月末締め':`${t.close}日締め`}　サイト${t.site}日</span>
+      </div>
+      <div class="kpi">
+        <div class="k"><small>対象</small><b style="font-size:15px">${DB.basis==='完工'
+          ?`${md(f)} 〜 ${md(to)}`:`請求月 ${mlab(iMonth)}`}</b></div>
+        <div class="k"><small>件数</small><b>${items.length}</b></div>
+        <div class="k"><small>請求額（税込）</small><b>${yen(sum)}</b></div>
+        <div class="k"><small>入金予定日</small><b style="font-size:15px">${md(dueOf(iClient,iMonth))}</b></div>
+      </div>
+      ${items.length?`<div class="tw" style="max-height:340px"><table>
+        <thead><tr><th>${DB.basis==='完工'?'完工日':'請求月'}</th><th>物件</th><th>区分</th>
+          <th class="r">金額（税込）</th></tr></thead>
+        <tbody>${items.map(c=>`<tr data-c="${c.id}"><td>${
+          DB.basis==='完工'?(md(c.done||c.plan)||'<span class="flag">日付なし</span>'):(c.bill?mlabel(c.bill):'—')}</td>
+          <td>${esc(c.prop||'（物件未入力）')}</td><td>${esc(c.kind)}</td>
+          <td class="r">${yen(salesOf(c))}</td></tr>`).join('')}
+        <tr><td colspan="3"><b>合計</b></td><td class="r"><b>${yen(sum)}</b></td></tr></tbody></table></div>`
+        :'<p class="note">この期間に対象の案件がない。</p>'}
+      <p class="note">締日を変えると対象期間と拾う案件がその場で変わる。ステップ・スリー（5日締め）を選ぶと 9/6〜10/5 のように切られる。</p>
+    </div>
+
+    <div class="tw"><table><thead><tr><th>顧客</th><th>締日</th><th>サイト</th>
+      ${MS.map(m=>`<th class="r">${mlab(m)}</th>`).join('')}<th class="r">合計</th></tr></thead>
+      <tbody>${names.map(nm=>{const tt=termOf(nm), s2=MS.reduce((a,m)=>a+(rows[nm][m]||0),0);
+        return `<tr><td><span class="cl" style="background:${col(nm)}">${esc(nm)}</span>${
+          isClient(nm)?'':'<span class="flag" style="margin-left:5px">マスタ外</span>'}</td>
+        <td><input type="number" class="tm" data-c="${esc(nm)}" data-f="close" value="${tt.close}" min="1" max="31"
+          style="width:60px;height:28px;font-size:12px"></td>
+        <td><input type="number" class="tm" data-c="${esc(nm)}" data-f="site" value="${tt.site}" min="0" max="120"
+          style="width:60px;height:28px;font-size:12px"></td>
+        ${MS.map(m=>{const v=rows[nm][m]||0; const r=DB.recv[nm+'|'+m]||0;
+          return `<td class="r">${v?yen(v):'—'}${v?`<br><input type="number" class="rc" data-k="${esc(nm+'|'+m)}" value="${r||''}" step="1000"
+            style="width:100px;height:26px;font-size:11.5px;margin-top:2px" placeholder="入金">`:''}</td>`;}).join('')}
+        <td class="r"><b>${yen(s2)}</b></td></tr>`;}).join('')}
+      <tr><td colspan="3"><b>合計</b></td>${MS.map(m=>`<td class="r"><b>${yen(tot[m]||0)}</b><br>
+        <span style="font-size:11px;color:var(--sub)">入金 ${yen(names.reduce((a,nm)=>a+(+DB.recv[nm+'|'+m]||0),0))}</span></td>`).join('')}
+        <td class="r"><b>${yen(Object.values(tot).reduce((a,b)=>a+b,0))}</b></td></tr>
+      </tbody></table></div>
+    <p class="note">締日とサイトはここで直せる。月末締め以外は「31」以外の数字を入れる（5日締めなら5）。
+      ${M.termNote&&M.termNote['日本財託']?`<br><span style="color:var(--warn)">※ ${esc(M.termNote['日本財託'])}。どちらが正しいか要確認。</span>`:''}
+      ${noTerm.length?`<br>締日が未設定の顧客：${noTerm.map(esc).join('、')}`:''}</p>`;
+}
+
+/* ================= 支払 ================= */
+function vPay(){
+  const rows={}, tot={};
+  DB.procs.forEach(p=>{if(!p.who)return; const m=p.month?('2026-'+String(p.month.replace('月','')).padStart(2,'0')):ym(p.date);
+    if(!m)return; rows[p.who]=rows[p.who]||{}; rows[p.who][m]=(rows[p.who][m]||0)+(+p.amt||0);
+    tot[m]=(tot[m]||0)+(+p.amt||0);});
+  const names=Object.keys(rows).sort((a,b)=>
+    Object.values(rows[b]).reduce((x,y)=>x+y,0)-Object.values(rows[a]).reduce((x,y)=>x+y,0));
+  const MS=MS_LIST();
+  const inv=Object.fromEntries(DB.vendors.map(v=>[v.name,v.inv]));
+  return `<div class="bar"><h2>支払（発注先別）</h2></div>
+    <div class="tw"><table><thead><tr><th>発注先</th><th>登録番号</th>
+      ${MS.map(m=>`<th class="r">${mlabel(m)}</th>`).join('')}<th class="r">合計</th></tr></thead>
+      <tbody>${names.map(nm=>{const sum=MS.reduce((a,m)=>a+(rows[nm][m]||0),0);
+        return `<tr><td>${esc(nm)}${isVendor(nm)?'':'<span class="flag" style="margin-left:5px">マスタ外</span>'}</td>
+        <td style="font-size:11px;color:var(--sub)">${inv[nm]?esc(inv[nm]):'<span class="flag">なし</span>'}</td>
+        ${MS.map(m=>`<td class="r">${rows[nm][m]?yen(rows[nm][m]):'—'}</td>`).join('')}
+        <td class="r"><b>${yen(sum)}</b></td></tr>`;}).join('')}
+      <tr><td colspan="2"><b>合計</b></td>${MS.map(m=>`<td class="r"><b>${yen(tot[m]||0)}</b></td>`).join('')}
+        <td class="r"><b>${yen(Object.values(tot).reduce((a,b)=>a+b,0))}</b></td></tr>
+      </tbody></table></div>
+    <p class="note">登録番号が空の発注先は、インボイスの仕入税額控除が取れない可能性がある。発注先マスタに登録番号が入っていない職人が多い。
+      いまの台帳の支払一覧は、工程ごとに手で打つ「月」列でしか集計していないので、その月が空だと支払から丸ごと落ちる。ここでは月が空なら予定日の月で拾うようにしてある。</p>`;
+}
+
+/* ================= 月次 ================= */
+function vPl(){
+  const MS=MS_LIST();
+  const bill={}, done={};
+  DB.cases.forEach(c=>{const s=salesOf(c), k=costOf(c.id);
+    const mb=ym(c.bill), mdn=ym(planOf(c));
+    if(mb){bill[mb]=bill[mb]||{s:0,c:0,n:0}; bill[mb].s+=s; bill[mb].c+=k; bill[mb].n++;}
+    if(mdn){done[mdn]=done[mdn]||{s:0,c:0,n:0}; done[mdn].s+=s; done[mdn].c+=k; done[mdn].n++;}});
+  const tb=(o,t)=>`<div class="card" style="margin-bottom:12px"><h3 style="font-size:14px;margin-bottom:8px">${t}</h3>
+    <div class="tw" style="max-height:none"><table><thead><tr><th></th>
+    ${MS.map(m=>`<th class="r">${mlabel(m)}</th>`).join('')}<th class="r">合計</th></tr></thead><tbody>
+    ${[['件数','n',v=>v],['売上（税込）','s',yen],['原価','c',yen]].map(([l,f,fmt])=>
+      `<tr><td>${l}</td>${MS.map(m=>`<td class="r">${fmt((o[m]||{})[f]||0)}</td>`).join('')}
+       <td class="r"><b>${fmt(MS.reduce((a,m)=>a+((o[m]||{})[f]||0),0))}</b></td></tr>`).join('')}
+    <tr><td><b>粗利</b></td>${MS.map(m=>{const x=o[m]||{s:0,c:0};
+      return `<td class="r"><b>${yen(x.s-x.c)}</b></td>`;}).join('')}
+      <td class="r"><b>${yen(MS.reduce((a,m)=>a+((o[m]||{s:0}).s-(o[m]||{c:0}).c),0))}</b></td></tr>
+    <tr><td>粗利率</td>${MS.map(m=>{const x=o[m]||{s:0,c:0};
+      return `<td class="r">${x.s?((x.s-x.c)/x.s*100).toFixed(1)+'%':'—'}</td>`;}).join('')}
+      <td class="r">${(()=>{const s=MS.reduce((a,m)=>a+((o[m]||{s:0}).s),0),c=MS.reduce((a,m)=>a+((o[m]||{c:0}).c),0);
+        return s?((s-c)/s*100).toFixed(1)+'%':'—';})()}</td></tr>
+    </tbody></table></div></div>`;
+  const z=DB.cases.filter(c=>salesOf(c)>0&&costOf(c.id)===0);
+  const A=tb(done,'完工（予定）月ベース　工事が実際に動いた月で見る'+(DB.basis==='完工'?'　← いま採用中':''));
+  const Bt=tb(bill,'請求月ベース　いまの月次決算表と同じ見方'+(DB.basis==='請求'?'　← いま採用中':''));
+  return `<div class="bar"><h2>月次</h2>
+      <span class="note" style="margin:0">計上基準</span>
+      <select id="basisSel" title="売上をどの日付で月に乗せるか">${optsL(['完工','請求'],DB.basis,{'完工':'計上：完工基準','請求':'計上：請求月基準'})}</select>
+      <span class="note" style="margin:0">請求タブの締め方も一緒に切り替わる</span></div>
+    ${DB.basis==='完工'?A+Bt:Bt+A}
+    <div class="card"><h3 style="font-size:14px;margin-bottom:6px">この粗利率が信用できない理由</h3>
+      <p class="note" style="margin-top:0">売上はあるのに発注が1件も入っていない案件が <b>${z.length}件・${yen(z.reduce((a,c)=>a+salesOf(c),0))}</b> ある。
+      その分だけ原価が抜け、粗利が過大に出る。販管費はこの台帳にそもそも入っていないので（経費シートは見出しだけ）、
+      月次決算表の営業利益＝売上総利益になっている。販管費はfreee側にあるので、そちらと突き合わせないと営業利益は出ない。</p></div>`;
+}
+
+/* 要確認からその場で直す */
+function fixCost(cid){
+  const ps=procsOf(cid);
+  return `<div style="margin-top:8px">
+    ${ps.map(p=>`<div class="prow" data-p="${p.id}">
+      <select data-pf="kind">${kindOpts(p.kind)}</select>
+      <select data-pf="who">${vendorSel(p.who)}</select>
+      <input type="date" data-pf="date" value="${esc(p.date||'')}">
+      <input type="number" data-pf="amt" value="${p.amt||0}" step="100">
+      <button class="x" data-del="${p.id}" title="削除">×</button></div>`).join('')}
+    <div style="display:flex;gap:7px;margin-top:6px">
+      <button class="btn small primary" data-addcost="${cid}">＋ 発注を入れる</button>
+      <button class="btn small" data-open="${cid}">案件台帳で開く</button></div></div>`;
+}
+function fixDone(cid){
+  const c=DB.cases.find(x=>x.id===cid); if(!c)return '';
+  return `<div style="display:flex;gap:7px;margin-top:8px;align-items:center;flex-wrap:wrap">
+    <span class="note" style="margin:0">完工日</span>
+    <input type="date" class="fd" data-c="${cid}" value="${esc(c.done||'')}" style="height:30px">
+    ${c.plan?`<button class="btn small primary" data-done2="${cid}" data-d="${esc(c.plan)}">予定日 ${md(c.plan)} を入れる</button>`:''}
+    <button class="btn small" data-open="${cid}">案件台帳で開く</button></div>`;
+}
+
+/* ================= 要確認 ================= */
+let ckScope='運用中';
+function vCheck(){
+  const B=byId();
+  let all=issues();
+  const total=all.length;
+  if(ckScope==='運用中')all=all.filter(i=>{const c=B[i.c]; return c&&c.live;});
+  /* 同じ案件・同じ種類は1つにまとめる（工程ごとに何度も出ないように） */
+  const g={};
+  all.forEach(i=>{ const arr=(g[i.k]=g[i.k]||[]); const hit=arr.find(x=>x.c===i.c);
+    if(hit){hit.n=(hit.n||1)+1; if(i.t&&hit.t.indexOf(i.t)<0&&hit.t.length<80)hit.t+='／'+i.t;} else arr.push(Object.assign({n:1},i)); });
+  const order=Object.keys(g).sort((a,b)=>g[b].length-g[a].length);
+  const shown=order.reduce((a,k)=>a+g[k].length,0);
+  return `<div class="bar"><h2>要確認 <span style="color:var(--warn)">${shown}</span></h2>
+      <div class="seg"><button data-ck="運用中" class="${ckScope==='運用中'?'on':''}">運用中だけ</button><button data-ck="すべて" class="${ckScope==='すべて'?'on':''}">過去データも</button></div>
+      <span class="note" style="margin:0">${ckScope==='運用中'?`過去データを含めると ${total} 件。過去分は「マスタ」の一括置き換えや「完工日なし」の予定日ボタンでまとめて減らせる`:'案件ごとにまとめて数えている'}</span></div>
+    ${shown?`<div class="kpi">${order.map(k=>`<div class="k"><small>${esc(k)}</small><b>${g[k].length}</b></div>`).join('')}</div>`
+      :'<div class="card empty">運用中の案件に、直すところは無い。</div>'}
+    ${order.map(k=>`<h3 style="font-size:14px;margin:14px 0 7px">${esc(k)}　${g[k].length}件</h3>
+      ${g[k].slice(0,25).map(i=>`<div class="ck"><span class="t">${esc(k)}${i.n>1?` ×${i.n}`:''}</span><b>${esc((B[i.c]||{}).prop||i.t)}</b>${(B[i.c]||{}).prop&&i.t!==(B[i.c]||{}).prop?`<span class="note" style="margin:0 0 0 8px">${esc(i.t)}</span>`:''}
+        <div class="d">${esc(i.d)}</div>
+        ${k==='原価なし'?fixCost(i.c):
+          k==='完工日なし'?fixDone(i.c):
+          `<button class="btn small" data-open="${i.c}" style="margin-top:6px">この案件を開く</button>`}</div>`).join('')}
+      ${g[k].length>25?`<p class="note">ほか ${g[k].length-25} 件。上から直していくと減る。</p>`:''}`).join('')}
+    <p class="note">この一覧は入力を直すと自動で減る。</p>`;
+}
+
+/* ================= render ================= */
+/* 再描画の前後で「どこを見ていたか・どこに入力していたか」を覚えて戻す。
+   #main を丸ごと書き直す方式なので、これが無いと1セル直すたびに表が先頭に戻りフォーカスも消える */
+const SCROLLERS='.tw,.lnw,.boardwrap,.cases,#dw,.cal,.drawer';
+function elKey(el){
+  if(el.id)return '#'+el.id;
+  const cls=(typeof el.className==='string'?el.className:'').trim(); if(!cls)return null;
+  const sel='.'+cls.split(/\s+/).join('.');
+  return sel+'|'+[...document.querySelectorAll(sel)].indexOf(el);
+}
+function elByKey(k){
+  if(!k)return null;
+  if(k[0]==='#')return document.getElementById(k.slice(1));
+  const [sel,i]=k.split('|'); return document.querySelectorAll(sel)[+i]||null;
+}
+function memView(){
+  const m={win:[window.scrollX,window.scrollY],els:[],focus:null};
+  document.querySelectorAll(SCROLLERS).forEach(el=>{ if(el.scrollTop||el.scrollLeft){const k=elKey(el); if(k)m.els.push([k,el.scrollLeft,el.scrollTop]);} });
+  const a=document.activeElement;
+  if(a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)&&!a.closest('.ask')){
+    let sel=null;
+    if(a.id)sel='#'+CSS.escape(a.id);
+    else{
+      const attr=['data-lf','data-pf','data-f'].find(n=>a.hasAttribute(n));
+      const row=a.closest('[data-l],[data-p],[data-pr],[data-v],[data-cm]');
+      if(attr&&row){const rn=['data-l','data-p','data-pr','data-v','data-cm'].find(n=>row.hasAttribute(n));
+        sel=`[${rn}="${CSS.escape(row.getAttribute(rn))}"] [${attr}="${CSS.escape(a.getAttribute(attr))}"]`;}
+      else if(attr){const box=a.closest('#dw,.drawer,.card'); const bk=box?elKey(box):null;
+        sel=(bk&&bk[0]==='#'?bk+' ':'')+`[${attr}="${CSS.escape(a.getAttribute(attr))}"]`;}
+      else if(a.dataset.k)sel=`[data-k="${CSS.escape(a.dataset.k)}"]`;
+    }
+    if(sel){let ss=null,se=null; try{ss=a.selectionStart;se=a.selectionEnd;}catch(e){} m.focus={sel,ss,se};}
+  }
+  return m;
+}
+function restoreView(m){
+  if(!m)return false;
+  let hitBoard=false;
+  m.els.forEach(([k,x,y])=>{const el=elByKey(k); if(el){el.scrollLeft=x; el.scrollTop=y; if(/boardwrap/.test(k))hitBoard=true;}});
+  window.scrollTo(m.win[0],m.win[1]);
+  if(m.focus){ let el=null; try{el=document.querySelector(m.focus.sel);}catch(e){}
+    if(el){ el.focus({preventScroll:true});
+      try{ if(m.focus.ss!=null&&typeof el.setSelectionRange==='function'&&/^(text|search|)$/.test(el.type||''))el.setSelectionRange(m.focus.ss,m.focus.se); }catch(e){} } }
+  return hitBoard;
+}
+let lastProcView='';
+function render(){
+  tipHide();
+  const mem=memView();
+  renderTabs();
+  paint();
+  const hitBoard=restoreView(mem);
+  if(tab==='proc'){
+    /* 工程表は、案件か月が変わったときだけ最初のチップに寄せる（同じ表を触っている間は位置を保つ） */
+    const key=pCase+'|'+pShift;
+    const wrap=document.querySelector('.layout .boardwrap');
+    const ch=wrap&&wrap.querySelector('.chip.pc');
+    if(wrap&&ch&&(key!==lastProcView||!hitBoard)&&key!==lastProcView){const td=ch.closest('td');
+      wrap.scrollLeft=Math.max(0,td.offsetLeft-wrap.clientWidth/2+td.offsetWidth/2);}
+    lastProcView=key;
+  }
+}
+/* 入力の change の直後は、ブラウザが次の欄へフォーカスを移してから描き直す（Tabで流せるように） */
+let renderTimer=null;
+function renderSoon(){ clearTimeout(renderTimer); renderTimer=setTimeout(()=>{renderTimer=null; render();},0); }
+function paint(){
+  document.getElementById('main').innerHTML=inboxBanner()+(
+    tab==='ledger'?vLedger():tab==='order'?vOrder():tab==='proc'?vProc():tab==='board'?vBoard():tab==='kanko'?vKanko():tab==='insp'?vInsp():
+    tab==='bill'?vBill():tab==='pay'?vPay():tab==='pl'?vPl():tab==='master'?vMaster():vCheck());
+}
+
+/* ================= 編集 ================= */
+/** 区分だけ決めた工程を1本足す（業者・日付は空） */
+function addKind(cid,k,quiet){
+  const c=DB.cases.find(x=>x.id===cid); if(!c)return;
+  if(!quiet)snap();
+  DB.pseq++;
+  const who=(k==='AW検査')?(M.kensa||'藤森正則'):'';
+  DB.procs.push({id:'Q'+DB.pseq+DEV,case:cid,kind:k,who,date:'',amt:0,month:'',prog:''});
+  if(!quiet)save();
+}
+function addInspection(cid){
+  const c=DB.cases.find(x=>x.id===cid); if(!c)return;
+  const ps=procsOf(cid);
+  const base=ps.filter(p=>p.kind==='清掃'&&p.date).map(endOf).sort().pop()
+    ||lastDayOf(ps)||c.done||c.plan||'';
+  snap(); DB.pseq++;
+  DB.procs.push({id:'Q'+DB.pseq+DEV,case:cid,kind:'AW検査',who:M.kensa||'藤森正則',
+    date:base,amt:0,month:'',prog:''});
+  recalcPlan(c);
+  save(); render();
+  toast(`${c.prop||'現場'} に AW検査（${M.kensa||'藤森正則'}${base?' '+md(base):''}）を入れた`, undo);
+}
+/* 手配ボード：職人の休みをその月ぶん入れる */
+function askOff(who,m){
+  const cur=offDays(who,m).join(',');
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg"><h4>${esc(who)} の休み（${mlab(m)}）</h4>
+    <p class="note" style="margin:0 0 8px">休む日を数字で、カンマ区切り（例：3,10,17,24）。空にすると休みなし。</p>
+    <input type="text" id="offT" value="${esc(cur)}" style="width:100%">
+    <div class="askbtn" style="margin-top:12px"><button class="btn small" id="askNo">やめる</button>
+      <button class="btn small primary" id="askYes">保存</button></div></div>`;
+  document.body.appendChild(el); el.querySelector('#offT').focus();
+  el.querySelector('#askNo').onclick=()=>el.remove();
+  el.querySelector('#askYes').onclick=()=>{
+    const D=daysIn(m);
+    const days=[...new Set(el.querySelector('#offT').value.split(/[,、\s]+/).map(x=>+x).filter(x=>x>=1&&x<=D))].sort((a,b)=>a-b);
+    snap(); DB.off[who]=DB.off[who]||{}; DB.off[who][m]=days; save(); el.remove(); render();
+    toast(`${who} の${mlab(m)}の休み：${days.length?days.join(',')+'日':'なし'}`, undo);};
+}
+function openCase(id){selCase=id; tab='ledger'; render();
+  const dw=document.getElementById('dw'); if(dw)dw.scrollIntoView({block:'nearest'});}
+function setField(id,f,v){
+  const c=DB.cases.find(x=>x.id===id); if(!c)return;
+  snap('case:'+id+':'+f);
+  if(f==='sales'||f==='add')v=+v||0;
+  if(f==='bill'&&v)v=v+'-01';
+  c[f]=v;
+  if(f==='done'){setDone(c,v);return save();}
+  if(f==='plan'){ if(v)c.planManual=1; else {delete c.planManual; recalcPlan(c);} }   /* 空にすると工程からの自動に戻る */
+  save();
+}
+function setProc(pid,f,v){
+  const p=DB.procs.find(x=>x.id===pid); if(!p)return;
+  snap('proc:'+pid+':'+f);
+  if(f==='amt')v=+v||0;
+  p[f]=v; if(f==='date'||f==='end')p.month='';
+  if(f==='who'&&v){const mv=vendorOf(v); if(mv&&mv.defKind&&PKINDS.indexOf(p.kind)<0)p.kind=mv.defKind;}
+  if(f==='end'&&p.end&&(!p.date||p.end<=p.date))p.end='';          // 開始以前＝1日だけ
+  if(f==='date'&&p.end&&p.end<=p.date)p.end='';
+  const c=DB.cases.find(x=>x.id===p.case);
+  if(c&&(f==='date'||f==='end'))recalcPlan(c);
+  save();
+}
+
+/* ================= カーソルを合わせたときの吹き出し ================= */
+let tipEl=null;
+function tipHide(){ if(tipEl){tipEl.remove(); tipEl=null;} }
+function tipMove(x,y){
+  if(!tipEl)return;
+  const w=tipEl.offsetWidth, h=tipEl.offsetHeight;
+  let L=x+14, T=y+16;
+  if(L+w>innerWidth-8) L=x-w-14;
+  if(T+h>innerHeight-8) T=y-h-12;
+  tipEl.style.left=Math.max(8,L)+'px'; tipEl.style.top=Math.max(8,T)+'px';
+}
+function tipShow(ch,x,y){
+  const p=DB.procs.find(q=>q.id===ch.dataset.p); if(!p)return;
+  const c=DB.cases.find(q=>q.id===p.case)||{};
+  const v=vendorOf(p.who);
+  const span=(typeof spanLabel==='function')?spanLabel(p):(p.date?md(p.date):'');
+  tipHide();
+  tipEl=document.createElement('div'); tipEl.className='tip';
+  tipEl.innerHTML=`<b>${esc(c.prop||'（物件未入力）')}</b>
+    <span class="s">${esc(c.client||'依頼元なし')}　${esc(c.kind||'')}${c.st?'　'+esc(c.st):''}</span>
+    <span class="w">${esc(p.kind)}　${esc(p.who||'業者未定')}${v&&v.type&&v.type!=='外注'?'（'+esc(v.type)+'）':''}</span>
+    <span class="w">${esc(span||'日付未定')}${p.amt?'　'+yen(p.amt):'　金額未入力'}</span>
+    ${p.memo?`<span class="w">${esc(p.memo)}</span>`:''}
+    ${c.done?`<span class="w">完工 ${md(c.done)}</span>`:(c.plan?`<span class="w">完工予定 ${md(c.plan)}</span>`:'')}
+    ${c.memo?`<span class="w">${esc(c.memo)}</span>`:''}`;
+  document.body.appendChild(tipEl);
+  tipMove(x,y);
+}
+document.addEventListener('mouseover',e=>{
+  const ch=e.target.closest&&e.target.closest('.chip[data-p]');
+  if(ch)tipShow(ch,e.clientX,e.clientY); else if(!e.target.closest||!e.target.closest('.tip'))tipHide();
+});
+document.addEventListener('mousemove',e=>{ if(tipEl)tipMove(e.clientX,e.clientY); });
+document.addEventListener('mouseout',e=>{
+  const ch=e.target.closest&&e.target.closest('.chip[data-p]');
+  if(ch&&!(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest('.chip[data-p]')))tipHide();
+});
+window.addEventListener('scroll',tipHide,true);
+document.addEventListener('wheel',e=>{
+  const t=e.target;
+  if(t&&t.tagName==='INPUT'&&t.type==='number'&&document.activeElement===t)t.blur();
+},{passive:true});
+
+/* ================= ドラッグ ================= */
+let dragId=null;
+const clearDZ=()=>document.querySelectorAll('td.ok,td.ng').forEach(n=>n.classList.remove('ok','ng'));
+function checkDrop(pid,who,ds){
+  const p=DB.procs.find(x=>x.id===pid); if(!p)return ['工程が見つからない'];
+  const w=[], len=spanLen(p), days=spanDays({date:ds,end:len>1?addDays(ds,len-1):''}), last=days[days.length-1]||ds;
+  const h=days.find(d=>isOff(who,d));
+  if(h)w.push(`${who} は ${md(h)} が休み`);
+  if(!isInsp(p.kind)&&clash(pid,who,days))w.push(`${days.length>1?md(ds)+'〜'+md(last):md(ds)} はすでに現場が入っている（1日2現場になる）`);
+  const c=DB.cases.find(x=>x.id===p.case);
+  if(c){const other=procsOf(c.id).filter(x=>x.id!==pid&&x.date);
+    if(p.kind==='清掃'&&other.some(x=>isSeko(x.kind)&&endOf(x)>ds))w.push('工事より前に清掃が来る');
+    if(isSeko(p.kind)&&other.some(x=>x.kind==='清掃'&&x.date<last))w.push('清掃より後に工事が来る');
+    if(isInsp(p.kind)&&other.some(x=>x.kind==='清掃'&&endOf(x)>ds))w.push('清掃より前にAW検査が来る');}
+  return w;
+}
+function applyMove(pid,who,ds){
+  snap();
+  const p=DB.procs.find(x=>x.id===pid); const c=DB.cases.find(x=>x.id===p.case);
+  const from=`${p.who} ${md(p.date)}`;
+  const len=spanLen(p); p.who=who; p.date=ds; p.end=len>1?addDays(ds,len-1):''; p.month='';
+  recalcPlan(c);
+  selProc=pid; save(); render();
+  toast(`${(c||{}).prop||'現場'}：${from} → ${who} ${md(ds)}`, undo);
+}
+/** 工程を組むタブ：担当はそのままで日だけ動かす */
+function setDate(pid,ds,de){
+  const p=DB.procs.find(x=>x.id===pid); if(!p)return;
+  if(de&&de<ds){const t=ds;ds=de;de=t;}
+  const nEnd=(de&&de>ds)?de:'';
+  if(p.date===ds&&(p.end||'')===nEnd)return;
+  snap(); const from=p.date?spanLabel(p):'未定'; p.date=ds; p.end=nEnd; p.month='';
+  const c=DB.cases.find(x=>x.id===p.case);
+  recalcPlan(c);
+  selProc=pid; save(); render();
+  toast(`${p.kind}（${p.who||'業者未定'}）を ${from} → ${spanLabel(p)} に`, undo);
+}
+/** ドラッグ：期間の長さを保ったまま開始日を動かす */
+function shiftDate(pid,ds){
+  const p=DB.procs.find(x=>x.id===pid); if(!p)return;
+  const len=spanLen(p); setDate(pid,ds,len>1?addDays(ds,len-1):'');
+}
+function dateWarn(pid,ds,de){
+  const p=DB.procs.find(x=>x.id===pid); if(!p)return [];
+  const w=[]; const days=spanDays({date:ds,end:de||''}); const last=days[days.length-1]||ds;
+  if(p.who&&SEN.indexOf(p.who)>=0){const h=days.find(d=>isOff(p.who,d));
+    if(h)w.push(`${p.who} は ${md(h)} が休み`);}
+  if(p.who&&!isInsp(p.kind)&&clash(pid,p.who,days))
+    w.push(`${p.who} は ${days.length>1?md(ds)+'〜'+md(last):md(ds)} に別の現場がある`);
+  const other=procsOf(p.case).filter(x=>x.id!==pid&&x.date);
+  if(p.kind==='清掃'&&other.some(x=>isSeko(x.kind)&&endOf(x)>ds))w.push('工事より前に清掃が来る');
+  if(isSeko(p.kind)&&other.some(x=>x.kind==='清掃'&&x.date<last))w.push('清掃より後に工事が来る');
+  if(isInsp(p.kind)&&other.some(x=>x.kind==='清掃'&&endOf(x)>ds))w.push('清掃より前にAW検査が来る');
+  return w;
+}
+function tryDate(pid,ds,de,keep){
+  if(keep){const p=DB.procs.find(x=>x.id===pid); const len=p?spanLen(p):1; de=len>1?addDays(ds,len-1):'';}
+  const w=dateWarn(pid,ds,de);
+  if(!w.length){setDate(pid,ds,de);return;}
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="askbox"><h4>この日に置くと問題が出る</h4>
+    <ul>${w.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+    <div class="askbtn"><button class="btn small" id="askNo">やめる</button>
+      <button class="btn small primary" id="askYes">このまま置く</button></div></div>`;
+  document.body.appendChild(el);
+  el.querySelector('#askNo').onclick=()=>el.remove();
+  el.querySelector('#askYes').onclick=()=>{el.remove();setDate(pid,ds,de);};
+}
+/** 工程を組む表のクリック：1回目＝開始日、2回目＝終了日。同じ日を2回なら1日だけ */
+function clickDay(pid,ds){
+  if(pendStart&&pendStart.pid===pid){
+    const a=pendStart.day; pendStart=null;
+    if(a===ds){tryDate(pid,ds,'');}
+    else{tryDate(pid,a<ds?a:ds,a<ds?ds:a);}
+    return;
+  }
+  pendStart={pid,day:ds}; selProc=pid; render();
+  toast(`${md(ds)} を開始日にした。終了日をクリック（同じ日なら1日だけ）`);
+}
+function tryMove(pid,who,ds){
+  const p=DB.procs.find(x=>x.id===pid); if(!p||(p.who===who&&p.date===ds))return;
+  pendStart=null;
+  const w=checkDrop(pid,who,ds);
+  if(!w.length){applyMove(pid,who,ds);return;}
+  const c=DB.cases.find(x=>x.id===p.case)||{};
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="askbox"><h4>このまま動かすと問題が出る</h4>
+    <p class="note" style="margin:0 0 9px">${esc(c.prop||'現場')} → ${esc(who)}　${md(ds)}（${wdOf(ds)}）</p>
+    <ul>${w.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+    <div class="askbtn"><button class="btn small" id="askNo">やめる</button>
+      <button class="btn small primary" id="askYes">このまま移動</button></div></div>`;
+  document.body.appendChild(el);
+  el.querySelector('#askNo').onclick=()=>el.remove();
+  el.querySelector('#askYes').onclick=()=>{el.remove();applyMove(pid,who,ds);};
+}
+document.addEventListener('dragstart',e=>{
+  const ch=e.target.closest('.chip[draggable="true"]'); if(!ch)return;
+  dragId=ch.dataset.p; ch.classList.add('drag'); tipHide();
+  try{e.dataTransfer.setData('text/plain',dragId);e.dataTransfer.effectAllowed='move';}catch(_){}
+});
+document.addEventListener('dragover',e=>{
+  if(!dragId)return;
+  const pt=e.target.closest('td.pc[data-pid]');
+  if(pt){e.preventDefault(); try{e.dataTransfer.dropEffect='move';}catch(_){}
+    if(pt.dataset.pid!==dragId)return;
+    if(!pt.classList.contains('ok')&&!pt.classList.contains('ng'))
+      {const p0=DB.procs.find(x=>x.id===dragId); const l0=p0?spanLen(p0):1;
+       pt.classList.add(dateWarn(dragId,pt.dataset.day,l0>1?addDays(pt.dataset.day,l0-1):'').length?'ng':'ok');}
+    return;}
+  const td=e.target.closest('td.c[data-who]'); if(!td)return;
+  e.preventDefault(); try{e.dataTransfer.dropEffect='move';}catch(_){}
+  if(td.classList.contains('ok')||td.classList.contains('ng'))return;
+  td.classList.add(checkDrop(dragId,td.dataset.who,td.dataset.day).length?'ng':'ok');
+});
+document.addEventListener('dragleave',e=>{
+  const td=e.target.closest('td.c[data-who],td.pc[data-pid]');
+  if(td&&!td.contains(e.relatedTarget))td.classList.remove('ok','ng');});
+document.addEventListener('dragend',()=>{dragId=null;clearDZ();
+  document.querySelectorAll('.chip.drag').forEach(n=>n.classList.remove('drag'));});
+document.addEventListener('drop',e=>{
+  if(!dragId)return;
+  const pt=e.target.closest('td.pc[data-pid]');
+  if(pt){e.preventDefault(); const id=dragId; dragId=null; clearDZ();
+    if(pt.dataset.pid===id){pendStart=null;tryDate(id,pt.dataset.day,'',true);} return;}
+  const td=e.target.closest('td.c[data-who]'); if(!td)return;
+  e.preventDefault(); const id=dragId; dragId=null; clearDZ();
+  tryMove(id,td.dataset.who,td.dataset.day);});
+
+/* ================= events ================= */
+document.addEventListener('click',e=>{
+  const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
+  /* ---- 発注 ---- */
+  const ov=e.target.closest('[data-ov]'); if(ov){oView=ov.dataset.ov;render();return;}
+  const oc=e.target.closest('[data-oc]'); if(oc){oCase=oc.dataset.oc;oSel={};render();return;}
+  const oco=e.target.closest('[data-ocopen]');
+  if(oco){oCase=oco.dataset.ocopen;oView='make';oSel={};tab='order';render();return;}
+  const lc=e.target.closest('.lchk');
+  if(lc){const tr=lc.closest('[data-l]'); if(tr){oSel[tr.dataset.l]=lc.checked;render();} return;}
+  const gc=e.target.classList.contains('gchk')?e.target:null;
+  if(gc&&oCase){const k=gc.closest('tr').dataset.g;
+    linesOf(oCase).filter(l=>!l.order&&(l.kind||'')===k).forEach(l=>{ if(gc.checked)oSel[l.id]=true; else delete oSel[l.id]; });
+    render(); return;}
+  if(e.target.id==='impInbox'){importInbox();return;}
+  if(e.target.id==='reloadInbox'){reloadInbox();return;}
+  if(e.target.id==='impPO'&&oCase){importPO(oCase);return;}
+  if(e.target.id==='applyPrice'&&oCase){applyPrices(oCase);return;}
+  if(e.target.id==='impPrice'){askPriceImport();return;}
+  if(e.target.id==='impPriceDb'){importPrices();return;}
+  const dpr=e.target.closest('[data-delpr]');
+  if(dpr){snap(); DB.prices=DB.prices.filter(x=>x.id!==dpr.dataset.delpr); save(); render();
+    toast('単価を削除した', undo); return;}
+  if(e.target.id==='impLines'&&oCase){askImport(oCase);return;}
+  if(e.target.id==='sampleLines'&&oCase){
+    addLines(oCase,parseLines(SAMPLE));render();toast('例を5行入れた（コンクルーの実物から）',undo);return;}
+  if(e.target.id==='addLine'&&oCase){
+    snap(); DB.lseq++;
+    DB.lines.push({id:'L'+DB.lseq+DEV,case:oCase,name:'',spec:'',qty:1,unit:'式',sell:0,price:0,kind:'内装',who:'',memo:'',order:''});
+    save(); render();
+    const i3=document.querySelector('tr[data-l]:last-child .li[data-lf="name"]'); if(i3)i3.focus();
+    return;}
+  const dll=e.target.closest('[data-dell]');
+  if(dll){snap(); DB.lines=DB.lines.filter(l=>l.id!==dll.dataset.dell); save(); render();
+    toast('明細を1行消した',undo); return;}
+  const pk=e.target.closest('[data-pick]'); if(pk){askPricePick(pk.dataset.pick);return;}
+  const go=e.target.closest('[data-gord]'); if(go&&oCase){
+    const k=go.dataset.gord, tr=go.closest('tr');
+    const who=tr?tr.querySelector('.gwho').value:'';
+    const rows=linesOf(oCase).filter(l=>!l.order&&(l.kind||'')===k);
+    if(who){rows.forEach(l=>{l.who=who;});}
+    oSel={}; rows.forEach(l=>oSel[l.id]=true); askOrder(oCase,who); return;}
+  if(e.target.id==='oHide'){oHide=!oHide; try{localStorage.setItem('aw-ohide',oHide?'1':'0');}catch(_){ } render(); return;}
+  if(e.target.id==='mkOrder'&&oCase){askOrder(oCase);return;}
+  if(e.target.id==='clrSel'){oSel={};render();return;}
+  if(e.target.id==='delSel'&&oCase){
+    const n=DB.lines.filter(l=>l.case===oCase&&oSel[l.id]&&!l.order).length;
+    snap(); const ids=DB.lines.filter(l=>l.case===oCase&&oSel[l.id]&&!l.order).map(l=>l.id); purgeShared('lines',ids);
+    DB.lines=DB.lines.filter(l=>!(l.case===oCase&&oSel[l.id]&&!l.order));
+    oSel={}; save(); render(); toast(`${n}行消した`, undo); return;}
+  if(e.target.id==='clearLines'&&oCase){
+    const keep=DB.lines.filter(l=>l.case===oCase&&l.order).length;
+    const n=DB.lines.filter(l=>l.case===oCase&&!l.order).length;
+    const el=document.createElement('div'); el.className='ask';
+    el.innerHTML=`<div class="askbox"><h4>明細を全部消す</h4>
+      <p class="note" style="margin:0 0 12px">${n}行を消します。${
+        keep?`発注済みの ${keep}行 は残ります。`:''}元に戻せます。</p>
+      <div class="askbtn"><button class="btn small" id="askNo">やめる</button>
+      <button class="btn small danger" id="askYes">消す</button></div></div>`;
+    document.body.appendChild(el);
+    el.querySelector('#askNo').onclick=()=>el.remove();
+    el.querySelector('#askYes').onclick=()=>{el.remove(); snap();
+      const ids=DB.lines.filter(l=>l.case===oCase&&!l.order).map(l=>l.id);
+      DB.lines=DB.lines.filter(l=>!(l.case===oCase&&!l.order));
+      oSel={}; save(); render(); toast(`${n}行消した`, undo); purgeShared('lines',ids);};
+    return;}
+  const osh=e.target.closest('[data-osheet]'); if(osh){orderSheet(osh.dataset.osheet);return;}
+  const onx=e.target.closest('[data-onext]'); if(onx){nextOrderSt(onx.dataset.onext);return;}
+  const odl=e.target.closest('[data-odel]'); if(odl){delOrder(odl.dataset.odel);return;}
+  const pc=e.target.closest('[data-pc]'); if(pc){pCase=pc.dataset.pc;pShift=0;selProc=null;pendStart=null;render();return;}
+  if(e.target.id==='pHide'){pHide=!pHide;render();return;}
+  if(e.target.id==='pPrevCase'||e.target.id==='pNextCase'){
+    const has=id=>procsOf(id).length>0;
+    let list=DB.cases.filter(c=>(pFilter==='すべて'||(pFilter==='未手配'?!has(c.id):has(c.id)))&&
+      (!pQ||(c.prop+c.client).toLowerCase().includes(pQ.toLowerCase())));
+    list=sortCases(list,pSort);
+    if(pCase&&!list.some(c=>c.id===pCase)){const sel=DB.cases.find(x=>x.id===pCase); if(sel)list=[sel,...list];}
+    const i=list.findIndex(c=>c.id===pCase), j=i+(e.target.id==='pNextCase'?1:-1);
+    if(j>=0&&j<list.length){pCase=list[j].id;pShift=0;selProc=null;pendStart=null;render();}
+    return;}
+  const ofb=e.target.closest('[data-off]'); if(ofb){askOff(ofb.dataset.off,bMonth);return;}
+  const ckb=e.target.closest('[data-ck]'); if(ckb){ckScope=ckb.dataset.ck;render();return;}
+  if(e.target.id==='pPrev'){pShift--;render();return;}
+  if(e.target.id==='pNext'){pShift++;render();return;}
+  const pj=e.target.closest('[data-pjump]');
+  if(pj&&pCase){ /* 旗の月へ飛ぶ：基準月からの差を pShift にする */
+    const c=DB.cases.find(x=>x.id===pCase); if(!c)return;
+    const keep=pShift; pShift=0; const base=procMonth(c,procsOf(c.id)); pShift=keep;
+    const t=pj.dataset.pjump;
+    pShift=(+t.slice(0,4)-+base.slice(0,4))*12+(+t.slice(5,7)-+base.slice(5,7));
+    render();return;}
+  if(e.target.id==='addProc2'&&pCase){
+    snap(); DB.pseq++; DB.procs.push({id:'Q'+DB.pseq+DEV,case:pCase,kind:'清掃',who:'',date:'',end:'',amt:0,month:'',prog:''});
+    save(); render(); return;}
+  const ptd=e.target.closest('td.pc[data-pid]');
+  if(ptd&&!e.target.closest('.chip')){clickDay(ptd.dataset.pid,ptd.dataset.day);return;}
+  const pch=e.target.closest('.chip.pc'); if(pch){
+    if(pendStart&&pendStart.pid===pch.dataset.p){const td=pch.closest('td'); clickDay(pch.dataset.p,td.dataset.day);return;}
+    selProc=selProc===pch.dataset.p?null:pch.dataset.p;render();return;}
+  const po=e.target.closest('[data-pcopen]');
+  if(po){pCase=po.dataset.pcopen;pShift=0;tab='proc';render();return;}
+  const ai=e.target.closest('[data-addins]'); if(ai){addInspection(ai.dataset.addins);return;}
+  const op=e.target.closest('[data-open]'); if(op){openCase(op.dataset.open);return;}
+  const dn=e.target.closest('[data-done]'); if(dn){
+    const c=DB.cases.find(x=>x.id===dn.dataset.done);
+    if(c){snap(); if(c.done)setDone(c,''); else setDone(c,planOf(c)||fmtD(new Date()));
+      save();render();} return;}
+  if(e.target.id==='addCase'){
+    snap(); DB.seq++; const id='N'+DB.seq+DEV;
+    DB.cases.unshift({id,client:fClient!=='すべて'?fClient:'',prop:'',kind:'清掃のみ',st:'新規案件',live:true,ord:'未',
+      sales:0,add:0,bill:fMonth!=='すべて'&&fMonth!=='未設定'?fMonth+'-01':'',done:'',plan:'',report:'',photo:'未'});
+    selCase=id; save(); render();
+    const i=document.querySelector('[data-f="prop"]'); if(i)i.focus(); return;}
+  if(e.target.id==='addProc'&&selCase){
+    snap(); DB.pseq++; DB.procs.push({id:'Q'+DB.pseq+DEV,case:selCase,kind:'清掃',who:'',date:'',end:'',amt:0,month:'',prog:''});
+    save(); render(); return;}
+  const del=e.target.closest('[data-del]'); if(del){
+    const dp=DB.procs.find(p=>p.id===del.dataset.del);
+    if(dp&&dp.order){const o=DB.orders.find(x=>x.id===dp.order); toast(`この工程は発注 ${o?o.no:''} に紐づいている。先に発注を取り消す`); return;}
+    snap(); DB.procs=DB.procs.filter(p=>p.id!==del.dataset.del);
+    if(dp)recalcPlan(DB.cases.find(x=>x.id===dp.case));
+    save(); render();
+    toast('工程を削除した',undo); return;}
+  if(e.target.id==='delCase'&&selCase&&!e.target.dataset.sure){
+    const c=DB.cases.find(x=>x.id===selCase); const n=procsOf(selCase).length+linesOf(selCase).length+ordersOf(selCase).length;
+    e.target.dataset.sure='1'; e.target.textContent=`本当に消す（工程・明細・発注 ${n}件も消える）`;
+    setTimeout(()=>{const b=document.getElementById('delCase'); if(b){delete b.dataset.sure; b.textContent='この案件を削除';}},4000);
+    return;}
+  if(e.target.id==='delCase'&&selCase){
+    const c=DB.cases.find(x=>x.id===selCase); snap();
+    DB.cases=DB.cases.filter(x=>x.id!==selCase); DB.procs=DB.procs.filter(p=>p.case!==selCase);
+    DB.lines=(DB.lines||[]).filter(l=>l.case!==selCase); DB.orders=(DB.orders||[]).filter(o=>o.case!==selCase);
+    selCase=null; save(); render(); toast(`${(c||{}).prop||'案件'} を削除した`,undo); return;}
+  if(e.target.id==='closeDw'){selCase=null;render();return;}
+  if(e.target.id==='undoBtn'){undo();return;}
+  if(e.target.id==='exportAll'){
+    const out={v:4,at:new Date().toISOString(),cases:DB.cases,procs:DB.procs,lines:DB.lines,orders:DB.orders,vendors:DB.vendors,clients:DB.clients,prices:DB.prices,
+      recv:DB.recv||{},paid:DB.paid||{},off:DB.off||{},basis:DB.basis||'完工'};
+    const txt=JSON.stringify(out); const m=document.getElementById('exportMsg');
+    navigator.clipboard.writeText(txt).then(()=>{ if(m)m.textContent=`コピーした（${(txt.length/1024).toFixed(0)}KB、案件 ${DB.cases.length}・工程 ${DB.procs.length}・明細 ${DB.lines.length}・発注 ${DB.orders.length}）`; })
+      .catch(err=>{ if(m)m.textContent='コピーできなかった：'+(err&&err.message); });
+    return;}
+  if(e.target.id==='resetBtn'){
+    const el=document.createElement('div'); el.className='ask';
+    el.innerHTML=`<div class="askbox"><h4>元データに戻す</h4>
+      <p class="note" style="margin:0 0 12px">この画面でやった入力・移動をすべて捨てて、10/20時点のコピーに戻す。元のスプレッドシートには影響しない。</p>
+      <div class="askbtn"><button class="btn small" id="askNo">やめる</button>
+      <button class="btn small danger" id="askYes">戻す</button></div></div>`;
+    document.body.appendChild(el);
+    el.querySelector('#askNo').onclick=()=>el.remove();
+    el.querySelector('#askYes').onclick=()=>{el.remove();reset();};return;}
+  if(e.target.id==='expCsv'){exportCsv();return;}
+  if(e.target.id==='convAll'){convertAll();return;}
+  const cv=e.target.closest('[data-conv]');
+  if(cv){const n=convertVendor(cv.dataset.conv); save(); render();
+    toast(n?`${cv.dataset.conv} の${n}件を置き換えた`:'対象なし', n?undo:null); return;}
+  const ca=e.target.closest('[data-convall]');
+  if(ca){const nm=ca.dataset.convall, v=vendorOf(nm);
+    const hit=DB.procs.filter(p=>p.who===nm&&p.kind!==v.defKind);
+    const kinds=[...new Set(hit.map(p=>p.kind))].join('・');
+    const el=document.createElement('div'); el.className='ask';
+    el.innerHTML=`<div class="askbox"><h4>${esc(nm)} の工程を全部「${esc(v.defKind)}」にする</h4>
+      <p class="note" style="margin:0 0 12px">${hit.length}件が対象（いまの区分：${esc(kinds)}）。元に戻せる。</p>
+      <div class="askbtn"><button class="btn small" id="askNo">やめる</button>
+      <button class="btn small primary" id="askYes">置き換える</button></div></div>`;
+    document.body.appendChild(el);
+    el.querySelector('#askNo').onclick=()=>el.remove();
+    el.querySelector('#askYes').onclick=()=>{el.remove(); snap();
+      hit.forEach(p=>{p.kind=v.defKind;}); save(); render();
+      toast(`${nm} の${hit.length}件を ${v.defKind} にした`, undo);};
+    return;}
+  const dv=e.target.closest('[data-delv]');
+  if(dv){const n=vendorRefs(dv.dataset.delv); if(n){toast(`この発注先は工程・明細・発注・単価表から${n}件参照されているので消せない`);return;}
+    snap(); DB.vendors=DB.vendors.filter(v=>v.name!==dv.dataset.delv); save(); render();
+    toast('発注先を削除した', undo); return;}
+  const dc=e.target.closest('[data-delc]');
+  if(dc){const n=clientRefs(dc.dataset.delc); if(n){toast(`この顧客は案件・単価表から${n}件参照されているので消せない`);return;}
+    snap(); DB.clients=DB.clients.filter(c=>c.name!==dc.dataset.delc); save(); render();
+    toast('顧客を削除した', undo); return;}
+  if(e.target.id==='addRow'){
+    snap();
+    if(mTab==='単価'){DB.prseq++; DB.prices.unshift({id:'PR'+DB.prseq+DEV,name:'',kind:'',unit:'式',price:0,who:'',client:'',memo:''});}
+    else if(mTab==='発注先')DB.vendors.unshift({name:uniqName('新しい発注先',DB.vendors),full:'',inv:'',type:'外注',defKind:'内装',close:30,site:30,bank:'',src:'手で追加'});
+    else DB.clients.unshift({name:uniqName('新しい顧客',DB.clients),full:'',method:'弊社仕様',close:31,site:30,mail:'',note:'',src:'手で追加'});
+    mQ=''; save(); render();
+    const i2=document.querySelector(mTab==='単価'?'.mp[data-f="name"]':mTab==='発注先'?'.mv[data-f="name"]':'.mc[data-f="name"]');
+    if(i2){i2.focus();i2.select();} return;}
+  const od=e.target.closest('[data-ord]');
+  if(od){const c=DB.cases.find(x=>x.id===od.dataset.ord);
+    if(c){snap();
+      if((c.ord||'未')==='未'){c.ord='済'; if(STATUS.indexOf(c.st)<STATUS.indexOf('発注書送付'))c.st='発注書送付';}
+      else c.ord='未';
+      save(); render();
+      toast(c.ord==='済'?`${c.prop||'案件'} を発注済にした（工程を組むの一覧から外れる）`:`${c.prop||'案件'} を発注前に戻した`, undo);}
+    return;}
+  const d2=e.target.closest('[data-done2]');
+  if(d2){const c=DB.cases.find(x=>x.id===d2.dataset.done2);
+    if(c){snap(); setDone(c,d2.dataset.d); save(); render();
+      toast(`${c.prop||'案件'} の完工日に ${md(c.done)} を入れた`, undo);} return;}
+  const ak=e.target.closest('[data-addkind]');
+  if(ak){const [cid,k]=ak.dataset.addkind.split('|'); addKind(cid,k); render();
+    toast(`${k} の工程を作った。業者と日を入れる`, undo); return;}
+  const aks=e.target.closest('[data-addkinds]');
+  if(aks){const cid=aks.dataset.addkinds, c=DB.cases.find(x=>x.id===cid);
+    const have=new Set(procsOf(cid).map(p=>p.kind));
+    const miss=needKinds(c).filter(k=>!have.has(k));
+    snap(); miss.forEach(k=>addKind(cid,k,true)); save(); render();
+    toast(`${miss.join('・')} の工程を作った`, undo); return;}
+  const ap=e.target.closest('[data-addcost]');
+  if(ap){const cid=ap.dataset.addcost; const c=DB.cases.find(x=>x.id===cid);
+    snap(); DB.pseq++;
+    DB.procs.push({id:'Q'+DB.pseq+DEV,case:cid,kind:'清掃',who:'',date:c?(c.done||c.plan||''):'',amt:0,month:'',prog:''});
+    save(); render(); return;}
+  const ch=e.target.closest('.chip[data-p]'); if(ch){
+    const p=DB.procs.find(x=>x.id===ch.dataset.p);
+    selProc=ch.dataset.p; if(p)openCase(p.case); return;}
+  const tr=e.target.closest('tr[data-c]'); if(tr){selCase=tr.dataset.c;render();return;}
+});
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.id==='fClient'){fClient=el.value;render();return;}
+  if(el.id==='fMonth'){fMonth=el.value;render();return;}
+  if(el.id==='fStatus'){fStatus=el.value;render();return;}
+  if(el.id==='fScope'){fScope=el.value;render();return;}
+  if(el.id==='bMonth'){bMonth=el.value;render();return;}
+  if(el.id==='kMonth'){kMonth=el.value;render();return;}
+  if(el.id==='cMonth'){cMonth=el.value;render();return;}
+  if(el.id==='cWho'){cWho=el.value;render();return;}
+  if(el.id==='pFilter'){pFilter=el.value;pCase=null;render();return;}
+  if(el.id==='selKind'&&oCase){
+    const k=el.value; if(!k)return;
+    const rows=linesOf(oCase).filter(l=>!l.order&&oSel[l.id]);
+    snap(); rows.forEach(l=>{l.kind=k;}); oSel={}; save(); render();
+    toast(`${rows.length}行を「${k}」にまとめた`, undo); return;}
+  if(el.id==='oJump'){oCase=el.value;oSel={};render();return;}
+  if(el.id==='oFilter'){oFilter=el.value;oCase=null;oSel={};render();return;}
+  if(el.id==='oMonth'){oMonth=el.value;render();return;}
+  if(el.id==='oSt'){oSt=el.value;render();return;}
+  if(el.id==='oSort'){oSort=el.value;render();return;}
+  if(el.id==='oLSort'){oLSort=el.value;render();return;}
+  if(el.id==='pSort'){pSort=el.value;render();return;}
+  if(el.classList.contains('li')){
+    const tr=el.closest('[data-l]'); if(!tr)return;
+    const l=DB.lines.find(x=>x.id===tr.dataset.l); if(!l)return;
+    const f=el.dataset.lf;
+    const was=l[f];
+    const nv=(f==='qty'||f==='price'||f==='sell')?(+el.value||0):el.value;
+    if(String(was)===String(nv))return;
+    snap('line:'+l.id+':'+f); l[f]=nv;
+    if(f==='who'&&nv&&!l.kind){const vd=vendorOf(nv); if(vd&&vd.defKind)l.kind=vd.defKind;}   /* 業者を決めたら既定の区分が入る */
+    save();renderSoon();
+    setTimeout(()=>{const tr2=document.querySelector('tr[data-l="'+l.id+'"]');
+      if(tr2){tr2.classList.add('chg'); setTimeout(()=>{tr2.classList.remove('chg');},1600);}},20);
+    const LBL={price:'原価単価',sell:'販売単価',qty:'数量',unit:'単位',kind:'工程区分',who:'発注先'};
+    if(LBL[f])toast(`${l.name||'明細'}　${LBL[f]} ${was||0} → ${l[f]||0}　（販売 ${yen(lineSell(l))} ／ 原価 ${yen(lineAmt(l))}）`);
+    return;}
+  if(el.id==='mTab'){mTab=el.value;mQ='';render();return;}
+  if(el.classList.contains('mv')){
+    const tr=el.closest('[data-v]'); const v=vendorOf(tr.dataset.v); if(!v)return;
+    const f=el.dataset.f, old=v.name; snap('vendor:'+old+':'+f);
+    if(f==='close'||f==='site')v[f]=+el.value||30; else v[f]=el.value;
+    if(f==='name'&&el.value&&el.value!==old){
+      if(DB.vendors.some(x=>x!==v&&x.name===el.value)){ v.name=old; toast(`「${el.value}」は既にある`); renderSoon(); return; }
+      renameVendor(old,el.value);}
+    save();renderSoon();return;}
+  if(el.classList.contains('mp')){
+    const tr=el.closest('[data-pr]'); if(!tr)return;
+    const pr=DB.prices.find(x=>x.id===tr.dataset.pr); if(!pr)return;
+    const f=el.dataset.f; snap('price:'+pr.id+':'+f);
+    pr[f]=(f==='price')?(+el.value||0):el.value;
+    save();renderSoon();return;}
+  if(el.classList.contains('mc')){
+    const tr=el.closest('[data-cm]'); const c=clientOf(tr.dataset.cm); if(!c)return;
+    const f=el.dataset.f, old=c.name; snap('client:'+old+':'+f);
+    if(f==='close'||f==='site')c[f]=+el.value||(f==='close'?31:30); else c[f]=el.value;
+    if(f==='name'&&el.value&&el.value!==old){
+      if(DB.clients.some(x=>x!==c&&x.name===el.value)){ c.name=old; toast(`「${el.value}」は既にある`); renderSoon(); return; }
+      renameClient(old,el.value);}
+    save();renderSoon();return;}
+  if(el.classList.contains('fd')){
+    const c=DB.cases.find(x=>x.id===el.dataset.c);
+    if(c){snap(); setDone(c,el.value); save(); render();}
+    return;}
+  if(el.id==='kView'){kView=el.value;render();return;}
+  if(el.id==='basisSel'){DB.basis=el.value;save();render();return;}
+  if(el.id==='iClient'){iClient=el.value;render();return;}
+  if(el.id==='iMonth'){iMonth=el.value;render();return;}
+  if(el.classList.contains('tm')){
+    const c=clientOf(el.dataset.c);
+    if(c){snap('term:'+c.name+':'+el.dataset.f); c[el.dataset.f]=+el.value||(el.dataset.f==='close'?31:30);}
+    save();renderSoon();return;}
+  if(el.classList.contains('rc')){snap('recv:'+el.dataset.k); DB.recv[el.dataset.k]=+el.value||0;save();return;}
+  if(el.dataset.f&&selCase){setField(selCase,el.dataset.f,el.value);renderSoon();return;}
+  const pr=el.closest('[data-p]');
+  if(pr&&el.dataset.pf){setProc(pr.dataset.p,el.dataset.pf,el.value);renderSoon();return;}
+});
+/* 検索欄。日本語の変換中は描き直さない（変換が途中で確定されてしまうため） */
+const QIDS=['fQ','pQ','mQ','oQ'];
+let composing=false, qTimer=null;
+function setQ(id,v){
+  if(id==='fQ')fQ=v;
+  else if(id==='mQ')mQ=v;
+  else if(id==='oQ'){oQ=v; oCase=null; oSel={};}
+  else {pQ=v; pCase=null;}
+}
+function renderQ(id){
+  const el=document.getElementById(id);
+  const pos=el?el.selectionStart:null;
+  render();
+  const n=document.getElementById(id);
+  if(n){ n.focus();
+    try{ const p=(pos==null?n.value.length:Math.min(pos,n.value.length)); n.setSelectionRange(p,p); }catch(_){}
+  }
+}
+document.addEventListener('compositionstart',e=>{ if(QIDS.indexOf(e.target.id)>=0)composing=true; });
+document.addEventListener('compositionend',e=>{
+  if(QIDS.indexOf(e.target.id)<0)return;
+  composing=false; setQ(e.target.id,e.target.value);
+  clearTimeout(qTimer); qTimer=setTimeout(()=>renderQ(e.target.id),10);
+});
+/* 数字欄はフォーカスで全選択。「0」の前後に打って 01 / 30 になるのを防ぐ */
+document.addEventListener('focusin',e=>{
+  const t=e.target; if(!(t instanceof HTMLInputElement)||t.type!=='number')return;
+  setTimeout(()=>{ try{ t.select(); }catch(_){ } },0);
+});
+document.addEventListener('input',e=>{
+  const id=e.target.id; if(QIDS.indexOf(id)<0)return;
+  setQ(id,e.target.value);
+  if(composing||e.isComposing)return;
+  clearTimeout(qTimer); qTimer=setTimeout(()=>renderQ(id),180);
+});
+let DL=null, canDl=null;
+(async()=>{
+  try{ DL=await claude.use('downloads'); }catch(e){ DL=null; }
+  canDl=!!DL; if(!DL&&tab==='ledger')render();
+})();
+async function exportCsv(){
+  if(!DL){toast('この画面ではファイルの書き出しが使えない');return;}
+  const head=['案件ID','顧客','物件','区分','ステータス','売上税抜','追加','売上税込','原価','粗利',
+    '完工予定','完工日','請求月','工程'];
+  const rows=DB.cases.map(c=>[c.id,c.client,c.prop,c.kind,c.st,c.sales,c.add,salesOf(c),costOf(c.id),
+    grossOf(c),planOf(c),c.done,ym(c.bill),
+    procsOf(c.id).map(p=>`${p.kind}:${p.who||'未定'}:${p.date||'未定'}:${p.amt}`).join(' / ')]);
+  const csv='﻿'+[head,...rows].map(r=>r.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  try{
+    await DL.save({filename:'Aチーム統合台帳.csv',data:new Blob([csv],{type:'text/csv'})});
+    toast('CSVを書き出した');
+  }catch(e){
+    toast(e&&e.code==='declined'?'書き出しを取りやめた':'書き出せなかった');
+  }
+}
+render();
+openInbox();
+if(reseeded)toast('元データを新しくしたので、この画面に保存してあった前回の編集は消えている');
+</script>

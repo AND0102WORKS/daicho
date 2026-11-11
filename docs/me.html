@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>自分の工程</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#F6F5F1;--card:#fff;--ink:#1E2A32;--sub:#55616B;--line:#DAD7CE;--acc:#0F5E63;--ok:#1F6B45;--ok-bg:#E3F0E8;--warn:#A8321A;--warn-bg:#FBE9E4;--amber-bg:#FBF3D6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Yu Gothic UI",system-ui,sans-serif;font-size:15px;line-height:1.55;padding:0 0 env(safe-area-inset-bottom)}
+header{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:10px;z-index:2}
+header h1{font-size:16px;margin:0;flex:1}
+header .who{color:var(--sub);font-size:13px}
+main{padding:12px 16px 40px;max-width:640px;margin:0 auto}
+.tabs{display:flex;gap:6px;margin:4px 0 12px}
+.tabs button{flex:1;padding:8px;border:1px solid var(--line);background:var(--card);border-radius:8px;font-size:14px}
+.tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.day{margin:14px 0 6px;font-weight:700;color:var(--sub);font-size:13px}
+.day.today{color:var(--acc)}
+.job{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:8px 0}
+.job.done{background:var(--ok-bg);border-color:#BFD9C9}
+.job .prop{font-weight:700;font-size:16px}
+.job .meta{color:var(--sub);font-size:13px;margin-top:2px}
+.job .row{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:9px;background:#EEE;color:var(--ink)}
+a.map{color:var(--acc);font-size:13px;text-decoration:none;border:1px solid var(--acc);padding:5px 10px;border-radius:7px}
+button.done{padding:8px 14px;border-radius:8px;border:1px solid var(--ok);background:var(--card);color:var(--ok);font-size:14px}
+.job.done button.done{background:var(--ok);color:#fff}
+.empty{color:var(--sub);text-align:center;padding:30px 0}
+.err{background:var(--warn-bg);color:var(--warn);padding:12px;border-radius:8px}
+</style>
+</head>
+<body>
+<header><h1>自分の工程</h1><span class="who" id="who"></span></header>
+<main>
+  <div class="tabs"><button data-r="week" class="on">今週</button><button data-r="next">来週</button><button data-r="month">今月</button></div>
+  <div id="list"><div class="empty">読み込み中…</div></div>
+</main>
+<script>
+const SB_URL='https://stcvyehefqnrxibanlxg.supabase.co', SB_KEY='sb_publishable_ZZelNGtUNXLpXs7j4Nd_zw_XFYwI3fx';
+const sb=window.supabase.createClient(SB_URL,SB_KEY);
+const token=new URLSearchParams(location.search).get('t')||'';
+const WD=['日','月','火','水','木','金','土'];
+const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const md=s=>{ if(!s)return ''; s=String(s).slice(0,10); return `${+s.slice(5,7)}/${+s.slice(8,10)}（${WD[new Date(s+'T00:00:00').getDay()]}）`; };
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let range='week', ME=null;
+function span(){
+  const t=new Date(); t.setHours(0,0,0,0);
+  if(range==='month'){ const a=new Date(t.getFullYear(),t.getMonth(),1), b=new Date(t.getFullYear(),t.getMonth()+1,0); return [fmt(a),fmt(b)]; }
+  const dow=(t.getDay()+6)%7; const mon=new Date(t); mon.setDate(t.getDate()-dow+(range==='next'?7:0));
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6); return [fmt(mon),fmt(sun)];
+}
+async function load(){
+  const list=document.getElementById('list');
+  if(!token){ list.innerHTML='<div class="err">このページは会社から送られた専用のリンクで開いてください。</div>'; return; }
+  if(!ME){ const {data,error}=await sb.rpc('my_vendor',{p_token:token}); if(error||!data||!data.length){ list.innerHTML='<div class="err">リンクが無効です。会社に確認してください。</div>'; return; } ME=data[0]; document.getElementById('who').textContent=ME.name+' さん'; }
+  const [a,b]=span();
+  const {data,error}=await sb.rpc('my_schedule',{p_token:token,p_from:a,p_to:b});
+  if(error){ list.innerHTML='<div class="err">読み込めませんでした：'+esc(error.message)+'</div>'; return; }
+  if(!data.length){ list.innerHTML='<div class="empty">この期間の工程はありません</div>'; return; }
+  const today=fmt(new Date()); let html='', last='';
+  data.forEach(p=>{ p.start_date=String(p.start_date||'').slice(0,10); p.end_date=String(p.end_date||'').slice(0,10);
+    if(p.start_date!==last){ last=p.start_date; html+=`<div class="day ${p.start_date===today?'today':''}">${md(p.start_date)}${p.start_date===today?'　今日':''}</div>`; }
+    const done=p.prog==='完了';
+    const q=encodeURIComponent(p.addr||p.prop||'');
+    html+=`<div class="job ${done?'done':''}" data-id="${esc(p.proc_id)}">
+      <div class="prop">${esc(p.prop)}</div>
+      <div class="meta"><span class="tag">${esc(p.kind)}</span>　${esc(p.client||'')}${p.end_date&&p.end_date!==p.start_date?`　〜${md(p.end_date)}`:''}</div>
+      ${p.addr?`<div class="meta">${esc(p.addr)}</div>`:''}
+      ${p.memo?`<div class="meta">${esc(p.memo)}</div>`:''}
+      <div class="row">${q?`<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${q}">地図</a>`:''}
+        <button class="done" data-done="${done?'0':'1'}">${done?'完了済み':'完了にする'}</button></div></div>`;
+  });
+  list.innerHTML=html;
+}
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('[data-r]'); if(t){ range=t.dataset.r; document.querySelectorAll('[data-r]').forEach(b=>b.classList.toggle('on',b===t)); load(); return; }
+  const d=e.target.closest('button.done'); if(d){ const id=d.closest('.job').dataset.id; d.disabled=true;
+    const {error}=await sb.rpc('proc_done',{p_token:token,p_proc:id,p_done:d.dataset.done==='1'}); if(error)alert('更新できませんでした：'+error.message); load(); }
+});
+load();
+</script>
+</body>
+</html>
