@@ -339,3 +339,16 @@ do $$ declare f text; begin
   end loop; end $$;
 revoke execute on function next_no(text,text) from anon;
 revoke execute on function my_role() from anon; revoke execute on function my_org() from anon;
+
+-- ---------- 関数の実行権（Supabase は PUBLIC に既定で execute を与えるため明示的に外す） ----------
+alter function touch_updated_at() set search_path = public;
+revoke execute on function audit_row() from public, anon, authenticated;
+revoke execute on function handle_new_user() from public, anon, authenticated;
+revoke execute on function touch_updated_at() from public, anon, authenticated;
+revoke execute on function my_role() from public, anon;
+revoke execute on function my_org() from public, anon;
+revoke execute on function next_no(text,text) from public, anon;
+grant execute on function next_no(text,text) to authenticated;
+revoke execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) from public;
+grant execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) to anon, authenticated;
+drop policy if exists none_counters on counters; create policy none_counters on counters for select using (my_role()='hq');
