@@ -352,3 +352,24 @@ grant execute on function next_no(text,text) to authenticated;
 revoke execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) from public;
 grant execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) to anon, authenticated;
 drop policy if exists none_counters on counters; create policy none_counters on counters for select using (my_role()='hq');
+
+-- ---------- ログイン前の役割プリセット（初回ログイン時に handle_new_user が参照） ----------
+create table if not exists role_presets (
+  email text primary key,
+  name text default '',
+  org text not null default 'hq' references orgs(id),
+  role text not null default 'staff'
+);
+alter table role_presets enable row level security;
+drop policy if exists sel_role_presets on role_presets; create policy sel_role_presets on role_presets for select using (my_role()='hq');
+drop policy if exists all_role_presets on role_presets; create policy all_role_presets on role_presets for all using (my_role()='hq') with check (my_role()='hq');
+create or replace function handle_new_user() returns trigger language plpgsql security definer set search_path = public as $$
+declare p role_presets%rowtype;
+begin
+  select * into p from role_presets where lower(email)=lower(new.email);
+  insert into profiles(id,email,name,org,role)
+    values (new.id, new.email, coalesce(nullif(p.name,''), split_part(new.email,'@',1)), coalesce(p.org,'hq'), coalesce(p.role,'staff'))
+  on conflict (id) do nothing;
+  return new;
+end $$;
+revoke execute on function handle_new_user() from public, anon, authenticated;
