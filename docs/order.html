@@ -95,6 +95,17 @@ table.plist tr.mine td{font-weight:700}
   table.lines{font-size:12.5px}
   th,td{padding:5px 5px}
 }
+/* 画面も横向きの用紙と同じ左右2列（幅 600px 以上）。スマホなど狭い画面だけ縦1列 */
+@media screen and (min-width:600px){
+  .sheet{max-width:1120px}
+  .p1{display:grid;grid-template-columns:minmax(240px,35%) 1fr;column-gap:22px;align-items:start}
+  .colL,.colR{display:block}
+  .party{grid-template-columns:1fr;gap:10px}
+  .to{min-width:100%}
+  .amount{width:100%}
+  .colR table.lines{margin-top:18px}
+  table.tot{min-width:56%}
+}
 /* 印刷・PDF：A4 横。1ページ目＝発注書（左：宛先・金額・現場・承諾欄／右：明細）、2ページ目＝工程表。
    明細が多いときは見出し行を繰り返して改ページする */
 @page{size:A4 landscape;margin:11mm 12mm}
