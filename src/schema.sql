@@ -307,12 +307,18 @@ language sql security definer stable as $$
   from procs p join cases c on c.id=p.case_id join vendors v on v.name=p.who
   where v.token=p_token and v.active and p.start_date between p_from and p_to
   order by p.start_date, c.prop $$;
+-- 発注書 2ページ目の工程表用に、同じ案件の全工程（procs）と完了予定日（plan）も返す。
+-- 他社の名前・金額は出さない（区分と日付だけ）。mine＝この発注の工程。戻り値の形を変えるので drop してから作る。
+drop function if exists order_view(text);
 create or replace function order_view(p_token text)
 returns table(order_no text, who text, kind text, start_date date, end_date date, due date, naiyo text, memo text, st text, accepted_at timestamptz,
-              prop text, addr text, client text, lines jsonb)
+              prop text, addr text, client text, lines jsonb, plan date, procs jsonb)
 language sql security definer stable as $$
   select o.no, o.who, o.kind, o.start_date, o.end_date, o.due, o.naiyo, o.memo, o.st, o.accepted_at, c.prop, c.addr, c.client,
-    (select jsonb_agg(jsonb_build_object('name',l.name,'spec',l.spec,'qty',l.qty,'unit',l.unit,'price',l.price,'memo',l.memo) order by l.no) from lines l where l.order_id=o.id)
+    (select jsonb_agg(jsonb_build_object('name',l.name,'spec',l.spec,'qty',l.qty,'unit',l.unit,'price',l.price,'memo',l.memo) order by l.no) from lines l where l.order_id=o.id),
+    c.plan,
+    (select jsonb_agg(jsonb_build_object('kind',p.kind,'start_date',p.start_date,'end_date',p.end_date,'prog',p.prog,
+        'mine',(p.order_id=o.id or p.id=o.proc_id)) order by p.start_date nulls last, p.id) from procs p where p.case_id=o.case_id)
   from orders o join cases c on c.id=o.case_id where o.token=p_token $$;
 create or replace function order_accept(p_token text, p_by text) returns boolean
 language sql security definer as $$

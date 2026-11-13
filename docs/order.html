@@ -55,6 +55,29 @@ table.tot tr.sum th,table.tot tr.sum td{font-size:16px;font-weight:700;color:var
 .btn.sec{background:var(--card);color:var(--acc)}
 .ok{background:var(--ok-bg);color:var(--ok);padding:10px 14px;border-radius:8px;font-weight:700}
 .err{background:var(--warn-bg);color:var(--warn);padding:12px;border-radius:8px}
+/* 2ページ目：工程表 */
+.page2{margin-top:34px;border-top:2px solid var(--ink);padding-top:14px;break-before:page;page-break-before:always}
+.page2 h2{font-size:19px;margin:0;letter-spacing:.2em}
+.page2 .hd2{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.page2 .meta{font-size:12.5px;color:var(--sub);text-align:right}
+.page2 .lead2{font-size:12.5px;margin:8px 0 10px}
+.gwrap{overflow-x:auto}
+table.gantt{table-layout:fixed;font-size:11.5px;min-width:100%}
+table.gantt th,table.gantt td{padding:3px 0;text-align:center;overflow:hidden}
+table.gantt .kc{width:9.5em;text-align:left;padding:4px 6px;white-space:nowrap;text-overflow:ellipsis}
+table.gantt .d{width:22px}
+table.gantt th.d{font-weight:600;font-size:10.5px;line-height:1.25}
+table.gantt .we{background:#EFEDE6}
+table.gantt td.on{background:#8FA3AD}
+table.gantt tr.mine td.on{background:var(--ink)}
+table.gantt tr.mine .kc{font-weight:700;color:var(--ink)}
+table.gantt td.plan,table.gantt th.plan{border-right:2px solid var(--warn)}
+table.plist{margin-top:14px}
+table.plist tr.mine td{font-weight:700}
+.legend{margin-top:8px;font-size:11.5px;color:var(--sub);display:flex;gap:16px;flex-wrap:wrap}
+.legend i{display:inline-block;width:18px;height:9px;margin-right:5px;vertical-align:middle;background:#8FA3AD}
+.legend i.m{background:var(--ink)}
+.legend i.p{background:none;border-right:2px solid var(--warn);width:8px}
 .print-only{display:none}
 @media (max-width:560px){
   .sheet{padding:18px 14px 16px;margin:0 0 40px;border-radius:0;border-width:0 0 1px}
@@ -78,6 +101,18 @@ table.tot tr.sum th,table.tot tr.sum td{font-size:16px;font-weight:700;color:var
   th{font-size:8.5pt;background:#EEE}
   th,td{padding:1.4mm 2mm}
   .memo{font-size:9.5pt;border-radius:0}
+  .page2{margin-top:0;border-top:0;padding-top:0}
+  .page2 .hd2{border-bottom:2px solid #000;padding-bottom:2mm}
+  .page2 h2{font-size:16pt}
+  .gwrap{overflow:visible}
+  table.gantt{font-size:8pt}
+  table.gantt th,table.gantt td{padding:1mm 0}
+  table.gantt .d{width:auto}
+  table.gantt .kc{width:26mm;padding:1mm 1.5mm}
+  table.gantt th.d{font-size:7pt}
+  table.gantt .we{background:#E6E6E6}
+  table.gantt td.on{background:#999}
+  table.gantt tr.mine td.on{background:#000}
   .act,.guide{display:none!important}
   .print-only{display:block}
 }
@@ -94,6 +129,36 @@ const yen=v=>'¥'+Math.round(v||0).toLocaleString('ja-JP');
 const WD=['日','月','火','水','木','金','土'];
 const md=s=>s?`${s.slice(0,4)}年${+s.slice(5,7)}月${+s.slice(8,10)}日（${WD[new Date(s.slice(0,10)+'T00:00:00').getDay()]}）`:'—';
 let O=null;
+// 2ページ目：同じ現場の全工程（区分と日付だけ。他社名・金額は出さない）。order_view が procs を返さない間は何も出さない
+const GANTT_MAX=45;   // これより長い期間は横棒をやめて一覧だけにする
+function schedule(O){
+  const ps=(O.procs||[]).map(p=>({kind:p.kind||'（区分なし）',s:(p.start_date||'').slice(0,10),e:(p.end_date||p.start_date||'').slice(0,10),prog:p.prog||'',mine:!!p.mine}));
+  if(!ps.length) return '';
+  const dated=ps.filter(p=>p.s), plan=(O.plan||'').slice(0,10);
+  const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const sd=s=>`${+s.slice(5,7)}/${+s.slice(8,10)}（${WD[new Date(s+'T00:00:00').getDay()]}）`;
+  let gantt='';
+  if(dated.length){
+    let lo=dated.reduce((a,p)=>p.s<a?p.s:a,dated[0].s), hi=dated.reduce((a,p)=>p.e>a?p.e:a,dated[0].e);
+    if(plan&&plan>hi) hi=plan;
+    const days=[]; for(let d=new Date(lo+'T00:00:00'),end=new Date(hi+'T00:00:00'); d<=end&&days.length<=GANTT_MAX; d.setDate(d.getDate()+1)) days.push({k:ymd(d),d:d.getDate(),m:d.getMonth()+1,w:d.getDay()});
+    if(days.length<=GANTT_MAX){
+      const cls=x=>'d'+(x.w===0||x.w===6?' we':'')+(x.k===plan?' plan':'');
+      gantt=`<div class="gwrap"><table class="gantt"><thead><tr><th class="kc">工程</th>${days.map((x,i)=>`<th class="${cls(x)}">${i===0||x.d===1?x.m+'/':''}${x.d}<br>${WD[x.w]}</th>`).join('')}</tr></thead><tbody>
+        ${dated.map(p=>`<tr class="${p.mine?'mine':''}"><td class="kc">${esc(p.kind)}${p.mine?' ★':''}</td>${days.map(x=>`<td class="${cls(x)}${x.k>=p.s&&x.k<=p.e?' on':''}"></td>`).join('')}</tr>`).join('')}
+      </tbody></table></div>
+      <div class="legend"><span><i class="m"></i>今回の発注（★）</span><span><i></i>ほかの工程</span>${plan?'<span><i class="p"></i>完了予定日</span>':''}</div>`;
+    }
+  }
+  return `<div class="page2">
+    <div class="hd2"><h2>工程表</h2><div class="meta">${esc(O.prop||'')}　／　発注No. ${esc(O.order_no||'—')}</div></div>
+    <div class="lead2">この現場の全体の工程です。★が今回お願いする工程です。${plan?`完了予定日：<b>${md(plan)}</b>`:''}</div>
+    ${gantt}
+    <table class="plist"><thead><tr><th>工程</th><th>開始</th><th>終了</th><th class="c">日数</th><th>状況</th></tr></thead><tbody>
+      ${ps.map(p=>`<tr class="${p.mine?'mine':''}"><td>${esc(p.kind)}${p.mine?' ★（今回の発注）':''}</td><td>${p.s?sd(p.s):'未定'}</td><td>${p.s?sd(p.e):''}</td>
+        <td class="c">${p.s?Math.round((new Date(p.e)-new Date(p.s))/864e5)+1:''}</td><td>${esc(p.prog)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
 async function load(){
   const el=document.getElementById('sheet');
   if(!token){ el.innerHTML='<div class="err">このページは発注元から送られた専用のリンクで開いてください。</div>'; return; }
@@ -129,6 +194,7 @@ async function load(){
       ${acc?`<div class="done">上記の内容を承諾しました。　承諾日時：${esc(accAt)}（オンラインで記録）</div>`
         :`<div>上記の内容を承諾します。</div><div class="f"><div>承諾日　　　　年　　　月　　　日</div><div class="name"><span>氏名（会社名）</span><span>印</span></div></div>`}
     </div>
+    ${schedule(O)}
     <div class="guide">この発注書の内容で承諾いただける場合は、下のお名前を入れて「承諾する」を押してください。承諾の日時が発注元に記録されます。</div>
     <div class="act">${acc?`<span class="ok">承諾済み　${esc(accAt)}</span>`
       :`<input id="by" placeholder="お名前" value="${esc(O.who)}"><button class="btn" id="accept">承諾する</button>`}
