@@ -167,6 +167,22 @@ td.pc.ng{outline:2px dashed var(--warn);outline-offset:-2px;background:var(--war
 .askbox{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:380px;width:100%;
   padding:16px;box-shadow:0 18px 50px rgba(30,42,50,.22)}
 .askbox h4{margin:0 0 6px;font-size:15px}
+/* 発注先の選択（検索＋区分） */
+.vpk{position:fixed;z-index:9999;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);
+  padding:8px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.vpk-q{height:34px;padding:0 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;width:100%;flex:none}
+.vpk-k{display:flex;flex-wrap:wrap;gap:4px;flex:none}
+.vpk-c{border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer;color:var(--ink);height:auto}
+.vpk-c.on{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.vpk-l{overflow:auto;flex:1;min-height:0;border-top:1px solid var(--line2);padding-top:2px}
+.vpk-g{font-size:11.5px;color:var(--sub);font-weight:700;padding:7px 8px 3px;position:sticky;top:0;background:var(--card)}
+.vpk-g span{font-weight:400;margin-left:6px}
+.vpk-i{display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%;text-align:left;border:0;background:none;
+  padding:6px 8px;border-radius:6px;font-size:13.5px;cursor:pointer;color:var(--ink);height:auto}
+.vpk-i:hover,.vpk-i:focus{background:var(--line2);outline:none}
+.vpk-i.cur{font-weight:700;color:var(--acc)}
+.vpk-i small{color:var(--sub);font-size:11.5px;white-space:nowrap;font-weight:400}
+.vpk-e{padding:10px 8px;color:var(--sub)}
 .askbox ul{margin:0 0 14px;padding-left:18px;font-size:13px;color:var(--warn);line-height:1.7}
 .askbtn{display:flex;gap:8px;justify-content:flex-end}
 .ck{border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:8px;padding:9px 11px;
@@ -636,11 +652,87 @@ function toast(msg,fn,label){
 }
 const vendorSel=v=>{
   const g={}; DB.vendors.forEach(x=>{(g[x.type||'外注']=g[x.type||'外注']||[]).push(x.name);});
-  return `<option value=""${v?'':' selected'}>（未定）</option>`+
+  return `<option value="" data-vs="1"${v?'':' selected'}>（未定）</option>`+
     VTYPES.filter(t=>g[t]&&g[t].length).map(t=>`<optgroup label="${t}">`+
       g[t].map(n=>`<option value="${esc(n)}"${n===v?' selected':''}>${esc(n)}</option>`).join('')+'</optgroup>').join('')+
     (v&&!isVendor(v)?`<optgroup label="マスタ外"><option selected>${esc(v)}</option></optgroup>`:'');
 };
+/* VPK-BEGIN */
+/* ---- 発注先の選択：検索と区分で絞れる一覧 ----
+   <select> 自体はそのまま残し（値・change の流れは変えない）、マウスやキーで開いたときだけこの一覧に差し替える。
+   対象は vendorSel() で作った select（先頭の option に data-vs が付いている）。 */
+let vpk=null;
+const vpkNorm=s=>String(s||'').normalize('NFKC').toLowerCase().replace(/\s+/g,'');
+const vpkIsSel=s=>!!(s&&s.tagName==='SELECT'&&!s.disabled&&s.querySelector('option[data-vs]'));
+function vpkClose(){
+  if(!vpk)return;
+  vpk.el.remove(); document.removeEventListener('mousedown',vpk.out,true); window.removeEventListener('scroll',vpk.scr,true); window.removeEventListener('resize',vpkClose);
+  vpk=null;
+}
+function vpkOpen(sel){
+  vpkClose();
+  const cur=sel.value, row=sel.closest('[data-p]'), ksel=row&&row.querySelector('select[data-pf="kind"]');
+  /* 再描画で select が作り直されても選んだ値を入れられるよう、場所を覚えておく */
+  const loc=sel.id?'#'+sel.id:(row&&sel.dataset.pf?`[data-p="${row.dataset.p}"] select[data-pf="${sel.dataset.pf}"]`:'');
+  const kindOf=v=>PKINDS.indexOf(v.defKind||'')>=0?v.defKind:'その他';
+  const kinds=PKINDS.filter(k=>DB.vendors.some(v=>kindOf(v)===k)).concat(DB.vendors.some(v=>kindOf(v)==='その他')?['その他']:[]);
+  let kind=(ksel&&kinds.indexOf(ksel.value)>=0)?ksel.value:'', q='';
+  const el=document.createElement('div'); el.className='vpk';
+  el.innerHTML='<input type="search" class="vpk-q" placeholder="発注先を検索（名前・正式名）" autocomplete="off"><div class="vpk-k"></div><div class="vpk-l"></div>';
+  const item=v=>`<button type="button" class="vpk-i${v.name===cur?' cur':''}" data-v="${esc(v.name)}"><span>${esc(v.name)}</span><small>${esc(v.type||'外注')}</small></button>`;
+  const group=(label,vs)=>vs.length?`<div class="vpk-g">${esc(label)}<span>${vs.length}</span></div>`+vs.map(item).join(''):'';
+  const draw=()=>{
+    el.querySelector('.vpk-k').innerHTML=[''].concat(kinds).map(k=>
+      `<button type="button" class="vpk-c${k===kind?' on':''}" data-k="${esc(k)}">${esc(k||'すべて')}</button>`).join('');
+    const nq=vpkNorm(q), hit=DB.vendors.filter(v=>!nq||vpkNorm(v.name+' '+(v.full||'')).indexOf(nq)>=0);
+    const inK=hit.filter(v=>!kind||kindOf(v)===kind), others=kind?hit.filter(v=>kindOf(v)!==kind):[];
+    let h=nq?'':`<button type="button" class="vpk-i${cur?'':' cur'}" data-v=""><span>（未定）</span></button>`;
+    h+=kind?group(kind,inK):kinds.map(k=>group(k,inK.filter(v=>kindOf(v)===k))).join('');
+    /* 検索中は、選んでいる区分の外で見つかった発注先も下に出す（区分違いで見落とさないように） */
+    if(nq&&others.length) h+=group('ほかの区分',others);
+    if(!inK.length&&!(nq&&others.length)) h+='<div class="vpk-e">該当する発注先がありません</div>';
+    if(cur&&!isVendor(cur)&&!nq) h+=`<div class="vpk-g">マスタ外</div><button type="button" class="vpk-i cur" data-v="${esc(cur)}"><span>${esc(cur)}</span></button>`;
+    el.querySelector('.vpk-l').innerHTML=h;
+  };
+  const choose=v=>{
+    const t=sel.isConnected?sel:(loc?document.querySelector(loc):null);
+    vpkClose();
+    if(!t){ toast('画面が更新されたため選択を反映できなかった。もう一度選んでください'); return; }
+    if(v&&!Array.prototype.some.call(t.options,o=>o.value===v)){ const o=document.createElement('option'); o.value=v; o.textContent=v; t.appendChild(o); }
+    if(t.value!==v){ t.value=v; t.dispatchEvent(new Event('change',{bubbles:true})); }
+    try{ t.focus(); }catch(e){}
+  };
+  el.addEventListener('click',e=>{
+    const c=e.target.closest('.vpk-c'); if(c){ kind=c.dataset.k; draw(); el.querySelector('.vpk-q').focus(); return; }
+    const i=e.target.closest('.vpk-i'); if(i) choose(i.dataset.v);
+  });
+  el.addEventListener('input',e=>{ if(e.target.classList.contains('vpk-q')){ q=e.target.value; draw(); } });
+  el.addEventListener('keydown',e=>{
+    const items=Array.prototype.slice.call(el.querySelectorAll('.vpk-i')), at=items.indexOf(document.activeElement);
+    if(e.key==='Escape'){ e.preventDefault(); vpkClose(); try{ sel.focus(); }catch(x){} }
+    else if(e.key==='ArrowDown'){ e.preventDefault(); (items[at+1]||items[0]||{focus(){}}).focus(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); (at>0?items[at-1]:el.querySelector('.vpk-q')).focus(); }
+    else if(e.key==='Enter'&&e.target.classList.contains('vpk-q')&&!e.isComposing){ e.preventDefault(); const f=q?items[0]:null; if(f) choose(f.dataset.v); }
+  });
+  document.body.appendChild(el); draw();
+  /* 位置：select の下。下に入らなければ上、右にはみ出すなら左へ寄せる */
+  const r=sel.getBoundingClientRect(), w=Math.min(Math.max(r.width,340),window.innerWidth-16), below=window.innerHeight-r.bottom-12, above=r.top-12;
+  const up=below<260&&above>below, mh=Math.max(180,Math.min(440,up?above:below));
+  el.style.width=w+'px'; el.style.maxHeight=mh+'px';
+  el.style.left=Math.max(8,Math.min(r.left,window.innerWidth-w-8))+'px';
+  if(up) el.style.bottom=(window.innerHeight-r.top+4)+'px'; else el.style.top=(r.bottom+4)+'px';
+  vpk={el,out:e=>{ if(!el.contains(e.target)) vpkClose(); },scr:e=>{ if(!el.contains(e.target)) vpkClose(); }};
+  document.addEventListener('mousedown',vpk.out,true); window.addEventListener('scroll',vpk.scr,true); window.addEventListener('resize',vpkClose);
+  el.querySelector('.vpk-q').focus();
+}
+document.addEventListener('mousedown',e=>{
+  const s=e.target&&e.target.closest?e.target.closest('select'):null;
+  if(e.button===0&&vpkIsSel(s)){ e.preventDefault(); const was=vpk&&vpk.sel===s; if(!was){ vpkOpen(s); if(vpk) vpk.sel=s; } }
+},true);
+document.addEventListener('keydown',e=>{
+  if(vpkIsSel(e.target)&&(e.key==='Enter'||e.key===' '||e.key==='ArrowDown'||e.key==='ArrowUp')){ e.preventDefault(); vpkOpen(e.target); if(vpk) vpk.sel=e.target; }
+},true);
+/* VPK-END */
 const opts=(arr,v,blank)=>(blank?`<option value=""${v?'':' selected'}>${esc(blank)}</option>`:'')+
   arr.map(o=>`<option value="${esc(o)}"${o===v?' selected':''}>${esc(o)}</option>`).join('');
 /* 値はそのまま、画面に出す文字だけ差し替える（「すべて」が何のすべてか分かるように） */
