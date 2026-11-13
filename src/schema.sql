@@ -308,7 +308,7 @@ language sql security definer stable as $$
   where v.token=p_token and v.active and p.start_date between p_from and p_to
   order by p.start_date, c.prop $$;
 -- 発注書 2ページ目の工程表用に、同じ案件の全工程（procs）と完了予定日（plan）も返す。
--- 他社の名前・金額は出さない（区分と日付だけ）。mine＝この発注の工程。戻り値の形を変えるので drop してから作る。
+-- 他社の名前・金額は出さない（区分・日付・工事内容だけ）。mine＝この発注の工程。戻り値の形を変えるので drop してから作る。
 drop function if exists order_view(text);
 create or replace function order_view(p_token text)
 returns table(order_no text, who text, kind text, start_date date, end_date date, due date, naiyo text, memo text, st text, accepted_at timestamptz,
@@ -318,7 +318,12 @@ language sql security definer stable as $$
     (select jsonb_agg(jsonb_build_object('name',l.name,'spec',l.spec,'qty',l.qty,'unit',l.unit,'price',l.price,'memo',l.memo) order by l.no) from lines l where l.order_id=o.id),
     c.plan,
     (select jsonb_agg(jsonb_build_object('kind',p.kind,'start_date',p.start_date,'end_date',p.end_date,'prog',p.prog,
-        'mine',(p.order_id=o.id or p.id=o.proc_id)) order by p.start_date nulls last, p.id) from procs p where p.case_id=o.case_id)
+        'mine',(p.order_id=o.id or p.id=o.proc_id),
+        -- 区分ごとの工事内容：その工程の発注の「内容」と、同じ区分の明細（場所＋名称。落とした行・数量0は除く）
+        'naiyo',(select o2.naiyo from orders o2 where o2.id=p.order_id and p.order_id<>''),
+        'items',(select jsonb_agg(trim(coalesce(l.spec,'')||' '||l.name) order by l.no, l.id) from lines l
+                 where l.case_id=p.case_id and l.kind=p.kind and p.kind<>'' and not l.cut and l.qty>0)
+      ) order by p.start_date nulls last, p.id) from procs p where p.case_id=o.case_id)
   from orders o join cases c on c.id=o.case_id where o.token=p_token $$;
 create or replace function order_accept(p_token text, p_by text) returns boolean
 language sql security definer as $$
