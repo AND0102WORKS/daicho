@@ -10,28 +10,149 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Yu Gothic UI",system-ui,sans-serif;font-size:14.5px;line-height:1.6}
 .sheet{max-width:760px;margin:16px auto 60px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px 28px 24px}
-h1{font-size:22px;margin:0 0 4px;letter-spacing:.1em}
-.no{color:var(--sub);font-size:13px}
-.hd{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:18px 0;font-size:14px}
-.hd .k{color:var(--sub);font-size:12px}
-.hd .v{font-weight:700}
-.to{font-size:18px;font-weight:700;margin:14px 0 2px}
-table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13.5px}
-th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;border-bottom:2px solid var(--ink);padding-bottom:8px}
+h1{font-size:24px;margin:0;letter-spacing:.3em}
+.no{font-size:13px;text-align:right;white-space:nowrap}
+.no .k{color:var(--sub);margin-right:6px}
+.party{display:grid;grid-template-columns:1fr auto;gap:20px;margin-top:18px;align-items:start}
+.to{font-size:19px;font-weight:700;border-bottom:1px solid var(--ink);padding-bottom:3px;display:inline-block;min-width:60%}
+.lead{margin-top:8px;font-size:13px}
+.from{font-size:12.5px;line-height:1.55}
+.from .k{color:var(--sub);font-size:11.5px}
+.from b{font-size:14.5px}
+.amount{margin-top:18px;display:flex;align-items:baseline;gap:18px;border:2px solid var(--ink);padding:9px 14px;width:fit-content;min-width:56%}
+.amount .k{font-size:13px;font-weight:700}
+.amount .v{font-size:22px;font-weight:700;margin-left:auto;letter-spacing:.02em}
+.amount small{font-size:11.5px;color:var(--sub);font-weight:400}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+table.info{margin-top:16px}
+table.info th{width:6.5em;white-space:nowrap}
+table.lines{margin-top:16px}
+th,td{padding:6px 8px;border:1px solid var(--line);text-align:left;vertical-align:top}
 th{font-size:12px;color:var(--sub);font-weight:600;background:#FBFAF7}
 td.r,th.r{text-align:right;white-space:nowrap}
+td.c,th.c{text-align:center;white-space:nowrap}
 tr.cut td{color:var(--sub);text-decoration:line-through}
-.tot{margin-top:12px;display:flex;justify-content:flex-end;gap:24px;font-size:15px}
-.tot b{font-size:18px}
-.memo{margin-top:16px;padding:12px;background:#FBFAF7;border-radius:8px;white-space:pre-wrap;font-size:13.5px}
+.sub{color:var(--sub);font-size:12px}
+thead{display:table-header-group}
+tr{break-inside:avoid;page-break-inside:avoid}
+table.tot{width:auto;min-width:46%;margin:12px 0 0 auto;font-size:14px;break-inside:avoid;page-break-inside:avoid}
+table.tot th{width:8.5em}
+table.tot tr.sum th,table.tot tr.sum td{font-size:16px;font-weight:700;color:var(--ink);border-top:2px solid var(--ink)}
+.box{margin-top:16px;break-inside:avoid;page-break-inside:avoid}
+.box>.k{font-size:12px;color:var(--sub);font-weight:600;margin-bottom:3px}
+.memo{padding:10px 12px;border:1px solid var(--line);border-radius:6px;white-space:pre-wrap;font-size:13.5px}
+.accept{margin-top:20px;border:1px solid var(--ink);padding:12px 14px;break-inside:avoid;page-break-inside:avoid}
+.accept .t{font-weight:700;font-size:13.5px}
+.accept .f{display:flex;gap:28px;margin-top:22px;font-size:13.5px;align-items:flex-end}
+.accept .f>div{border-bottom:1px solid var(--ink);padding:0 4px 3px;white-space:nowrap}
+.accept .f .name{flex:1;display:flex;justify-content:space-between}
+.accept .done{margin-top:6px;font-size:13.5px}
+.guide{margin-top:18px;font-size:12.5px;color:var(--sub);border-top:1px dashed var(--line);padding-top:10px}
 .act{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--line);margin:24px -28px -24px;padding:14px 28px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .act input{flex:1;min-width:160px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:15px}
 .btn{padding:10px 18px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;font-size:15px;font-weight:700}
 .btn.sec{background:var(--card);color:var(--acc)}
 .ok{background:var(--ok-bg);color:var(--ok);padding:10px 14px;border-radius:8px;font-weight:700}
 .err{background:var(--warn-bg);color:var(--warn);padding:12px;border-radius:8px}
-.from{margin-top:22px;font-size:12.5px;color:var(--sub);border-top:1px dashed var(--line);padding-top:10px}
-@media print{ body{background:#fff} .sheet{border:0;margin:0;max-width:none} .act{display:none} }
+/* 1ページ目は上下構成：上に宛先・発注元・金額・現場や期日、下に明細を用紙の全幅で */
+.band{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:16px;margin-top:16px;align-items:stretch}
+.band .amount{margin-top:0;width:100%;min-width:0;align-items:center}
+.info{display:grid;grid-template-columns:1fr 1fr;padding:1px 0 0 1px;align-content:start}
+.kv{display:flex;border:1px solid var(--line);margin:-1px 0 0 -1px;font-size:13.5px}
+.kv .k{flex:none;width:6em;padding:6px 8px;font-size:12px;color:var(--sub);font-weight:600;background:#FBFAF7;border-right:1px solid var(--line)}
+.kv .v{padding:6px 8px;min-width:0}
+.kv.wide{grid-column:1/-1}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:16px}
+.notes .box{margin-top:14px}
+.foot{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:start;margin-top:12px;break-inside:avoid;page-break-inside:avoid}
+.foot .accept{margin-top:0}
+.foot table.tot{margin:0;min-width:300px;grid-column:2}
+/* 2ページ目：工程表 */
+table.gantt .nc{width:16em;text-align:left;padding:4px 6px;font-size:11px;line-height:1.4;white-space:normal;vertical-align:top}
+table.gantt .nc b{font-weight:600}
+table.gantt td.kc{vertical-align:top}
+table.gantt .kc small{display:block;white-space:normal;font-weight:400;color:var(--sub);font-size:10.5px}
+.page2{margin-top:34px;border-top:2px solid var(--ink);padding-top:14px;break-before:page;page-break-before:always}
+.page2 h2{font-size:19px;margin:0;letter-spacing:.2em}
+.page2 .hd2{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.page2 .meta{font-size:12.5px;color:var(--sub);text-align:right}
+.page2 .lead2{font-size:12.5px;margin:8px 0 10px}
+.gwrap{overflow-x:auto}
+table.gantt{table-layout:fixed;font-size:11.5px;min-width:100%}
+table.gantt th,table.gantt td{padding:3px 0;text-align:center;overflow:hidden}
+table.gantt .kc{width:9.5em;text-align:left;padding:4px 6px;white-space:nowrap;text-overflow:ellipsis}
+table.gantt .d{width:22px}
+table.gantt th.d{font-weight:600;font-size:10.5px;line-height:1.25}
+table.gantt .we{background:#EFEDE6}
+table.gantt td.on{background:#8FA3AD}
+table.gantt tr.mine td.on{background:var(--ink)}
+table.gantt tr.mine .kc{font-weight:700;color:var(--ink)}
+table.gantt td.plan,table.gantt th.plan{border-right:2px solid var(--warn)}
+table.plist{margin-top:14px}
+table.plist tr.mine td{font-weight:700}
+.legend{margin-top:8px;font-size:11.5px;color:var(--sub);display:flex;gap:16px;flex-wrap:wrap}
+.legend i{display:inline-block;width:18px;height:9px;margin-right:5px;vertical-align:middle;background:#8FA3AD}
+.legend i.m{background:var(--ink)}
+.legend i.p{background:none;border-right:2px solid var(--warn);width:8px}
+.print-only{display:none}
+@media (max-width:560px){
+  .sheet{padding:18px 14px 16px;margin:0 0 40px;border-radius:0;border-width:0 0 1px}
+  .act{margin:20px -14px -16px;padding:12px 14px}
+  .party{grid-template-columns:1fr}
+  .amount{width:100%}
+  .band,.info,.foot{grid-template-columns:1fr}
+  .notes{display:block}
+  .foot table.tot{grid-column:1;min-width:0;width:100%}
+  table.lines{font-size:12.5px}
+  th,td{padding:5px 5px}
+}
+/* 画面も横向きの用紙に合わせて広く使う（幅 600px 以上）。スマホなど狭い画面は縦1列 */
+@media screen and (min-width:600px){
+  .sheet{max-width:1120px}
+}
+/* 印刷・PDF：A4 横。1ページ目＝発注書（上：宛先・金額・現場や期日／下：明細を全幅）、最後のページ＝工程表。
+   明細が多いときは見出し行を繰り返して改ページする */
+@page{size:A4 landscape;margin:11mm 12mm}
+@media print{
+  .party{margin-top:4mm}
+  .band{grid-template-columns:86mm 1fr;gap:6mm;margin-top:4mm}
+  .kv{font-size:9.5pt}
+  .kv .k{font-size:8.5pt;background:#EEE;padding:1.4mm 2mm;width:19mm}
+  .kv .v{padding:1.4mm 2mm}
+  .notes{gap:6mm}
+  .notes .box,.box{margin-top:3mm}
+  table.lines{margin-top:4mm}
+  .foot{margin-top:3mm;gap:8mm}
+  .foot table.tot{min-width:92mm}
+  :root{--ink:#000;--sub:#333;--line:#777}
+  html,body{background:#fff}
+  body{font-size:10pt;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sheet{border:0;border-radius:0;margin:0;padding:0;max-width:none}
+  h1{font-size:20pt}
+  .to{font-size:14pt}
+  .amount .v{font-size:16pt}
+  table{font-size:9.5pt}
+  th{font-size:8.5pt;background:#EEE}
+  th,td{padding:1.4mm 2mm}
+  .memo{font-size:9.5pt;border-radius:0}
+  .page2{margin-top:0;border-top:0;padding-top:0}
+  .page2 .hd2{border-bottom:2px solid #000;padding-bottom:2mm}
+  .page2 h2{font-size:16pt}
+  .gwrap{overflow:visible}
+  table.gantt{font-size:8pt}
+  table.gantt th,table.gantt td{padding:1mm 0}
+  table.gantt .d{width:auto}
+  table.gantt .kc{width:27mm;padding:1mm 1.5mm}
+  table.gantt .nc{width:78mm;padding:1mm 1.5mm;font-size:7.5pt}
+  table.gantt .kc small{font-size:7pt}
+  table.gantt th.d{font-size:7pt}
+  table.gantt .we{background:#E6E6E6}
+  table.gantt td.on{background:#999}
+  table.gantt tr.mine td.on{background:#000}
+  .act,.guide{display:none!important}
+  .print-only{display:block}
+}
 </style>
 </head>
 <body>
@@ -45,31 +166,80 @@ const yen=v=>'¥'+Math.round(v||0).toLocaleString('ja-JP');
 const WD=['日','月','火','水','木','金','土'];
 const md=s=>s?`${s.slice(0,4)}年${+s.slice(5,7)}月${+s.slice(8,10)}日（${WD[new Date(s.slice(0,10)+'T00:00:00').getDay()]}）`:'—';
 let O=null;
+// 2ページ目：同じ現場の全工程（区分と日付だけ。他社名・金額は出さない）。order_view が procs を返さない間は何も出さない
+const GANTT_MAX=45;   // これより長い期間は横棒をやめて一覧だけにする
+function schedule(O){
+  const ps=(O.procs||[]).map(p=>({kind:p.kind||'（区分なし）',s:(p.start_date||'').slice(0,10),e:(p.end_date||p.start_date||'').slice(0,10),prog:p.prog||'',mine:!!p.mine,naiyo:(p.naiyo||'').trim(),items:(p.items||[]).filter(Boolean)}));
+  if(!ps.length) return '';
+  // 区分ごとの工事内容：発注の「内容」＋同じ区分の明細の名称（多いときは先頭だけ）
+  const ITEM_MAX=14;
+  const cont=p=>((p.naiyo?`<b>${esc(p.naiyo)}</b>`:'')+(p.naiyo&&p.items.length?'<br>':'')+esc(p.items.slice(0,ITEM_MAX).join('、'))+(p.items.length>ITEM_MAX?` ほか${p.items.length-ITEM_MAX}件`:''))||'—';
+  const dated=ps.filter(p=>p.s), plan=(O.plan||'').slice(0,10);
+  const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const sd=s=>`${+s.slice(5,7)}/${+s.slice(8,10)}（${WD[new Date(s+'T00:00:00').getDay()]}）`;
+  const nd=s=>`${+s.slice(5,7)}/${+s.slice(8,10)}`;
+  let gantt='';
+  if(dated.length){
+    let lo=dated.reduce((a,p)=>p.s<a?p.s:a,dated[0].s), hi=dated.reduce((a,p)=>p.e>a?p.e:a,dated[0].e);
+    if(plan&&plan>hi) hi=plan;
+    const days=[]; for(let d=new Date(lo+'T00:00:00'),end=new Date(hi+'T00:00:00'); d<=end&&days.length<=GANTT_MAX; d.setDate(d.getDate()+1)) days.push({k:ymd(d),d:d.getDate(),m:d.getMonth()+1,w:d.getDay()});
+    if(days.length<=GANTT_MAX){
+      const cls=x=>'d'+(x.w===0||x.w===6?' we':'')+(x.k===plan?' plan':'');
+      gantt=`<div class="gwrap"><table class="gantt"><thead><tr><th class="kc">工程</th><th class="nc">工事内容</th>${days.map((x,i)=>`<th class="${cls(x)}">${i===0||x.d===1?x.m+'/':''}${x.d}<br>${WD[x.w]}</th>`).join('')}</tr></thead><tbody>
+        ${ps.map(p=>`<tr class="${p.mine?'mine':''}"><td class="kc">${esc(p.kind)}${p.mine?' ★':''}<small>${p.s?(p.s===p.e?sd(p.s):nd(p.s)+'〜'+nd(p.e)):'日程未定'}${p.prog?'・'+esc(p.prog):''}</small></td><td class="nc">${cont(p)}</td>${days.map(x=>`<td class="${cls(x)}${p.s&&x.k>=p.s&&x.k<=p.e?' on':''}"></td>`).join('')}</tr>`).join('')}
+      </tbody></table></div>
+      <div class="legend"><span><i class="m"></i>今回の発注（★）</span><span><i></i>ほかの工程</span>${plan?'<span><i class="p"></i>完了予定日</span>':''}</div>`;
+    }
+  }
+  return `<div class="page2">
+    <div class="hd2"><h2>工程表</h2><div class="meta">${esc(O.prop||'')}　／　発注No. ${esc(O.order_no||'—')}</div></div>
+    <div class="lead2">この現場の全体の工程です。★が今回お願いする工程です。${plan?`完了予定日：<b>${md(plan)}</b>`:''}</div>
+    ${gantt||`<table class="plist"><thead><tr><th>工程</th><th>工事内容</th><th>開始</th><th>終了</th><th class="c">日数</th><th>状況</th></tr></thead><tbody>
+      ${ps.map(p=>`<tr class="${p.mine?'mine':''}"><td>${esc(p.kind)}${p.mine?' ★':''}</td><td style="font-weight:400">${cont(p)}</td><td>${p.s?sd(p.s):'未定'}</td><td>${p.s?sd(p.e):''}</td>
+        <td class="c">${p.s?Math.round((new Date(p.e)-new Date(p.s))/864e5)+1:''}</td><td>${esc(p.prog)}</td></tr>`).join('')}
+    </tbody></table>`}</div>`;
+}
 async function load(){
   const el=document.getElementById('sheet');
   if(!token){ el.innerHTML='<div class="err">このページは発注元から送られた専用のリンクで開いてください。</div>'; return; }
   const {data,error}=await sb.rpc('order_view',{p_token:token});
   if(error||!data||!data.length){ el.innerHTML='<div class="err">発注書が見つかりません。リンクを確認してください。</div>'; return; }
   O=data[0]; const ls=O.lines||[];
-  const sub=ls.reduce((a,l)=>a+Math.round((+l.qty||0)*(+l.price||0)),0), tax=Math.round(sub*0.1);
+  const amt=l=>Math.round((+l.qty||0)*(+l.price||0));
+  const sub=ls.reduce((a,l)=>a+amt(l),0), tax=Math.round(sub*0.1);
   const acc=O.st==='承諾'||O.st==='完了'||O.st==='請求済';
-  el.innerHTML=`<h1>発注書</h1><div class="no">No. ${esc(O.order_no||'')}</div>
-    <div class="to">${esc(O.who)} 様</div>
-    <div class="hd">
-      <div><div class="k">現場</div><div class="v">${esc(O.prop)}</div>${O.addr?`<div>${esc(O.addr)}</div>`:''}</div>
-      <div><div class="k">工期</div><div class="v">${md(O.start_date)}${O.end_date&&O.end_date!==O.start_date?`<br>〜 ${md(O.end_date)}`:''}</div></div>
-      <div><div class="k">工事区分</div><div class="v">${esc(O.kind)}</div></div>
-      <div><div class="k">依頼元</div><div class="v">${esc(O.client||'')}</div></div>
+  const accAt=O.accepted_at?new Date(O.accepted_at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+  const term=md(O.start_date)+(O.end_date&&O.end_date!==O.start_date?` 〜 ${md(O.end_date)}`:'');
+  const info=[['現場',O.prop],['工期',O.start_date?term:''],['住所',O.addr],['回答期限',O.due?md(O.due):''],['工事区分',O.kind],['依頼元',O.client],['鍵情報',O.key_info]].filter(r=>r[1]);
+  document.title=['発注書',O.order_no,O.prop].filter(Boolean).join('_');   // PDF 保存時のファイル名になる
+  el.innerHTML=`<div class="top"><h1>発注書</h1><div class="no"><span class="k">発注No.</span><b>${esc(O.order_no||'—')}</b></div></div>
+    <div class="party">
+      <div><div class="to">${esc(O.who)} 様</div><div class="lead">下記のとおり発注いたします。</div></div>
+      <div class="from"><div class="k">発注元</div><b>アンドワークス株式会社</b><br>東京都江戸川区</div>
     </div>
-    ${O.naiyo?`<div class="memo">${esc(O.naiyo)}</div>`:''}
-    <table><thead><tr><th>場所</th><th>内容</th><th class="r">数量</th><th>単位</th><th class="r">単価</th><th class="r">金額</th></tr></thead><tbody>
-      ${ls.map(l=>`<tr class="${+l.qty>0?'':'cut'}"><td>${esc(l.spec||'')}</td><td>${esc(l.name)}${l.memo?`<div style="color:var(--sub);font-size:12px">${esc(l.memo)}</div>`:''}</td>
-        <td class="r">${+l.qty||0}</td><td>${esc(l.unit||'式')}</td><td class="r">${yen(l.price)}</td><td class="r">${yen((+l.qty||0)*(+l.price||0))}</td></tr>`).join('')||'<tr><td colspan="6">（明細なし）</td></tr>'}
+    <div class="band">
+      <div class="amount"><span class="k">発注金額 <small>（税込）</small></span><span class="v">${yen(sub+tax)}</span></div>
+      <div class="info">${info.map(r=>`<div class="kv${r[0]==='鍵情報'?' wide':''}"><div class="k">${r[0]}</div><div class="v">${esc(r[1])}</div></div>`).join('')}</div>
+    </div>
+    ${O.naiyo||O.memo?`<div class="notes">${O.naiyo?`<div class="box"><div class="k">工事内容</div><div class="memo">${esc(O.naiyo)}</div></div>`:''}${O.memo?`<div class="box"><div class="k">備考</div><div class="memo">${esc(O.memo)}</div></div>`:''}</div>`:''}
+    <table class="lines"><thead><tr><th>場所</th><th>内容</th><th class="r">数量</th><th class="c">単位</th><th class="r">単価</th><th class="r">金額</th></tr></thead><tbody>
+      ${ls.map(l=>`<tr class="${+l.qty>0?'':'cut'}"><td>${esc(l.spec||'')}</td><td>${esc(l.name)}${l.memo?`<div class="sub">${esc(l.memo)}</div>`:''}</td>
+        <td class="r">${+l.qty||0}</td><td class="c">${esc(l.unit||'式')}</td><td class="r">${yen(l.price)}</td><td class="r">${yen(amt(l))}</td></tr>`).join('')||'<tr><td colspan="6">（明細なし）</td></tr>'}
     </tbody></table>
-    <div class="tot"><span>税抜 ${yen(sub)}</span><span>消費税 ${yen(tax)}</span><b>税込 ${yen(sub+tax)}</b></div>
-    ${O.memo?`<div class="memo">${esc(O.memo)}</div>`:''}
-    <div class="from">発注元：アンドワークス株式会社　東京都江戸川区　／　この発注書の内容で承諾いただける場合は、下のお名前を入れて「承諾する」を押してください。承諾の日時が発注元に記録されます。</div>
-    <div class="act">${acc?`<span class="ok">承諾済み　${O.accepted_at?new Date(O.accepted_at).toLocaleString('ja-JP'):''}</span>`
+    <div class="foot">
+      <div class="accept ${acc?'':'print-only'}"><div class="t">承諾欄</div>
+        ${acc?`<div class="done">上記の内容を承諾しました。　承諾日時：${esc(accAt)}（オンラインで記録）</div>`
+          :`<div>上記の内容を承諾します。</div><div class="f"><div>承諾日　　　　年　　　月　　　日</div><div class="name"><span>氏名（会社名）</span><span>印</span></div></div>`}
+      </div>
+      <table class="tot"><tbody>
+        <tr><th>小計（税抜）</th><td class="r">${yen(sub)}</td></tr>
+        <tr><th>消費税（10%）</th><td class="r">${yen(tax)}</td></tr>
+        <tr class="sum"><th>合計（税込）</th><td class="r">${yen(sub+tax)}</td></tr>
+      </tbody></table>
+    </div>
+    ${schedule(O)}
+    <div class="guide">この発注書の内容で承諾いただける場合は、下のお名前を入れて「承諾する」を押してください。承諾の日時が発注元に記録されます。</div>
+    <div class="act">${acc?`<span class="ok">承諾済み　${esc(accAt)}</span>`
       :`<input id="by" placeholder="お名前" value="${esc(O.who)}"><button class="btn" id="accept">承諾する</button>`}
       <button class="btn sec" onclick="window.print()">印刷・PDF</button></div>`;
   const b=document.getElementById('accept');
