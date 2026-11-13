@@ -137,9 +137,12 @@ td.pc.ng{outline:2px dashed var(--warn);outline-offset:-2px;background:var(--war
 .fg .full{grid-column:1/-1}
 .fg input,.fg select{width:100%}
 .pl{margin-top:12px;border-top:1px solid var(--line2);padding-top:10px}
-.prow{display:grid;grid-template-columns:58px 1fr 118px 14px 118px 84px 26px;gap:5px;align-items:center;margin-bottom:5px}
+/* 工程の行：1段目＝区分・発注先・×、2段目＝開始〜終了・金額（右パネルの幅に収める。欄が無い行はその場所が空くだけ） */
+.prow{display:grid;grid-template-columns:minmax(0,1fr) 14px minmax(0,1fr) 62px 22px;grid-template-areas:"k w w w x" "d t e a a";gap:5px;align-items:center;margin-bottom:10px}
+.prow [data-pf="kind"]{grid-area:k}.prow [data-pf="who"]{grid-area:w}.prow [data-pf="date"]{grid-area:d}.prow .tl{grid-area:t}
+.prow [data-pf="end"]{grid-area:e}.prow [data-pf="amt"]{grid-area:a}.prow .x{grid-area:x}
 .prow .tl{text-align:center;color:var(--sub);font-size:12px}
-.prow.np{grid-template-columns:70px 1fr 128px 14px 128px 26px}
+.prow.np{grid-template-columns:70px 1fr 128px 14px 128px 26px;grid-template-areas:"k w d t e x";margin-bottom:5px}
 .chip .cont{display:inline-block;font-size:9.5px;color:var(--sub);margin-left:3px}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .cal .h{font-size:11px;font-weight:700;color:var(--sub);text-align:center;padding:2px 0}
@@ -438,7 +441,9 @@ function dbSubscribe(){
       if(recLast[k]===sg)return;                       /* 自分の書き込みの反射 */
       const i=arr.findIndex(r=>r.id===rec.id);
       if(i>=0){ const l=arr[i]; Object.keys(l).forEach(x=>delete l[x]); Object.assign(l,rec); } else { if(t==='cases')arr.unshift(rec); else arr.push(rec); }
-      recLast[k]=sg; renderIdle();
+      recLast[k]=sg;
+      if(t==='orders'&&typeof onOrderRemote==='function'){ try{ onOrderRemote(arr.find(r=>r.id===rec.id)); }catch(e){ alog('onOrderRemote',e&&e.message); } }
+      renderIdle();
     });
   });
   rtChan.subscribe(st=>{ alog('realtime',st); });
@@ -1207,7 +1212,7 @@ function orderPanel(c){
         <td class="r">${yen(a)}</td><td class="r">${yen(Math.round(a*1.1))}</td>
         <td><span class="st ${OSTC[o.st]}">${esc(o.st)}</span></td>
         <td><button class="btn small" data-osheet="${o.id}">発注書</button>
-          ${OSTS.indexOf(o.st)<OSTS.length-1?`<button class="btn small" data-onext="${o.id}">${
+          ${OSTS.indexOf(o.st)<OSTS.length-1?`<button class="btn small" data-onext="${o.id}" data-ost="${esc(o.st)}">${
             o.st==='下書き'?'送る':o.st==='送付済'?'承諾':o.st==='承諾'?'完了':'請求済'}</button>`:''}
           <button class="btn small danger" data-odel="${o.id}">取消</button></td></tr>`;}).join('')}
     </tbody></table></div>`:'';
@@ -1307,7 +1312,7 @@ function askOrder(cid,who0){
       <div class="full"><label class="fl">工事内容（明細から作った。直せる）</label>
         <input type="text" id="oqNaiyo" value="${esc(sel.map(l=>l.name).join('、'))}"></div>
       <div class="full"><label class="fl">伝達事項・備考</label>
-        <input type="text" id="oqMemo" value="${esc(c.client||'')}"></div>
+        <input type="text" id="oqMemo" value=""></div>
     </div>
     ${kinds.filter(Boolean).length>1?`<p class="note" style="color:var(--warn)">選んだ行の工程区分が ${esc(kinds.filter(Boolean).join('・'))} に分かれている。1つにまとめてよいか確認</p>`:''}
     ${whos.length>1?`<p class="note" style="color:var(--warn)">選んだ行の発注先が ${esc(whos.join('・'))} に分かれている。業者ごとに分けるなら「やめる」で戻り、明細の上の業者ごとのボタンから作る</p>`:''}
@@ -1367,16 +1372,29 @@ function recalcOrd(c){
   const live=DB.orders.some(o=>o.case===c.id&&OSTS.indexOf(o.st)>=OSTS.indexOf('送付済'));
   if(!live){c.ord='未'; delete c.ordBy;}
 }
-function nextOrderSt(oid){
+/* 発注が送付済以上になったら、案件側も「発注 済」「発注書送付」に揃える。変えたら true */
+function markOrdered(o){
+  if(OSTS.indexOf(o.st)<OSTS.indexOf('送付済'))return false;
+  const c=DB.cases.find(x=>x.id===o.case); if(!c)return false;
+  let ch=false;
+  if(c.ord!=='済'){ c.ordBy='order'; c.ord='済'; ch=true; }
+  if(STATUS.indexOf(c.st)<STATUS.indexOf('発注書送付')){ c.st='発注書送付'; ch=true; }
+  return ch;
+}
+/* seen＝ボタンを押した時に画面に出ていた状態。業者の承諾などで裏で状態が変わっていたら、進めずに画面を更新して知らせる
+   （古い表示のまま「送る」を押して、承諾済みの発注が「完了」になるのを防ぐ） */
+function nextOrderSt(oid,seen){
   const o=DB.orders.find(x=>x.id===oid); if(!o)return;
+  if(seen&&o.st!==seen){ render(); toast(`${o.no} は「${o.st}」に変わっていた。画面を更新したので、もう一度確かめてから押してください`); return; }
   const i=OSTS.indexOf(o.st); if(i<0||i>=OSTS.length-1)return;
   snap(); o.st=OSTS[i+1];
-  if(o.st==='送付済'){
-    o.sent=fmtD(new Date());
-    const c=DB.cases.find(x=>x.id===o.case);
-    if(c){ if(c.ord!=='済')c.ordBy='order'; c.ord='済'; if(STATUS.indexOf(c.st)<STATUS.indexOf('発注書送付'))c.st='発注書送付';}}
+  if(o.st==='送付済') o.sent=fmtD(new Date());
+  markOrdered(o);
   save(); render(); toast(`${o.no} を ${o.st} にした`, undo);
 }
+/* 他の端末・業者ページから発注の状態が変わった時（store4.js の Realtime から呼ばれる）。
+   送付前のリンクで業者が承諾した場合も、案件側の「発注」を済にする */
+function onOrderRemote(o){ if(markOrdered(o)) save(); }
 function delOrder(oid){
   const o=DB.orders.find(x=>x.id===oid); if(!o)return;
   snap();
@@ -2784,7 +2802,7 @@ document.addEventListener('click',e=>{
     return;}
   const osh=e.target.closest('[data-osheet]'); if(osh){orderSheet(osh.dataset.osheet);return;}
   const vl=e.target.closest('[data-vlink]'); if(vl){ const v=vendorOf(vl.dataset.vlink); copyText(vendorLink(v),`${v.name} さんのスマホ用リンクをコピーした`); return; }
-  const onx=e.target.closest('[data-onext]'); if(onx){nextOrderSt(onx.dataset.onext);return;}
+  const onx=e.target.closest('[data-onext]'); if(onx){nextOrderSt(onx.dataset.onext,onx.dataset.ost);return;}
   const odl=e.target.closest('[data-odel]'); if(odl){delOrder(odl.dataset.odel);return;}
   const pc=e.target.closest('[data-pc]'); if(pc){pCase=pc.dataset.pc;pShift=0;selProc=null;pendStart=null;render();return;}
   if(e.target.id==='pHide'){pHide=!pHide;render();return;}

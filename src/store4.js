@@ -161,7 +161,9 @@ function dbSubscribe(){
       if(recLast[k]===sg)return;                       /* 自分の書き込みの反射 */
       const i=arr.findIndex(r=>r.id===rec.id);
       if(i>=0){ const l=arr[i]; Object.keys(l).forEach(x=>delete l[x]); Object.assign(l,rec); } else { if(t==='cases')arr.unshift(rec); else arr.push(rec); }
-      recLast[k]=sg; renderIdle();
+      recLast[k]=sg;
+      if(t==='orders'&&typeof onOrderRemote==='function'){ try{ onOrderRemote(arr.find(r=>r.id===rec.id)); }catch(e){ alog('onOrderRemote',e&&e.message); } }
+      renderIdle();
     });
   });
   rtChan.subscribe(st=>{ alog('realtime',st); });
