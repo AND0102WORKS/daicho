@@ -1567,6 +1567,8 @@ function drawer(){
       <div><label class="fl">報告日</label><input type="date" data-f="report" value="${esc(c.report||'')}"></div>
       <div><label class="fl">請求月</label><input type="month" data-f="bill" value="${esc(ym(c.bill))}"></div>
       <div><label class="fl">写真UP</label><select data-f="photo">${opts(['済','未'],c.photo||'未')}</select></div>
+      <div class="full"><label class="fl">現場住所<span class="note" style="margin:0">発注書と職人ページに載る</span></label>
+        <input type="text" data-f="addr" value="${esc(c.addr||'')}"></div>
       <div class="full"><label class="fl">鍵情報<span class="note" style="margin:0">発注書に載る（キーボックスの場所・番号など）</span></label>
         <input type="text" data-f="keyInfo" value="${esc(c.keyInfo||'')}"></div>
       <div class="full"><label class="fl">備考</label>
