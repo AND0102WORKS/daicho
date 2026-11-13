@@ -281,8 +281,8 @@ function alog(ev,x){ try{ AWLOG.push([new Date().toISOString().slice(5,19),DEV,e
 
 /* ---- 表と JS 項目の対応 ---- */
 const TABLES={
-  cases: {cols:['id','org','client','prop','kind','st','live','ord','ord_by','sales','add_amt','bill','kisan','want','plan','plan_manual','done','keyx','warr','recv','case_no','src','memo','items','report','photo','addr'],
-          map:{add:'add_amt',planManual:'plan_manual',caseNo:'case_no',ordBy:'ord_by'}, dates:['kisan','want','plan','done'], bools:['live','plan_manual']},
+  cases: {cols:['id','org','client','prop','kind','st','live','ord','ord_by','sales','add_amt','bill','kisan','want','plan','plan_manual','done','keyx','warr','recv','case_no','src','memo','items','report','photo','addr','key_info'],
+          map:{add:'add_amt',planManual:'plan_manual',caseNo:'case_no',ordBy:'ord_by',keyInfo:'key_info'}, dates:['kisan','want','plan','done'], bools:['live','plan_manual']},
   procs: {cols:['id','org','case_id','kind','who','start_date','end_date','amt','month','prog','order_id','auto','memo'],
           map:{case:'case_id',date:'start_date',end:'end_date',order:'order_id'}, dates:['start_date','end_date'], bools:['auto']},
   lines: {cols:['id','org','case_id','no','name','spec','qty','unit','sell','price','kind','who','memo','cut','src','order_id'],
@@ -1457,6 +1457,8 @@ function drawer(){
       <div><label class="fl">報告日</label><input type="date" data-f="report" value="${esc(c.report||'')}"></div>
       <div><label class="fl">請求月</label><input type="month" data-f="bill" value="${esc(ym(c.bill))}"></div>
       <div><label class="fl">写真UP</label><select data-f="photo">${opts(['済','未'],c.photo||'未')}</select></div>
+      <div class="full"><label class="fl">鍵情報<span class="note" style="margin:0">発注書に載る（キーボックスの場所・番号など）</span></label>
+        <input type="text" data-f="keyInfo" value="${esc(c.keyInfo||'')}"></div>
       <div class="full"><label class="fl">備考</label>
         <input type="text" data-f="memo" value="${esc(c.memo||'')}"></div>
     </div>

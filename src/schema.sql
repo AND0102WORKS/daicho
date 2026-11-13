@@ -103,9 +103,11 @@ create table if not exists cases (
   report text default '',
   photo text default '',
   addr text default '',           -- 現場住所（職人ページ用）
+  key_info text default '',       -- 鍵情報（キーボックスの場所・番号など。発注書に出す）
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+alter table cases add column if not exists key_info text default '';
 create index if not exists cases_org_live on cases(org,live);
 create index if not exists cases_client on cases(client);
 create index if not exists cases_done on cases(done);
@@ -307,12 +309,12 @@ language sql security definer stable as $$
   from procs p join cases c on c.id=p.case_id join vendors v on v.name=p.who
   where v.token=p_token and v.active and p.start_date between p_from and p_to
   order by p.start_date, c.prop $$;
--- 発注書 2ページ目の工程表用に、同じ案件の全工程（procs）と完了予定日（plan）も返す。
+-- 発注書 2ページ目の工程表用に、同じ案件の全工程（procs）と完了予定日（plan）も返す。鍵情報（key_info）も返す。
 -- 他社の名前・金額は出さない（区分・日付・工事内容だけ）。mine＝この発注の工程。戻り値の形を変えるので drop してから作る。
 drop function if exists order_view(text);
 create or replace function order_view(p_token text)
 returns table(order_no text, who text, kind text, start_date date, end_date date, due date, naiyo text, memo text, st text, accepted_at timestamptz,
-              prop text, addr text, client text, lines jsonb, plan date, procs jsonb)
+              prop text, addr text, client text, lines jsonb, plan date, procs jsonb, key_info text)
 language sql security definer stable as $$
   select o.no, o.who, o.kind, o.start_date, o.end_date, o.due, o.naiyo, o.memo, o.st, o.accepted_at, c.prop, c.addr, c.client,
     (select jsonb_agg(jsonb_build_object('name',l.name,'spec',l.spec,'qty',l.qty,'unit',l.unit,'price',l.price,'memo',l.memo) order by l.no) from lines l where l.order_id=o.id),
@@ -323,7 +325,8 @@ language sql security definer stable as $$
         'naiyo',(select o2.naiyo from orders o2 where o2.id=p.order_id and p.order_id<>''),
         'items',(select jsonb_agg(trim(coalesce(l.spec,'')||' '||l.name) order by l.no, l.id) from lines l
                  where l.case_id=p.case_id and l.kind=p.kind and p.kind<>'' and not l.cut and l.qty>0)
-      ) order by p.start_date nulls last, p.id) from procs p where p.case_id=o.case_id)
+      ) order by p.start_date nulls last, p.id) from procs p where p.case_id=o.case_id),
+    c.key_info
   from orders o join cases c on c.id=o.case_id where o.token=p_token $$;
 create or replace function order_accept(p_token text, p_by text) returns boolean
 language sql security definer as $$
