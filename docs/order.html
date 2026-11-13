@@ -55,10 +55,18 @@ table.tot tr.sum th,table.tot tr.sum td{font-size:16px;font-weight:700;color:var
 .btn.sec{background:var(--card);color:var(--acc)}
 .ok{background:var(--ok-bg);color:var(--ok);padding:10px 14px;border-radius:8px;font-weight:700}
 .err{background:var(--warn-bg);color:var(--warn);padding:12px;border-radius:8px}
-/* 画面は1列（宛先→金額→現場→内容→明細→合計→備考→承諾欄）。印刷は左右2列に組む */
-.p1{display:flex;flex-direction:column}
-.colL,.colR{display:contents}
-.o1{order:1}.o2{order:2}.o3{order:3}.o4{order:4}.o5{order:5}.o6{order:6}.o7{order:7}.o8{order:8}
+/* 1ページ目は上下構成：上に宛先・発注元・金額・現場や期日、下に明細を用紙の全幅で */
+.band{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:16px;margin-top:16px;align-items:stretch}
+.band .amount{margin-top:0;width:100%;min-width:0;align-items:center}
+.info{display:grid;grid-template-columns:1fr 1fr;padding:1px 0 0 1px;align-content:start}
+.kv{display:flex;border:1px solid var(--line);margin:-1px 0 0 -1px;font-size:13.5px}
+.kv .k{flex:none;width:6em;padding:6px 8px;font-size:12px;color:var(--sub);font-weight:600;background:#FBFAF7;border-right:1px solid var(--line)}
+.kv .v{padding:6px 8px;min-width:0}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:16px}
+.notes .box{margin-top:14px}
+.foot{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:start;margin-top:12px;break-inside:avoid;page-break-inside:avoid}
+.foot .accept{margin-top:0}
+.foot table.tot{margin:0;min-width:300px;grid-column:2}
 /* 2ページ目：工程表 */
 table.gantt .nc{width:16em;text-align:left;padding:4px 6px;font-size:11px;line-height:1.4;white-space:normal;vertical-align:top}
 table.gantt .nc b{font-weight:600}
@@ -92,34 +100,30 @@ table.plist tr.mine td{font-weight:700}
   .act{margin:20px -14px -16px;padding:12px 14px}
   .party{grid-template-columns:1fr}
   .amount{width:100%}
+  .band,.info,.foot{grid-template-columns:1fr}
+  .notes{display:block}
+  .foot table.tot{grid-column:1;min-width:0;width:100%}
   table.lines{font-size:12.5px}
   th,td{padding:5px 5px}
 }
-/* 画面も横向きの用紙と同じ左右2列（幅 600px 以上）。スマホなど狭い画面だけ縦1列 */
+/* 画面も横向きの用紙に合わせて広く使う（幅 600px 以上）。スマホなど狭い画面は縦1列 */
 @media screen and (min-width:600px){
   .sheet{max-width:1120px}
-  .p1{display:grid;grid-template-columns:minmax(240px,35%) 1fr;column-gap:22px;align-items:start}
-  .colL,.colR{display:block}
-  .party{grid-template-columns:1fr;gap:10px}
-  .to{min-width:100%}
-  .amount{width:100%}
-  .colR table.lines{margin-top:18px}
-  table.tot{min-width:56%}
 }
-/* 印刷・PDF：A4 横。1ページ目＝発注書（左：宛先・金額・現場・承諾欄／右：明細）、2ページ目＝工程表。
+/* 印刷・PDF：A4 横。1ページ目＝発注書（上：宛先・金額・現場や期日／下：明細を全幅）、最後のページ＝工程表。
    明細が多いときは見出し行を繰り返して改ページする */
 @page{size:A4 landscape;margin:11mm 12mm}
 @media print{
-  .p1{display:grid;grid-template-columns:92mm 1fr;column-gap:8mm;align-items:start}
-  .colL,.colR{display:block}
-  .colR table.lines{margin-top:5mm}
-  .party{grid-template-columns:1fr;gap:3mm;margin-top:5mm}
-  .to{min-width:100%}
-  .amount{width:100%;margin-top:4mm}
-  table.info{margin-top:4mm}
-  .box{margin-top:3mm}
-  .accept{margin-top:5mm}
-  table.tot{min-width:56%}
+  .party{margin-top:4mm}
+  .band{grid-template-columns:86mm 1fr;gap:6mm;margin-top:4mm}
+  .kv{font-size:9.5pt}
+  .kv .k{font-size:8.5pt;background:#EEE;padding:1.4mm 2mm;width:19mm}
+  .kv .v{padding:1.4mm 2mm}
+  .notes{gap:6mm}
+  .notes .box,.box{margin-top:3mm}
+  table.lines{margin-top:4mm}
+  .foot{margin-top:3mm;gap:8mm}
+  .foot table.tot{min-width:92mm}
   :root{--ink:#000;--sub:#333;--line:#777}
   html,body{background:#fff}
   body{font-size:10pt;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -205,33 +209,33 @@ async function load(){
   const acc=O.st==='承諾'||O.st==='完了'||O.st==='請求済';
   const accAt=O.accepted_at?new Date(O.accepted_at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
   const term=md(O.start_date)+(O.end_date&&O.end_date!==O.start_date?` 〜 ${md(O.end_date)}`:'');
-  const info=[['現場',O.prop],['住所',O.addr],['工事区分',O.kind],['工期',O.start_date?term:''],['依頼元',O.client],['回答期限',O.due?md(O.due):'']].filter(r=>r[1]);
+  const info=[['現場',O.prop],['工期',O.start_date?term:''],['住所',O.addr],['回答期限',O.due?md(O.due):''],['工事区分',O.kind],['依頼元',O.client]].filter(r=>r[1]);
   document.title=['発注書',O.order_no,O.prop].filter(Boolean).join('_');   // PDF 保存時のファイル名になる
   el.innerHTML=`<div class="top"><h1>発注書</h1><div class="no"><span class="k">発注No.</span><b>${esc(O.order_no||'—')}</b></div></div>
-    <div class="p1"><div class="colL">
-    <div class="party o1">
+    <div class="party">
       <div><div class="to">${esc(O.who)} 様</div><div class="lead">下記のとおり発注いたします。</div></div>
       <div class="from"><div class="k">発注元</div><b>アンドワークス株式会社</b><br>東京都江戸川区</div>
     </div>
-    <div class="amount o2"><span class="k">発注金額 <small>（税込）</small></span><span class="v">${yen(sub+tax)}</span></div>
-    <table class="info o3"><tbody>${info.map(r=>`<tr><th>${r[0]}</th><td>${esc(r[1])}</td></tr>`).join('')}</tbody></table>
-    ${O.naiyo?`<div class="box o4"><div class="k">工事内容</div><div class="memo">${esc(O.naiyo)}</div></div>`:''}
-    ${O.memo?`<div class="box o7"><div class="k">備考</div><div class="memo">${esc(O.memo)}</div></div>`:''}
-    </div><div class="colR">
-    <table class="lines o5"><thead><tr><th>場所</th><th>内容</th><th class="r">数量</th><th class="c">単位</th><th class="r">単価</th><th class="r">金額</th></tr></thead><tbody>
+    <div class="band">
+      <div class="amount"><span class="k">発注金額 <small>（税込）</small></span><span class="v">${yen(sub+tax)}</span></div>
+      <div class="info">${info.map(r=>`<div class="kv"><div class="k">${r[0]}</div><div class="v">${esc(r[1])}</div></div>`).join('')}</div>
+    </div>
+    ${O.naiyo||O.memo?`<div class="notes">${O.naiyo?`<div class="box"><div class="k">工事内容</div><div class="memo">${esc(O.naiyo)}</div></div>`:''}${O.memo?`<div class="box"><div class="k">備考</div><div class="memo">${esc(O.memo)}</div></div>`:''}</div>`:''}
+    <table class="lines"><thead><tr><th>場所</th><th>内容</th><th class="r">数量</th><th class="c">単位</th><th class="r">単価</th><th class="r">金額</th></tr></thead><tbody>
       ${ls.map(l=>`<tr class="${+l.qty>0?'':'cut'}"><td>${esc(l.spec||'')}</td><td>${esc(l.name)}${l.memo?`<div class="sub">${esc(l.memo)}</div>`:''}</td>
         <td class="r">${+l.qty||0}</td><td class="c">${esc(l.unit||'式')}</td><td class="r">${yen(l.price)}</td><td class="r">${yen(amt(l))}</td></tr>`).join('')||'<tr><td colspan="6">（明細なし）</td></tr>'}
     </tbody></table>
-    <table class="tot o6"><tbody>
-      <tr><th>小計（税抜）</th><td class="r">${yen(sub)}</td></tr>
-      <tr><th>消費税（10%）</th><td class="r">${yen(tax)}</td></tr>
-      <tr class="sum"><th>合計（税込）</th><td class="r">${yen(sub+tax)}</td></tr>
-    </tbody></table>
-    <div class="accept o8 ${acc?'':'print-only'}"><div class="t">承諾欄</div>
-      ${acc?`<div class="done">上記の内容を承諾しました。<br>承諾日時：${esc(accAt)}（オンラインで記録）</div>`
-        :`<div>上記の内容を承諾します。</div><div class="f"><div>承諾日　　　　年　　　月　　　日</div><div class="name"><span>氏名（会社名）</span><span>印</span></div></div>`}
+    <div class="foot">
+      <div class="accept ${acc?'':'print-only'}"><div class="t">承諾欄</div>
+        ${acc?`<div class="done">上記の内容を承諾しました。　承諾日時：${esc(accAt)}（オンラインで記録）</div>`
+          :`<div>上記の内容を承諾します。</div><div class="f"><div>承諾日　　　　年　　　月　　　日</div><div class="name"><span>氏名（会社名）</span><span>印</span></div></div>`}
+      </div>
+      <table class="tot"><tbody>
+        <tr><th>小計（税抜）</th><td class="r">${yen(sub)}</td></tr>
+        <tr><th>消費税（10%）</th><td class="r">${yen(tax)}</td></tr>
+        <tr class="sum"><th>合計（税込）</th><td class="r">${yen(sub+tax)}</td></tr>
+      </tbody></table>
     </div>
-    </div></div>
     ${schedule(O)}
     <div class="guide">この発注書の内容で承諾いただける場合は、下のお名前を入れて「承諾する」を押してください。承諾の日時が発注元に記録されます。</div>
     <div class="act">${acc?`<span class="ok">承諾済み　${esc(accAt)}</span>`
