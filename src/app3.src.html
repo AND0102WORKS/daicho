@@ -1,4 +1,4 @@
-<title>Aチーム統合台帳</title>
+<title>ワークス台帳</title>
 <meta name="claude:viewport-fit-sides" content="true">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -265,7 +265,7 @@ table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#F
 }
 </style>
 <div class="top">
-  <div class="brand">Aチーム統合台帳 <small>案件管理 ＋ 完工予定 ＋ スケジュール管理 を1つに／テストモデル v3</small></div>
+  <div class="brand">ワークス台帳 <small>案件管理 ＋ 完工予定 ＋ スケジュール管理 を1つに</small></div>
   <div class="tabs" id="tabs"></div>
   <div class="src" id="src"></div>
 </div>
@@ -578,11 +578,17 @@ function snap(key){
   if(key&&key===lastSnapKey)return;
   lastSnapKey=key||null;
   undoStack.push(JSON.stringify({c:DB.cases,p:DB.procs,l:DB.lines||[],o:DB.orders||[],
-    pr:DB.prices||[],v:DB.vendors||[],cl:DB.clients||[],rv:DB.recv||{},pd:DB.paid||{}}));
+    pr:DB.prices||[],v:DB.vendors||[],cl:DB.clients||[],rv:DB.recv||{},pd:DB.paid||{},of:DB.off||{},sk:DB.skip||{},
+    rs:typeof remoteSeq==='number'?remoteSeq:0}));   /* rs＝この控えを取った時点までに受け取った「他の人の変更」の番号 */
   if(undoStack.length>40)undoStack.shift();}
-function undo(){if(!undoStack.length)return; const o=JSON.parse(undoStack.pop()); lastSnapKey=null;
+function undo(){if(!undoStack.length)return; const o=JSON.parse(undoStack[undoStack.length-1]); lastSnapKey=null;
+  const rt=typeof remoteReplay==='function';
+  if(rt&&!remoteCanReplay(o.rs)){ undoStack.length=0; toast('他の人の変更がたくさん入ったので、この操作は元に戻せない'); return; }
+  undoStack.pop();
   DB.cases=o.c; DB.procs=o.p; if(o.l)DB.lines=o.l; if(o.o)DB.orders=o.o;
   if(o.pr)DB.prices=o.pr; if(o.v)DB.vendors=o.v; if(o.cl)DB.clients=o.cl; if(o.rv)DB.recv=o.rv; if(o.pd)DB.paid=o.pd;
+  if(o.of)DB.off=o.of; if(o.sk)DB.skip=o.sk;
+  if(rt)remoteReplay(o.rs);   /* 控えを取った後に入った他の人・職人・業者の変更は残す（巻き戻さない） */
   save(); render(); toast('元に戻した');}
 load();
 window.addEventListener('beforeunload',()=>{ if(dbDirty&&LDB){ clearTimeout(dbSaveTimer); dbSaveNow(); } });
@@ -684,7 +690,7 @@ const isVendor=nm=>!!vendorOf(nm);
 const VTYPES=['専属','外注','経費'];
 const SEN=M.senzoku;
 const STATUS=M.status;
-const stCls=s=>s==='完工'||s==='報告済'?'done':(s==='新規案件'||s==='現調済'||s==='見積提出'?'new':'wip');
+const stCls=s=>s==='完工'||s==='報告済'?'done':(s==='新規案件'||s==='受付'||s==='現調済'||s==='見積提出'?'new':'wip');
 const KINDS=['清掃のみ','工事一式','鍵交換','入居中修繕','その他'];
 const PKINDS=['内装','水道設備','電気設備','清掃','リペア補修','AW検査','鍵交換'];
 const KCOL={'内装':'#EADFC8','水道設備':'#CCE2EC','電気設備':'#F7E3A8','清掃':'#D7E9D3',
@@ -923,7 +929,16 @@ function inboxKind(t){
 }
 function pendingInbox(){
   if(!INBOX)return [];
-  return INBOX.filter(r=>r.key&&!DB.cases.some(c=>c.recv===r.key));
+  return INBOX.filter(r=>r.key&&!(DB.skip&&DB.skip[r.key])&&!DB.cases.some(c=>c.recv===r.key));
+}
+/* 見送り＝取り込んだ案件を削除した受注受付。未取り込みに数えない。「戻す」で未取り込みに戻る */
+function skippedInbox(){
+  if(!INBOX||!DB.skip)return [];
+  return INBOX.filter(r=>r.key&&DB.skip[r.key]&&!DB.cases.some(c=>c.recv===r.key));
+}
+function unskipInbox(){
+  const n=skippedInbox().length; if(!n)return;
+  snap(); DB.skip={}; save(); render(); toast(`見送り ${n}件を未取り込みに戻した`, undo);
 }
 async function openInbox(){
   if(typeof claude==='undefined'||!claude||typeof claude.use!=='function'){
@@ -1067,7 +1082,9 @@ function inboxBanner(){
     sub=`<span class="grow note" style="margin:0">${esc(p.slice(0,3).map(r=>[r.client,r.prop,r.room].filter(Boolean).join(' ')).join('／'))}${p.length>3?' ほか':''}</span>`;
     btn='<button class="btn small primary" id="impInbox">取り込む</button>';
   }
+  const sk=skippedInbox().length;
   return `<div class="selbar" style="${sty}"><b>${esc(msg)}</b>${sub||'<span class="grow"></span>'}${btn}
+    ${sk?`<span class="note" style="margin:0" title="取り込んだあと案件を削除した受注受付。未取り込みには数えない">見送り ${sk}件</span><button class="btn small" id="unskipInbox">戻す</button>`:''}
     <button class="btn small" id="reloadInbox">読み直す</button></div>`;
 }
 
@@ -2647,7 +2664,7 @@ function openCase(id){selCase=id; tab='ledger'; render();
 function setField(id,f,v){
   const c=DB.cases.find(x=>x.id===id); if(!c)return;
   snap('case:'+id+':'+f);
-  if(f==='sales'||f==='add')v=+v||0;
+  if(f==='sales'||f==='add')v=Math.round(+v||0);
   if(f==='bill'&&v)v=v+'-01';
   c[f]=v;
   if(f==='done'){setDone(c,v);return save();}
@@ -2853,6 +2870,7 @@ document.addEventListener('click',e=>{
     linesOf(oCase).filter(l=>!l.order&&(l.kind||'')===k).forEach(l=>{ if(gc.checked)oSel[l.id]=true; else delete oSel[l.id]; });
     render(); return;}
   if(e.target.id==='impInbox'){importInbox();return;}
+  if(e.target.id==='unskipInbox'){unskipInbox();return;}
   if(e.target.id==='reloadInbox'){reloadInbox();return;}
   if(e.target.id==='impPO'&&oCase){importPO(oCase);return;}
   if(e.target.id==='applyPrice'&&oCase){applyPrices(oCase);return;}
@@ -2947,7 +2965,7 @@ document.addEventListener('click',e=>{
       save();render();} return;}
   if(e.target.id==='addCase'){
     snap(); DB.seq++; const id='N'+DB.seq+DEV;
-    DB.cases.unshift({id,client:fClient!=='すべて'?fClient:'',prop:'',kind:'清掃のみ',st:'新規案件',live:true,ord:'未',
+    DB.cases.unshift({id,client:fClient!=='すべて'?fClient:'',prop:'',kind:'清掃のみ',st:STATUS[0]||'受付',live:true,ord:'未',
       sales:0,add:0,bill:fMonth!=='すべて'&&fMonth!=='未設定'?fMonth+'-01':'',done:'',plan:'',report:'',photo:'未'});
     selCase=id; save(); render();
     const i=document.querySelector('[data-f="prop"]'); if(i)i.focus(); return;}
@@ -2968,9 +2986,10 @@ document.addEventListener('click',e=>{
     return;}
   if(e.target.id==='delCase'&&selCase){
     const c=DB.cases.find(x=>x.id===selCase); snap();
+    const skipped=!!(c&&c.recv&&DB.skip); if(skipped)DB.skip[c.recv]=1;   /* 受注受付から作った案件：消したら見送りにする */
     DB.cases=DB.cases.filter(x=>x.id!==selCase); DB.procs=DB.procs.filter(p=>p.case!==selCase);
     DB.lines=(DB.lines||[]).filter(l=>l.case!==selCase); DB.orders=(DB.orders||[]).filter(o=>o.case!==selCase);
-    selCase=null; save(); render(); toast(`${(c||{}).prop||'案件'} を削除した`,undo); return;}
+    selCase=null; save(); render(); toast(`${(c||{}).prop||'案件'} を削除した${skipped?'（受注受付は見送りにした）':''}`,undo); return;}
   if(e.target.id==='closeDw'){selCase=null;render();return;}
   if(e.target.id==='undoBtn'){undo();return;}
   if(e.target.id==='exportAll'){
@@ -3129,7 +3148,7 @@ document.addEventListener('change',e=>{
     const c=clientOf(el.dataset.c);
     if(c){snap('term:'+c.name+':'+el.dataset.f); c[el.dataset.f]=+el.value||(el.dataset.f==='close'?31:30);}
     save();renderSoon();return;}
-  if(el.classList.contains('rc')){snap('recv:'+el.dataset.k); DB.recv[el.dataset.k]=+el.value||0;save();return;}
+  if(el.classList.contains('rc')){snap('recv:'+el.dataset.k); DB.recv[el.dataset.k]=Math.round(+el.value||0);save();return;}
   if(el.dataset.f&&selCase){setField(selCase,el.dataset.f,el.value);renderSoon();return;}
   const pr=el.closest('[data-p]');
   if(pr&&el.dataset.pf){setProc(pr.dataset.p,el.dataset.pf,el.value);renderSoon();return;}
@@ -3183,7 +3202,7 @@ async function exportCsv(){
     procsOf(c.id).map(p=>`${p.kind}:${p.who||'未定'}:${p.date||'未定'}:${p.amt}`).join(' / ')]);
   const csv='﻿'+[head,...rows].map(r=>r.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
   try{
-    await DL.save({filename:'Aチーム統合台帳.csv',data:new Blob([csv],{type:'text/csv'})});
+    await DL.save({filename:'ワークス台帳.csv',data:new Blob([csv],{type:'text/csv'})});
     toast('CSVを書き出した');
   }catch(e){
     toast(e&&e.code==='declined'?'書き出しを取りやめた':'書き出せなかった');

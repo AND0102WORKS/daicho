@@ -55,7 +55,7 @@ function recToRow(t,rec){
     if(v===undefined) return;
     if(T.dates.indexOf(c)>=0) v=(v&&/^\d{4}-\d{2}-\d{2}/.test(String(v)))?String(v).slice(0,10):null;
     else if(T.bools.indexOf(c)>=0) v=!!v;
-    else if(['sales','add_amt','amt','sell','price','close_day','site'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):(+v||0);
+    else if(['sales','add_amt','amt','sell','price','close_day','site'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
     else if(c==='qty') v=(v===''||v==null)?0:(+v||0);
     else if(v===null) v='';
     row[c]=v; });
@@ -69,9 +69,19 @@ const orderLink=o=>o&&o.token?siteBase()+'order.html?t='+o.token:'';
 function copyText(t,msg){ navigator.clipboard.writeText(t).then(()=>toast(msg||'コピーした')).catch(()=>prompt('コピーできなかった。手で選んでコピー：',t)); }
 let recLast={};   /* 'table:id' → sig。変わった行を見つけるため */
 const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1};
-function rememberAll(){ recLast={}; Object.keys(COLS).forEach(t=>(DB[t]||[]).forEach(r=>{ if(r.id)recLast[t+':'+r.id]=sig(r); })); kvLast=JSON.stringify(kvObj()); }
-let kvLast='';
-const kvObj=()=>({recv:DB.recv||{},paid:DB.paid||{},off:DB.off||{},basis:DB.basis||'完工'});
+function rememberAll(){ recLast={}; Object.keys(COLS).forEach(t=>(DB[t]||[]).forEach(r=>{ if(r.id)recLast[t+':'+r.id]=sig(r); })); kvSaved=kvFlat(); }
+/* 入金・支払済・休み・計上基準・見送り：最後に保存した値（キーごと）。
+   全件をまとめて書くと、古い画面の人が他の人の入力を古い値で上書きしてしまうので、変わったキーだけ書く */
+let kvSaved={recv:{},paid:{},off:{},skip:{},basis:'完工'};
+function kvFlat(){
+  const num=o=>{ const r={}; Object.entries(o||{}).forEach(([k,v])=>{ const n=Math.round(+v||0); if(n)r[k]=n; }); return r; };
+  const off={}; Object.entries(DB.off||{}).forEach(([who,m])=>Object.entries(m||{}).forEach(([month,days])=>{ const d=(days||[]).map(Number).join(','); if(d)off[who+'|'+month]=d; }));
+  const skip={}; Object.keys(DB.skip||{}).forEach(k=>{ if(DB.skip[k])skip[k]=1; });
+  return {recv:num(DB.recv),paid:num(DB.paid),off,skip,basis:DB.basis||'完工'};
+}
+const kvChanged=(cur,old)=>[...new Set([...Object.keys(cur),...Object.keys(old)])].filter(k=>cur[k]!==old[k]);
+const kvSplit=k=>{ const i=k.lastIndexOf('|'); return [k.slice(0,i),k.slice(i+1)]; };
+const SKIP_KEY='inbox_skip:';
 
 /* ---- 読み込み ---- */
 async function fetchAll(t,select){
@@ -86,11 +96,12 @@ async function dbLoad(){
   DB={cases:cases.map(r=>rowToRec('cases',r)),procs:procs.map(r=>rowToRec('procs',r)),lines:lines.map(r=>rowToRec('lines',r)),
       orders:orders.map(r=>rowToRec('orders',r)),vendors:vendors.map(r=>rowToRec('vendors',r)),clients:clients.map(r=>rowToRec('clients',r)),
       prices:prices.map(r=>rowToRec('prices',r)),
-      recv:{},paid:{},off:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
-  recv.forEach(r=>{DB.recv[r.client+'|'+r.month]=r.amount;});
-  paid.forEach(r=>{DB.paid[r.who+'|'+r.month]=r.amount;});
-  off.forEach(r=>{(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice();});
-  settings.forEach(r=>{ if(r.key==='basis')DB.basis=r.value; });
+      recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
+  recv.forEach(r=>{ if(+r.amount)DB.recv[r.client+'|'+r.month]=r.amount; });      /* 0 は「消した」の意味 */
+  paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
+  off.forEach(r=>{ if((r.days||[]).length)(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice(); });
+  settings.forEach(r=>{ if(r.key==='basis')DB.basis=r.value;
+    else if(String(r.key).indexOf(SKIP_KEY)===0&&r.value===true)DB.skip[String(r.key).slice(SKIP_KEY.length)]=1; });   /* 見送った受注受付 */
   /* 案件は新しいものが上。採番は既存の最大＋1 から */
   DB.cases.sort((a,b)=>String(b.id).localeCompare(String(a.id)));
   const mx=(arr,re)=>arr.reduce((m,r)=>{const k=re.exec(String(r.id)); return k?Math.max(m,+k[1]):m;},0);
@@ -103,10 +114,12 @@ async function dbLoad(){
 }
 function migrate(){
   if(!DB.basis)DB.basis='完工';
-  DB.cases.forEach(c=>{ if(!c.ord)c.ord='未'; if(c.live==null)c.live=true; if(c.keyx==null)c.keyx=''; if(c.warr==null)c.warr=''; });
+  if(!DB.skip)DB.skip={};
+  DB.cases.forEach(c=>{ if(!c.ord)c.ord='未'; if(c.live==null)c.live=true; if(c.keyx==null)c.keyx=''; if(c.warr==null)c.warr='';
+    if(c.st==='新規案件')c.st='受付'; });   /* v4 の状態一覧に「新規案件」は無い */
 }
 function reset(){ toast('v4 では「元データに戻す」は無い（データベースが正）'); }
-function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],recv:{},paid:{},off:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
+function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
 
 /* ---- 保存：変わった行だけ ---- */
 function save(){ dbSaveSoon(); }
@@ -118,31 +131,39 @@ async function dbSaveNow(){
     /* 画面側で id 無しで作られたマスタ行に id を振る */
     (DB.vendors||[]).forEach(v=>{ if(!v.id)v.id='V'+Math.random().toString(36).slice(2,10); });
     (DB.clients||[]).forEach(c=>{ if(!c.id)c.id='CL'+Math.random().toString(36).slice(2,10); });
+    /* 先に全部の表の差分を出し、自分が消す行・書く行を覚えておく（Realtime の反射を「他の人の変更」と取り違えないため。
+       案件を消すと DB 側で工程・明細・発注も一緒に消え、その通知が自分の delete より先に届くことがある） */
+    const plan={};
     for(const t of Object.keys(COLS)){
-      const arr=DB[t]||[], seen=new Set(), ups=[], dels=[];
-      const after=[];
-      arr.forEach(r=>{ if(!r.id)return; seen.add(r.id); const k=t+':'+r.id, sg=sig(r); if(recLast[k]!==sg){ ups.push(recToRow(t,r)); after.push([k,sg]); } });
-      Object.keys(recLast).forEach(k=>{ if(k.indexOf(t+':')!==0)return; const id=k.slice(t.length+1); if(!seen.has(id))dels.push(id); });
+      const arr=DB[t]||[], seen=new Set(), ups=[], dels=[], after=[];
+      arr.forEach(r=>{ if(!r.id)return; seen.add(r.id); const k=t+':'+r.id, sg=sig(r); if(recLast[k]!==sg){ const row=recToRow(t,r); ups.push(row); after.push([k,sg]); sentRows[k]=row; } });
+      Object.keys(recLast).forEach(k=>{ if(k.indexOf(t+':')!==0)return; const id=k.slice(t.length+1); if(!seen.has(id)){ dels.push(id); ownDel[k]=Date.now(); } });
+      plan[t]={ups,dels,after};
+    }
+    for(const t of Object.keys(COLS)){
+      const {ups,dels,after}=plan[t];
       if(dels.length){ const {error}=await sb.from(t).delete().in('id',dels); if(error)throw error; dels.forEach(id=>delete recLast[t+':'+id]); alog('del '+t,dels.length); }
       for(let i=0;i<ups.length;i+=200){ const {error}=await sb.from(t).upsert(ups.slice(i,i+200),{onConflict:'id'}); if(error)throw error; }
       after.forEach(([k,sg])=>{recLast[k]=sg;});     /* 成功してから「保存済み」にする（失敗分は次回また書く） */
       if(ups.length)alog('upsert '+t,ups.length);
     }
-    const kv=JSON.stringify(kvObj());
-    if(kv!==kvLast){
-      const recv=Object.entries(DB.recv||{}).map(([k,v])=>{const [client,month]=k.split('|'); return {org:ORG,client,month,amount:+v||0};});
-      const paid=Object.entries(DB.paid||{}).map(([k,v])=>{const [who,month]=k.split('|'); return {org:ORG,who,month,amount:+v||0};});
-      const off=[]; Object.entries(DB.off||{}).forEach(([who,m])=>Object.entries(m||{}).forEach(([month,days])=>off.push({org:ORG,who,month,days:(days||[]).map(Number)})));
-      if(recv.length){const {error}=await sb.from('receipts').upsert(recv); if(error)throw error;}
-      if(paid.length){const {error}=await sb.from('payments').upsert(paid); if(error)throw error;}
-      if(off.length){const {error}=await sb.from('days_off').upsert(off); if(error)throw error;}
-      const {error}=await sb.from('settings').upsert({org:ORG,key:'basis',value:DB.basis||'完工'}); if(error)throw error;
-      kvLast=kv;
-    }
+    /* 入金・支払済・休み・計上基準・見送り：変わったキーだけ書く。消したものは 0（休みは空）で上書きする */
+    const cur=kvFlat();
+    const recv=kvChanged(cur.recv,kvSaved.recv).map(k=>{const [client,month]=kvSplit(k); return {org:ORG,client,month,amount:cur.recv[k]||0};});
+    const paid=kvChanged(cur.paid,kvSaved.paid).map(k=>{const [who,month]=kvSplit(k); return {org:ORG,who,month,amount:cur.paid[k]||0};});
+    const off=kvChanged(cur.off,kvSaved.off).map(k=>{const [who,month]=kvSplit(k); return {org:ORG,who,month,days:cur.off[k]?cur.off[k].split(',').map(Number):[]};});
+    const sets=kvChanged(cur.skip,kvSaved.skip).map(k=>({org:ORG,key:SKIP_KEY+k,value:!!cur.skip[k]}));
+    if(cur.basis!==kvSaved.basis)sets.push({org:ORG,key:'basis',value:cur.basis});
+    if(recv.length){const {error}=await sb.from('receipts').upsert(recv); if(error)throw error; kvSaved.recv=cur.recv;}
+    if(paid.length){const {error}=await sb.from('payments').upsert(paid); if(error)throw error; kvSaved.paid=cur.paid;}
+    if(off.length){const {error}=await sb.from('days_off').upsert(off); if(error)throw error; kvSaved.off=cur.off;}
+    if(sets.length){const {error}=await sb.from('settings').upsert(sets); if(error)throw error; kvSaved.skip=cur.skip; kvSaved.basis=cur.basis;}
     dbState='保存した '+new Date().toTimeString().slice(0,5);
   }catch(e){
     dbDirty=true; dbState='保存できていない：'+String((e&&e.message)||e); alog('save ERR',(e&&e.message)||e);
-    toast('保存に失敗した（'+String((e&&e.message)||e)+'）。もう一度操作するか、再読み込みしてください');
+    const em=String((e&&e.message)||e);
+    toast(/JWT|permission denied|not authenticated|401/i.test(em)?'保存できなかった。ログインが切れている可能性があります。ページを再読み込みしてログインし直してください（'+em+'）'
+      :'保存に失敗した（'+em+'）。もう一度操作するか、再読み込みしてください');
   }finally{ dbBusy=false; }
   const el=document.getElementById('dbState'); if(el)el.textContent=dbState;
 }
@@ -150,16 +171,44 @@ window.addEventListener('beforeunload',()=>{ if(dbDirty){ clearTimeout(dbSaveTim
 
 /* ---- 他の人の変更を受け取る ---- */
 let rtChan=null;
+/* 自分が送った行・消した行（Realtime で戻ってくる反射を、他の人の変更と区別する） */
+let sentRows={}, ownDel={};
+function isOwnEcho(t,k,rec){
+  const sent=sentRows[k]; if(!sent)return false;
+  const got=recToRow(t,rec);
+  return Object.keys(sent).every(c=>{ const a=sent[c], b=got[c]; return String(a==null?'':a)===String(b==null?'':b); });
+}
+/* 他の人（と職人・業者ページ）の変更の記録。「元に戻す」は画面全体を控えに戻すので、
+   そのままだと控えを取った後に入った他の人の追加・変更まで消してしまう。戻したあとにこれを掛け直す */
+let remoteLog=[], remoteSeq=0;
+function logRemote(e){ if(!undoStack.length){ remoteLog.length=0; return; } e.seq=++remoteSeq; remoteLog.push(e); if(remoteLog.length>3000)remoteLog.splice(0,remoteLog.length-3000); }
+function remoteCanReplay(seq){ return !remoteLog.length || remoteLog[0].seq<=(seq||0)+1; }
+function remoteReplay(seq){
+  remoteLog.forEach(e=>{ if(e.seq<=(seq||0))return; const arr=DB[e.t]; if(!arr)return;
+    const id=e.del||e.rec.id, i=arr.findIndex(r=>r.id===id);
+    if(e.del){ if(i>=0)arr.splice(i,1); return; }
+    const rec=JSON.parse(JSON.stringify(e.rec));
+    if(i>=0)arr[i]=rec; else if(e.t==='cases')arr.unshift(rec); else arr.push(rec); });
+}
 function dbSubscribe(){
   if(!sb||rtChan)return;
   rtChan=sb.channel('ledger');
   Object.keys(COLS).forEach(t=>{
     rtChan.on('postgres_changes',{event:'*',schema:'public',table:t},payload=>{
       const arr=DB[t]||[];
-      if(payload.eventType==='DELETE'){ const id=payload.old&&payload.old.id; const i=arr.findIndex(r=>r.id===id); if(i>=0){arr.splice(i,1); delete recLast[t+':'+id]; renderIdle();} return; }
+      if(payload.eventType==='DELETE'){ const id=payload.old&&payload.old.id; if(!id)return; const dk=t+':'+id;
+        const mine=ownDel[dk]&&Date.now()-ownDel[dk]<60000; delete ownDel[dk];
+        const i=arr.findIndex(r=>r.id===id);
+        if(mine&&i<0)return;                           /* 自分が消した行の反射 */
+        logRemote({t,del:id});
+        if(i>=0){arr.splice(i,1); delete recLast[dk]; renderIdle();} return; }
       const rec=rowToRec(t,payload.new); const k=t+':'+rec.id, sg=sig(rec);
       if(recLast[k]===sg)return;                       /* 自分の書き込みの反射 */
       const i=arr.findIndex(r=>r.id===rec.id);
+      if(i>=0&&isOwnEcho(t,k,rec)){                    /* 自分の書き込みの反射（DB が足した項目だけ受け取る。token など） */
+        const l=arr[i]; let added=false; Object.keys(rec).forEach(x=>{ if(l[x]===undefined){ l[x]=rec[x]; added=true; } });
+        delete sentRows[k]; if(recLast[k]!==undefined)recLast[k]=sig(l); if(added)renderIdle(); return; }
+      logRemote({t,rec:JSON.parse(JSON.stringify(rec))});
       if(i>=0){ const l=arr[i]; Object.keys(l).forEach(x=>delete l[x]); Object.assign(l,rec); } else { if(t==='cases')arr.unshift(rec); else arr.push(rec); }
       recLast[k]=sg;
       if(t==='orders'&&typeof onOrderRemote==='function'){ try{ onOrderRemote(arr.find(r=>r.id===rec.id)); }catch(e){ alog('onOrderRemote',e&&e.message); } }
@@ -184,16 +233,39 @@ function known(){ }
 async function initAuth(){
   sb=window.supabase.createClient(SB_URL,SB_KEY);
   const {data:{session}}=await sb.auth.getSession(); SESSION=session;
-  sb.auth.onAuthStateChange((_e,s)=>{ SESSION=s; if(s&&!ME)boot(); if(!s){ME=null; render();} });
+  /* この中から supabase を直接呼ばない。auth の内部ロックを持ったまま呼ぶことになり、トークン更新と重なって詰まる。
+     必ず setTimeout で外に出してから処理する */
+  sb.auth.onAuthStateChange((ev,s)=>{ setTimeout(()=>onAuth(ev,s),0); });
   if(SESSION)await boot(); else render();
 }
-async function boot(){
+function onAuth(ev,s){
+  const had=!!SESSION; SESSION=s;
+  if(!s){ if(had||ME){ ME=null; dbState='ログインが切れました。もう一度ログインしてください'; alog('auth',ev+' signed out'); render(); } return; }
+  if(ev==='TOKEN_REFRESHED')checkClock(s);
+  if(!ME)boot();
+}
+/* 取り立てのトークンの残り時間が有効期間と大きく違う＝この端末の時計がずれている。
+   ずれているとトークンが「もう切れた」と判定され続け、更新が繰り返されてログインが切れる */
+let clockWarned=false;
+function checkClock(s){
+  if(clockWarned||!s||!s.expires_at||!s.expires_in)return;
+  const left=s.expires_at-Date.now()/1000;
+  if(Math.abs(left-s.expires_in)>180){ clockWarned=true; alog('clock','left='+Math.round(left)+' expires_in='+s.expires_in);
+    toast('この端末の時計がずれているようです。ログインが切れやすくなるので、日付と時刻の自動設定を確かめてください'); }
+}
+/* 読み込みは同時に1本だけ。以前はログイン直後の通知（INITIAL_SESSION・SIGNED_IN・TOKEN_REFRESHED）ごとに
+   読み込みが重ねて走り、そのたびにトークン更新が起きて、更新の回数制限に当たってログインが切れていた */
+let bootP=null, bootFails=0;
+function boot(){ if(!bootP)bootP=boot1().finally(()=>{ bootP=null; }); return bootP; }
+async function boot1(){
+  if(!SESSION||ME)return;
+  if(bootFails>=3)return;     /* 続けて失敗したら自動では繰り返さない（再読み込みでやり直す） */
   try{
     const {data:me}=await sb.from('profiles').select('*').eq('id',SESSION.user.id).single();
     ME=me||{role:'staff',org:'hq'}; ORG=ME.org||'hq';
-    await dbLoad(); dbSubscribe(); render();
+    await dbLoad(); dbSubscribe(); bootFails=0; render();
     await reloadInbox();
-  }catch(e){ dbState='読み込めなかった：'+String((e&&e.message)||e); toast(dbState); render(); }
+  }catch(e){ bootFails++; ME=null; dbState='読み込めなかった：'+String((e&&e.message)||e)+'。ページを再読み込みしてください'; alog('boot ERR',(e&&e.message)||e); toast(dbState); render(); }
 }
 async function sendMagicLink(email){
   const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});

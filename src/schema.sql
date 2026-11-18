@@ -1,4 +1,4 @@
--- Aチーム統合台帳 v4 — Supabase (PostgreSQL) スキーマ
+-- ワークス台帳 v4（旧称：Aチーム統合台帳） — Supabase (PostgreSQL) スキーマ
 -- 方針：
 --   * すべての表に org（所属：hq＝本部／fc_a..fc_d）。本部版では全行 'hq'。
 --   * id は既存のテキスト id をそのまま使う（移行で C1302 / P00012 / L284-c8d などを維持）。
@@ -307,7 +307,8 @@ returns table(proc_id text, case_id text, prop text, addr text, kind text, start
 language sql security definer stable as $$
   select p.id, c.id, c.prop, c.addr, p.kind, p.start_date, p.end_date, p.prog, p.memo, c.client
   from procs p join cases c on c.id=p.case_id join vendors v on v.name=p.who
-  where v.token=p_token and v.active and p.start_date between p_from and p_to
+  where v.token=p_token and v.active
+    and p.start_date<=p_to and coalesce(p.end_date,p.start_date)>=p_from   -- 期間に少しでも掛かる工程（前の週から続く工程も出す）
   order by p.start_date, c.prop $$;
 -- 発注書 2ページ目の工程表用に、同じ案件の全工程（procs）と完了予定日（plan）も返す。鍵情報（key_info）も返す。
 -- 他社の名前・金額は出さない（区分・日付・工事内容だけ）。mine＝この発注の工程。戻り値の形を変えるので drop してから作る。
@@ -334,7 +335,7 @@ language sql security definer as $$
 create or replace function proc_done(p_token text, p_proc text, p_done boolean) returns boolean
 language sql security definer as $$
   update procs p set prog = case when p_done then '完了' else '' end
-  from vendors v where v.token=p_token and v.name=p.who and p.id=p_proc returning true $$;
+  from vendors v where v.token=p_token and v.active and v.name=p.who and p.id=p_proc returning true $$;   -- 無効にした発注先のリンクでは変えられない
 create or replace function my_vendor(p_token text) returns table(name text, type text)
 language sql security definer stable as $$ select name, type from vendors where token=p_token and active $$;
 grant execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) to anon, authenticated;
@@ -352,15 +353,18 @@ do $$ declare f text; begin
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function next_no(text,text) from anon;
-revoke execute on function my_role() from anon; revoke execute on function my_org() from anon;
 
 -- ---------- 関数の実行権（Supabase は PUBLIC に既定で execute を与えるため明示的に外す） ----------
 alter function touch_updated_at() set search_path = public;
 revoke execute on function audit_row() from public, anon, authenticated;
 revoke execute on function handle_new_user() from public, anon, authenticated;
 revoke execute on function touch_updated_at() from public, anon, authenticated;
-revoke execute on function my_role() from public, anon;
-revoke execute on function my_org() from public, anon;
+-- my_role() / my_org() は RLS のポリシーが呼ぶ。ログインしていない（anon）リクエストでも表に触るとポリシーが評価されるので、
+-- anon にも実行権が要る（無いと「permission denied for function my_org」になる。ログイン切れの時に起きた）。
+-- 返すのは 'none' と '' だけなので、anon が呼べても行は見えない。本番は 2026-11-18 の migration grant_my_org_role_to_anon で適用済み。
+revoke execute on function my_role() from public;
+revoke execute on function my_org() from public;
+grant execute on function my_role(), my_org() to anon, authenticated;
 revoke execute on function next_no(text,text) from public, anon;
 grant execute on function next_no(text,text) to authenticated;
 revoke execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) from public;

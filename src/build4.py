@@ -62,11 +62,7 @@ src2=src2.replace("""      ${location.hash==='#admin'?'<button class="btn small 
       <button class="btn small" id="signOut">ログアウト</button></div>""")
 # 移行コピーのカード → 取り込みカード
 src2=re.sub(r"""    \$\{location\.hash==='#admin'\?`<div class="card" style="margin-top:10px"><h3 style="margin:0 0 6px">新しい台帳（v4）への移行</h3>.*?<button class="btn small primary" id="exportAll">全データをコピーする</button> <span id="exportMsg" class="note"></span></div>\n""",
-"""    ${location.hash==='#admin'?`<div class="card" style="margin-top:10px"><h3 style="margin:0 0 6px">旧台帳（Artifact版）からの取り込み</h3>
-      <p class="note">旧台帳のマスタ画面（#admin）で「全データをコピーする」を押してから、ここに貼り付けて「取り込む」。同じ id は上書き、無いものは追加。</p>
-      <textarea id="impJson" style="width:100%;height:120px;font:11px ui-monospace,monospace" placeholder="ここに貼り付け"></textarea>
-      <div class="bar"><button class="btn small primary" id="impRun">取り込む</button><span id="impMsg" class="note"></span></div></div>
-""", src2, flags=re.S)
+"""    ${location.hash==='#admin'?`""", src2, flags=re.S)
 src2=src2.replace("""診断ログ（この端末）　端末 ${esc(DEV)}　墓標 ${Object.keys(DB.tomb||{}).length}　状態 ${esc(dbState)}""",
                   """診断ログ（この端末）　端末 ${esc(DEV)}　状態 ${esc(dbState)}""")
 # resetBtn handler → signOut / import handlers
@@ -80,11 +76,20 @@ src2=src2.replace("""    `元データ：${esc(M.asof)}<br>運用中""","""    `
 src2=src2.replace("""<br>（この画面の編集は元シートに書き戻しません）<br><span id="dbState">${esc(dbState||(LDB?'':'共有保存：未接続（この端末のみ）'))}</span>""",
                   """<br><span id="dbState">${esc(dbState)}</span>""")
 EXTRA=r'''
+/* 旧台帳からの取り込み：マスタタブの一番下、#admin を付けて開いた時だけ出す（手配ボードには置かない） */
+function adminCards(){
+  if(location.hash!=='#admin')return '';
+  return `<div class="card" style="margin-top:18px"><h3 style="margin:0 0 6px">旧台帳（Artifact版）からの取り込み</h3>
+      <p class="note">旧台帳のマスタ画面（#admin）で「全データをコピーする」を押してから、ここに貼り付けて「取り込む」。同じ id は上書き、無いものは追加。</p>
+      <textarea id="impJson" style="width:100%;height:120px;font:11px ui-monospace,monospace" placeholder="ここに貼り付け"></textarea>
+      <div class="bar"><button class="btn small primary" id="impRun">取り込む</button><span id="impMsg" class="note"></span></div></div>`;
+}
+function vMaster(){ return vMaster0()+adminCards(); }
 function paintLogin(){
   const main=document.getElementById('main')||document.body;
   const email=(()=>{try{return localStorage.getItem('aw-email')||'';}catch(e){return '';}})();
   main.innerHTML=`<div class="card" style="max-width:420px;margin:60px auto;padding:24px">
-    <h2 style="margin:0 0 6px">Aチーム統合台帳</h2>
+    <h2 style="margin:0 0 6px">ワークス台帳</h2>
     <p class="note" style="margin:0 0 14px">会社のメールアドレスを入れると、ログイン用のリンクが届きます。</p>
     <input type="email" id="lgEmail" placeholder="name@and-w.co.jp" value="${esc(email)}" style="width:100%;margin-bottom:10px">
     <button class="btn primary" id="lgSend" style="width:100%">ログイン用リンクを送る</button>
@@ -117,6 +122,8 @@ async function importFromV3(){
   }catch(e){ msg.textContent='失敗：'+String((e&&e.message)||e); }
 }
 '''
+assert src2.count("function vMaster(){")==1
+src2=src2.replace("function vMaster(){","function vMaster0(){")
 i=src2.index("render();\ninitAuth();")
 src2=src2[:i]+EXTRA+"\n"+src2[i:]
 # v4 固有の画面追加：発注書に業者用リンク、発注先マスタに職人用リンク
@@ -131,7 +138,7 @@ src2=src2.replace('''    <div class="askbtn" style="margin-top:14px"><button cla
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
   const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderLink(o),'業者用のリンクをコピーした');
-  const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ snap(); o.st='送付済'; o.sent=fmtD(new Date()); save(); el.remove(); render(); toast(`${o.no} を送付済にした`, undo); };
+  const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ el.remove(); nextOrderSt(o.id); };   /* 案件の発注表の「送る」と同じ処理（案件の 発注＝済・状態も進める） */
 }''')
 src2=src2.replace('''        <th class="r">使用</th><th class="r">旧区分</th><th></th></tr></thead>''','''        <th class="r">使用</th><th class="r">旧区分</th><th>スマホ用</th><th></th></tr></thead>''')
 src2=src2.replace('''        <td class="r">${old?`<b style="color:var(--warn)">${old}</b>`:'—'}</td>
@@ -142,6 +149,7 @@ src2=src2.replace('''  const osh=e.target.closest('[data-osheet]'); if(osh){orde
   const vl=e.target.closest('[data-vlink]'); if(vl){ const v=vendorOf(vl.dataset.vlink); copyText(vendorLink(v),`${v.name} さんのスマホ用リンクをコピーした`); return; }''')
 src2=src2.replace("M.kensa||'藤森正則'","M.kensa||'検査担当'").replace("// 藤森の検査予定（この月）","// 検査担当の検査予定（この月）")
 assert '藤森' not in src2 and '長沼' not in src2, '個人名がコードに残っている'
+assert '統合台帳' not in src2, '旧名称（統合台帳）が画面に残っている'
 open(os.path.join(HERE,'app4.src.html'),'w',encoding='utf-8').write(src2)
 
 # 8) 公開用 index.html：完全な HTML に包み、supabase-js を読み込み、URL/KEY を差し込む
