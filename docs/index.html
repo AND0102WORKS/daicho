@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
-<title>Aチーム統合台帳</title>
+<title>ワークス台帳</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -272,7 +272,7 @@ table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#F
 </head>
 <body>
 <div class="top">
-  <div class="brand">Aチーム統合台帳 <small>案件管理 ＋ 完工予定 ＋ スケジュール管理 を1つに／テストモデル v3</small></div>
+  <div class="brand">ワークス台帳 <small>案件管理 ＋ 完工予定 ＋ スケジュール管理 を1つに</small></div>
   <div class="tabs" id="tabs"></div>
   <div class="src" id="src"></div>
 </div>
@@ -335,7 +335,7 @@ function recToRow(t,rec){
     if(v===undefined) return;
     if(T.dates.indexOf(c)>=0) v=(v&&/^\d{4}-\d{2}-\d{2}/.test(String(v)))?String(v).slice(0,10):null;
     else if(T.bools.indexOf(c)>=0) v=!!v;
-    else if(['sales','add_amt','amt','sell','price','close_day','site'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):(+v||0);
+    else if(['sales','add_amt','amt','sell','price','close_day','site'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
     else if(c==='qty') v=(v===''||v==null)?0:(+v||0);
     else if(v===null) v='';
     row[c]=v; });
@@ -349,9 +349,19 @@ const orderLink=o=>o&&o.token?siteBase()+'order.html?t='+o.token:'';
 function copyText(t,msg){ navigator.clipboard.writeText(t).then(()=>toast(msg||'コピーした')).catch(()=>prompt('コピーできなかった。手で選んでコピー：',t)); }
 let recLast={};   /* 'table:id' → sig。変わった行を見つけるため */
 const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1};
-function rememberAll(){ recLast={}; Object.keys(COLS).forEach(t=>(DB[t]||[]).forEach(r=>{ if(r.id)recLast[t+':'+r.id]=sig(r); })); kvLast=JSON.stringify(kvObj()); }
-let kvLast='';
-const kvObj=()=>({recv:DB.recv||{},paid:DB.paid||{},off:DB.off||{},basis:DB.basis||'完工'});
+function rememberAll(){ recLast={}; Object.keys(COLS).forEach(t=>(DB[t]||[]).forEach(r=>{ if(r.id)recLast[t+':'+r.id]=sig(r); })); kvSaved=kvFlat(); }
+/* 入金・支払済・休み・計上基準・見送り：最後に保存した値（キーごと）。
+   全件をまとめて書くと、古い画面の人が他の人の入力を古い値で上書きしてしまうので、変わったキーだけ書く */
+let kvSaved={recv:{},paid:{},off:{},skip:{},basis:'完工'};
+function kvFlat(){
+  const num=o=>{ const r={}; Object.entries(o||{}).forEach(([k,v])=>{ const n=Math.round(+v||0); if(n)r[k]=n; }); return r; };
+  const off={}; Object.entries(DB.off||{}).forEach(([who,m])=>Object.entries(m||{}).forEach(([month,days])=>{ const d=(days||[]).map(Number).join(','); if(d)off[who+'|'+month]=d; }));
+  const skip={}; Object.keys(DB.skip||{}).forEach(k=>{ if(DB.skip[k])skip[k]=1; });
+  return {recv:num(DB.recv),paid:num(DB.paid),off,skip,basis:DB.basis||'完工'};
+}
+const kvChanged=(cur,old)=>[...new Set([...Object.keys(cur),...Object.keys(old)])].filter(k=>cur[k]!==old[k]);
+const kvSplit=k=>{ const i=k.lastIndexOf('|'); return [k.slice(0,i),k.slice(i+1)]; };
+const SKIP_KEY='inbox_skip:';
 
 /* ---- 読み込み ---- */
 async function fetchAll(t,select){
@@ -366,11 +376,12 @@ async function dbLoad(){
   DB={cases:cases.map(r=>rowToRec('cases',r)),procs:procs.map(r=>rowToRec('procs',r)),lines:lines.map(r=>rowToRec('lines',r)),
       orders:orders.map(r=>rowToRec('orders',r)),vendors:vendors.map(r=>rowToRec('vendors',r)),clients:clients.map(r=>rowToRec('clients',r)),
       prices:prices.map(r=>rowToRec('prices',r)),
-      recv:{},paid:{},off:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
-  recv.forEach(r=>{DB.recv[r.client+'|'+r.month]=r.amount;});
-  paid.forEach(r=>{DB.paid[r.who+'|'+r.month]=r.amount;});
-  off.forEach(r=>{(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice();});
-  settings.forEach(r=>{ if(r.key==='basis')DB.basis=r.value; });
+      recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
+  recv.forEach(r=>{ if(+r.amount)DB.recv[r.client+'|'+r.month]=r.amount; });      /* 0 は「消した」の意味 */
+  paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
+  off.forEach(r=>{ if((r.days||[]).length)(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice(); });
+  settings.forEach(r=>{ if(r.key==='basis')DB.basis=r.value;
+    else if(String(r.key).indexOf(SKIP_KEY)===0&&r.value===true)DB.skip[String(r.key).slice(SKIP_KEY.length)]=1; });   /* 見送った受注受付 */
   /* 案件は新しいものが上。採番は既存の最大＋1 から */
   DB.cases.sort((a,b)=>String(b.id).localeCompare(String(a.id)));
   const mx=(arr,re)=>arr.reduce((m,r)=>{const k=re.exec(String(r.id)); return k?Math.max(m,+k[1]):m;},0);
@@ -383,10 +394,12 @@ async function dbLoad(){
 }
 function migrate(){
   if(!DB.basis)DB.basis='完工';
-  DB.cases.forEach(c=>{ if(!c.ord)c.ord='未'; if(c.live==null)c.live=true; if(c.keyx==null)c.keyx=''; if(c.warr==null)c.warr=''; });
+  if(!DB.skip)DB.skip={};
+  DB.cases.forEach(c=>{ if(!c.ord)c.ord='未'; if(c.live==null)c.live=true; if(c.keyx==null)c.keyx=''; if(c.warr==null)c.warr='';
+    if(c.st==='新規案件')c.st='受付'; });   /* v4 の状態一覧に「新規案件」は無い */
 }
 function reset(){ toast('v4 では「元データに戻す」は無い（データベースが正）'); }
-function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],recv:{},paid:{},off:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
+function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
 
 /* ---- 保存：変わった行だけ ---- */
 function save(){ dbSaveSoon(); }
@@ -398,31 +411,39 @@ async function dbSaveNow(){
     /* 画面側で id 無しで作られたマスタ行に id を振る */
     (DB.vendors||[]).forEach(v=>{ if(!v.id)v.id='V'+Math.random().toString(36).slice(2,10); });
     (DB.clients||[]).forEach(c=>{ if(!c.id)c.id='CL'+Math.random().toString(36).slice(2,10); });
+    /* 先に全部の表の差分を出し、自分が消す行・書く行を覚えておく（Realtime の反射を「他の人の変更」と取り違えないため。
+       案件を消すと DB 側で工程・明細・発注も一緒に消え、その通知が自分の delete より先に届くことがある） */
+    const plan={};
     for(const t of Object.keys(COLS)){
-      const arr=DB[t]||[], seen=new Set(), ups=[], dels=[];
-      const after=[];
-      arr.forEach(r=>{ if(!r.id)return; seen.add(r.id); const k=t+':'+r.id, sg=sig(r); if(recLast[k]!==sg){ ups.push(recToRow(t,r)); after.push([k,sg]); } });
-      Object.keys(recLast).forEach(k=>{ if(k.indexOf(t+':')!==0)return; const id=k.slice(t.length+1); if(!seen.has(id))dels.push(id); });
+      const arr=DB[t]||[], seen=new Set(), ups=[], dels=[], after=[];
+      arr.forEach(r=>{ if(!r.id)return; seen.add(r.id); const k=t+':'+r.id, sg=sig(r); if(recLast[k]!==sg){ const row=recToRow(t,r); ups.push(row); after.push([k,sg]); sentRows[k]=row; } });
+      Object.keys(recLast).forEach(k=>{ if(k.indexOf(t+':')!==0)return; const id=k.slice(t.length+1); if(!seen.has(id)){ dels.push(id); ownDel[k]=Date.now(); } });
+      plan[t]={ups,dels,after};
+    }
+    for(const t of Object.keys(COLS)){
+      const {ups,dels,after}=plan[t];
       if(dels.length){ const {error}=await sb.from(t).delete().in('id',dels); if(error)throw error; dels.forEach(id=>delete recLast[t+':'+id]); alog('del '+t,dels.length); }
       for(let i=0;i<ups.length;i+=200){ const {error}=await sb.from(t).upsert(ups.slice(i,i+200),{onConflict:'id'}); if(error)throw error; }
       after.forEach(([k,sg])=>{recLast[k]=sg;});     /* 成功してから「保存済み」にする（失敗分は次回また書く） */
       if(ups.length)alog('upsert '+t,ups.length);
     }
-    const kv=JSON.stringify(kvObj());
-    if(kv!==kvLast){
-      const recv=Object.entries(DB.recv||{}).map(([k,v])=>{const [client,month]=k.split('|'); return {org:ORG,client,month,amount:+v||0};});
-      const paid=Object.entries(DB.paid||{}).map(([k,v])=>{const [who,month]=k.split('|'); return {org:ORG,who,month,amount:+v||0};});
-      const off=[]; Object.entries(DB.off||{}).forEach(([who,m])=>Object.entries(m||{}).forEach(([month,days])=>off.push({org:ORG,who,month,days:(days||[]).map(Number)})));
-      if(recv.length){const {error}=await sb.from('receipts').upsert(recv); if(error)throw error;}
-      if(paid.length){const {error}=await sb.from('payments').upsert(paid); if(error)throw error;}
-      if(off.length){const {error}=await sb.from('days_off').upsert(off); if(error)throw error;}
-      const {error}=await sb.from('settings').upsert({org:ORG,key:'basis',value:DB.basis||'完工'}); if(error)throw error;
-      kvLast=kv;
-    }
+    /* 入金・支払済・休み・計上基準・見送り：変わったキーだけ書く。消したものは 0（休みは空）で上書きする */
+    const cur=kvFlat();
+    const recv=kvChanged(cur.recv,kvSaved.recv).map(k=>{const [client,month]=kvSplit(k); return {org:ORG,client,month,amount:cur.recv[k]||0};});
+    const paid=kvChanged(cur.paid,kvSaved.paid).map(k=>{const [who,month]=kvSplit(k); return {org:ORG,who,month,amount:cur.paid[k]||0};});
+    const off=kvChanged(cur.off,kvSaved.off).map(k=>{const [who,month]=kvSplit(k); return {org:ORG,who,month,days:cur.off[k]?cur.off[k].split(',').map(Number):[]};});
+    const sets=kvChanged(cur.skip,kvSaved.skip).map(k=>({org:ORG,key:SKIP_KEY+k,value:!!cur.skip[k]}));
+    if(cur.basis!==kvSaved.basis)sets.push({org:ORG,key:'basis',value:cur.basis});
+    if(recv.length){const {error}=await sb.from('receipts').upsert(recv); if(error)throw error; kvSaved.recv=cur.recv;}
+    if(paid.length){const {error}=await sb.from('payments').upsert(paid); if(error)throw error; kvSaved.paid=cur.paid;}
+    if(off.length){const {error}=await sb.from('days_off').upsert(off); if(error)throw error; kvSaved.off=cur.off;}
+    if(sets.length){const {error}=await sb.from('settings').upsert(sets); if(error)throw error; kvSaved.skip=cur.skip; kvSaved.basis=cur.basis;}
     dbState='保存した '+new Date().toTimeString().slice(0,5);
   }catch(e){
     dbDirty=true; dbState='保存できていない：'+String((e&&e.message)||e); alog('save ERR',(e&&e.message)||e);
-    toast('保存に失敗した（'+String((e&&e.message)||e)+'）。もう一度操作するか、再読み込みしてください');
+    const em=String((e&&e.message)||e);
+    toast(/JWT|permission denied|not authenticated|401/i.test(em)?'保存できなかった。ログインが切れている可能性があります。ページを再読み込みしてログインし直してください（'+em+'）'
+      :'保存に失敗した（'+em+'）。もう一度操作するか、再読み込みしてください');
   }finally{ dbBusy=false; }
   const el=document.getElementById('dbState'); if(el)el.textContent=dbState;
 }
@@ -430,16 +451,44 @@ window.addEventListener('beforeunload',()=>{ if(dbDirty){ clearTimeout(dbSaveTim
 
 /* ---- 他の人の変更を受け取る ---- */
 let rtChan=null;
+/* 自分が送った行・消した行（Realtime で戻ってくる反射を、他の人の変更と区別する） */
+let sentRows={}, ownDel={};
+function isOwnEcho(t,k,rec){
+  const sent=sentRows[k]; if(!sent)return false;
+  const got=recToRow(t,rec);
+  return Object.keys(sent).every(c=>{ const a=sent[c], b=got[c]; return String(a==null?'':a)===String(b==null?'':b); });
+}
+/* 他の人（と職人・業者ページ）の変更の記録。「元に戻す」は画面全体を控えに戻すので、
+   そのままだと控えを取った後に入った他の人の追加・変更まで消してしまう。戻したあとにこれを掛け直す */
+let remoteLog=[], remoteSeq=0;
+function logRemote(e){ if(!undoStack.length){ remoteLog.length=0; return; } e.seq=++remoteSeq; remoteLog.push(e); if(remoteLog.length>3000)remoteLog.splice(0,remoteLog.length-3000); }
+function remoteCanReplay(seq){ return !remoteLog.length || remoteLog[0].seq<=(seq||0)+1; }
+function remoteReplay(seq){
+  remoteLog.forEach(e=>{ if(e.seq<=(seq||0))return; const arr=DB[e.t]; if(!arr)return;
+    const id=e.del||e.rec.id, i=arr.findIndex(r=>r.id===id);
+    if(e.del){ if(i>=0)arr.splice(i,1); return; }
+    const rec=JSON.parse(JSON.stringify(e.rec));
+    if(i>=0)arr[i]=rec; else if(e.t==='cases')arr.unshift(rec); else arr.push(rec); });
+}
 function dbSubscribe(){
   if(!sb||rtChan)return;
   rtChan=sb.channel('ledger');
   Object.keys(COLS).forEach(t=>{
     rtChan.on('postgres_changes',{event:'*',schema:'public',table:t},payload=>{
       const arr=DB[t]||[];
-      if(payload.eventType==='DELETE'){ const id=payload.old&&payload.old.id; const i=arr.findIndex(r=>r.id===id); if(i>=0){arr.splice(i,1); delete recLast[t+':'+id]; renderIdle();} return; }
+      if(payload.eventType==='DELETE'){ const id=payload.old&&payload.old.id; if(!id)return; const dk=t+':'+id;
+        const mine=ownDel[dk]&&Date.now()-ownDel[dk]<60000; delete ownDel[dk];
+        const i=arr.findIndex(r=>r.id===id);
+        if(mine&&i<0)return;                           /* 自分が消した行の反射 */
+        logRemote({t,del:id});
+        if(i>=0){arr.splice(i,1); delete recLast[dk]; renderIdle();} return; }
       const rec=rowToRec(t,payload.new); const k=t+':'+rec.id, sg=sig(rec);
       if(recLast[k]===sg)return;                       /* 自分の書き込みの反射 */
       const i=arr.findIndex(r=>r.id===rec.id);
+      if(i>=0&&isOwnEcho(t,k,rec)){                    /* 自分の書き込みの反射（DB が足した項目だけ受け取る。token など） */
+        const l=arr[i]; let added=false; Object.keys(rec).forEach(x=>{ if(l[x]===undefined){ l[x]=rec[x]; added=true; } });
+        delete sentRows[k]; if(recLast[k]!==undefined)recLast[k]=sig(l); if(added)renderIdle(); return; }
+      logRemote({t,rec:JSON.parse(JSON.stringify(rec))});
       if(i>=0){ const l=arr[i]; Object.keys(l).forEach(x=>delete l[x]); Object.assign(l,rec); } else { if(t==='cases')arr.unshift(rec); else arr.push(rec); }
       recLast[k]=sg;
       if(t==='orders'&&typeof onOrderRemote==='function'){ try{ onOrderRemote(arr.find(r=>r.id===rec.id)); }catch(e){ alog('onOrderRemote',e&&e.message); } }
@@ -464,16 +513,39 @@ function known(){ }
 async function initAuth(){
   sb=window.supabase.createClient(SB_URL,SB_KEY);
   const {data:{session}}=await sb.auth.getSession(); SESSION=session;
-  sb.auth.onAuthStateChange((_e,s)=>{ SESSION=s; if(s&&!ME)boot(); if(!s){ME=null; render();} });
+  /* この中から supabase を直接呼ばない。auth の内部ロックを持ったまま呼ぶことになり、トークン更新と重なって詰まる。
+     必ず setTimeout で外に出してから処理する */
+  sb.auth.onAuthStateChange((ev,s)=>{ setTimeout(()=>onAuth(ev,s),0); });
   if(SESSION)await boot(); else render();
 }
-async function boot(){
+function onAuth(ev,s){
+  const had=!!SESSION; SESSION=s;
+  if(!s){ if(had||ME){ ME=null; dbState='ログインが切れました。もう一度ログインしてください'; alog('auth',ev+' signed out'); render(); } return; }
+  if(ev==='TOKEN_REFRESHED')checkClock(s);
+  if(!ME)boot();
+}
+/* 取り立てのトークンの残り時間が有効期間と大きく違う＝この端末の時計がずれている。
+   ずれているとトークンが「もう切れた」と判定され続け、更新が繰り返されてログインが切れる */
+let clockWarned=false;
+function checkClock(s){
+  if(clockWarned||!s||!s.expires_at||!s.expires_in)return;
+  const left=s.expires_at-Date.now()/1000;
+  if(Math.abs(left-s.expires_in)>180){ clockWarned=true; alog('clock','left='+Math.round(left)+' expires_in='+s.expires_in);
+    toast('この端末の時計がずれているようです。ログインが切れやすくなるので、日付と時刻の自動設定を確かめてください'); }
+}
+/* 読み込みは同時に1本だけ。以前はログイン直後の通知（INITIAL_SESSION・SIGNED_IN・TOKEN_REFRESHED）ごとに
+   読み込みが重ねて走り、そのたびにトークン更新が起きて、更新の回数制限に当たってログインが切れていた */
+let bootP=null, bootFails=0;
+function boot(){ if(!bootP)bootP=boot1().finally(()=>{ bootP=null; }); return bootP; }
+async function boot1(){
+  if(!SESSION||ME)return;
+  if(bootFails>=3)return;     /* 続けて失敗したら自動では繰り返さない（再読み込みでやり直す） */
   try{
     const {data:me}=await sb.from('profiles').select('*').eq('id',SESSION.user.id).single();
     ME=me||{role:'staff',org:'hq'}; ORG=ME.org||'hq';
-    await dbLoad(); dbSubscribe(); render();
+    await dbLoad(); dbSubscribe(); bootFails=0; render();
     await reloadInbox();
-  }catch(e){ dbState='読み込めなかった：'+String((e&&e.message)||e); toast(dbState); render(); }
+  }catch(e){ bootFails++; ME=null; dbState='読み込めなかった：'+String((e&&e.message)||e)+'。ページを再読み込みしてください'; alog('boot ERR',(e&&e.message)||e); toast(dbState); render(); }
 }
 async function sendMagicLink(email){
   const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});
@@ -487,11 +559,17 @@ function snap(key){
   if(key&&key===lastSnapKey)return;
   lastSnapKey=key||null;
   undoStack.push(JSON.stringify({c:DB.cases,p:DB.procs,l:DB.lines||[],o:DB.orders||[],
-    pr:DB.prices||[],v:DB.vendors||[],cl:DB.clients||[],rv:DB.recv||{},pd:DB.paid||{}}));
+    pr:DB.prices||[],v:DB.vendors||[],cl:DB.clients||[],rv:DB.recv||{},pd:DB.paid||{},of:DB.off||{},sk:DB.skip||{},
+    rs:typeof remoteSeq==='number'?remoteSeq:0}));   /* rs＝この控えを取った時点までに受け取った「他の人の変更」の番号 */
   if(undoStack.length>40)undoStack.shift();}
-function undo(){if(!undoStack.length)return; const o=JSON.parse(undoStack.pop()); lastSnapKey=null;
+function undo(){if(!undoStack.length)return; const o=JSON.parse(undoStack[undoStack.length-1]); lastSnapKey=null;
+  const rt=typeof remoteReplay==='function';
+  if(rt&&!remoteCanReplay(o.rs)){ undoStack.length=0; toast('他の人の変更がたくさん入ったので、この操作は元に戻せない'); return; }
+  undoStack.pop();
   DB.cases=o.c; DB.procs=o.p; if(o.l)DB.lines=o.l; if(o.o)DB.orders=o.o;
   if(o.pr)DB.prices=o.pr; if(o.v)DB.vendors=o.v; if(o.cl)DB.clients=o.cl; if(o.rv)DB.recv=o.rv; if(o.pd)DB.paid=o.pd;
+  if(o.of)DB.off=o.of; if(o.sk)DB.skip=o.sk;
+  if(rt)remoteReplay(o.rs);   /* 控えを取った後に入った他の人・職人・業者の変更は残す（巻き戻さない） */
   save(); render(); toast('元に戻した');}
 load();   /* 空の DB。ログイン後に dbLoad() で埋まる */
 
@@ -592,7 +670,7 @@ const isVendor=nm=>!!vendorOf(nm);
 const VTYPES=['専属','外注','経費'];
 const SEN=M.senzoku;
 const STATUS=M.status;
-const stCls=s=>s==='完工'||s==='報告済'?'done':(s==='新規案件'||s==='現調済'||s==='見積提出'?'new':'wip');
+const stCls=s=>s==='完工'||s==='報告済'?'done':(s==='新規案件'||s==='受付'||s==='現調済'||s==='見積提出'?'new':'wip');
 const KINDS=['清掃のみ','工事一式','鍵交換','入居中修繕','その他'];
 const PKINDS=['内装','水道設備','電気設備','清掃','リペア補修','AW検査','鍵交換'];
 const KCOL={'内装':'#EADFC8','水道設備':'#CCE2EC','電気設備':'#F7E3A8','清掃':'#D7E9D3',
@@ -844,7 +922,16 @@ function inboxKind(t){
 }
 function pendingInbox(){
   if(!INBOX)return [];
-  return INBOX.filter(r=>r.key&&!DB.cases.some(c=>c.recv===r.key));
+  return INBOX.filter(r=>r.key&&!(DB.skip&&DB.skip[r.key])&&!DB.cases.some(c=>c.recv===r.key));
+}
+/* 見送り＝取り込んだ案件を削除した受注受付。未取り込みに数えない。「戻す」で未取り込みに戻る */
+function skippedInbox(){
+  if(!INBOX||!DB.skip)return [];
+  return INBOX.filter(r=>r.key&&DB.skip[r.key]&&!DB.cases.some(c=>c.recv===r.key));
+}
+function unskipInbox(){
+  const n=skippedInbox().length; if(!n)return;
+  snap(); DB.skip={}; save(); render(); toast(`見送り ${n}件を未取り込みに戻した`, undo);
 }
 
 /* 単価表のうち、まだマスタに入っていないもの */
@@ -953,7 +1040,9 @@ function inboxBanner(){
     sub=`<span class="grow note" style="margin:0">${esc(p.slice(0,3).map(r=>[r.client,r.prop,r.room].filter(Boolean).join(' ')).join('／'))}${p.length>3?' ほか':''}</span>`;
     btn='<button class="btn small primary" id="impInbox">取り込む</button>';
   }
+  const sk=skippedInbox().length;
   return `<div class="selbar" style="${sty}"><b>${esc(msg)}</b>${sub||'<span class="grow"></span>'}${btn}
+    ${sk?`<span class="note" style="margin:0" title="取り込んだあと案件を削除した受注受付。未取り込みには数えない">見送り ${sk}件</span><button class="btn small" id="unskipInbox">戻す</button>`:''}
     <button class="btn small" id="reloadInbox">読み直す</button></div>`;
 }
 
@@ -1443,7 +1532,7 @@ function orderSheet(oid){
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
   const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderLink(o),'業者用のリンクをコピーした');
-  const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ snap(); o.st='送付済'; o.sent=fmtD(new Date()); save(); el.remove(); render(); toast(`${o.no} を送付済にした`, undo); };
+  const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ el.remove(); nextOrderSt(o.id); };   /* 案件の発注表の「送る」と同じ処理（案件の 発注＝済・状態も進める） */
 }
 
 /* ================= tabs ================= */
@@ -1805,11 +1894,7 @@ function vBoard(){
       <button class="btn small" id="undoBtn">ひとつ戻す</button>
       <span class="note" style="margin:0">データベース：Supabase（${esc(SB_URL.replace(/^https?:\/\//,''))}）　ログイン中：${esc((ME&&(ME.name||ME.email))||'')}　役割：${esc((ME&&ME.role)||'')}</span>
       <button class="btn small" id="signOut">ログアウト</button></div>
-    ${location.hash==='#admin'?`<div class="card" style="margin-top:10px"><h3 style="margin:0 0 6px">旧台帳（Artifact版）からの取り込み</h3>
-      <p class="note">旧台帳のマスタ画面（#admin）で「全データをコピーする」を押してから、ここに貼り付けて「取り込む」。同じ id は上書き、無いものは追加。</p>
-      <textarea id="impJson" style="width:100%;height:120px;font:11px ui-monospace,monospace" placeholder="ここに貼り付け"></textarea>
-      <div class="bar"><button class="btn small primary" id="impRun">取り込む</button><span id="impMsg" class="note"></span></div></div>
-    <div class="card" style="margin-top:10px"><h3 style="margin:0 0 6px">診断ログ（この端末）　端末 ${esc(DEV)}　状態 ${esc(dbState)}</h3>
+    ${location.hash==='#admin'?`    <div class="card" style="margin-top:10px"><h3 style="margin:0 0 6px">診断ログ（この端末）　端末 ${esc(DEV)}　状態 ${esc(dbState)}</h3>
       <textarea readonly style="width:100%;height:260px;font:11px/1.4 ui-monospace,monospace">${esc(AWLOG.slice().reverse().map(r=>r.join('  ')).join('\n'))}</textarea></div>`:''}
     <div class="legend">${Object.keys(CC).map(k=>`<span><i style="background:${col(k)}"></i>${esc(k)}</span>`).join('')}
       <span><i style="background:var(--c-other)"></i>その他</span>
@@ -2191,7 +2276,7 @@ function applyPrices(cid){
   toast(n?`${n}行に単価を入れた${tail?'／'+tail:''}`
          :(DB.prices.length?(tail||'単価表に合う行が無かった'):'単価マスタがまだ空'), n?undo:null);
 }
-function vMaster(){
+function vMaster0(){
   const q=mQ.toLowerCase();
   const oldN=DB.procs.filter(p=>p.kind&&PKINDS.indexOf(p.kind)<0).length;
   if(mTab==='単価')return vPrice();
@@ -2543,7 +2628,7 @@ function openCase(id){selCase=id; tab='ledger'; render();
 function setField(id,f,v){
   const c=DB.cases.find(x=>x.id===id); if(!c)return;
   snap('case:'+id+':'+f);
-  if(f==='sales'||f==='add')v=+v||0;
+  if(f==='sales'||f==='add')v=Math.round(+v||0);
   if(f==='bill'&&v)v=v+'-01';
   c[f]=v;
   if(f==='done'){setDone(c,v);return save();}
@@ -2749,6 +2834,7 @@ document.addEventListener('click',e=>{
     linesOf(oCase).filter(l=>!l.order&&(l.kind||'')===k).forEach(l=>{ if(gc.checked)oSel[l.id]=true; else delete oSel[l.id]; });
     render(); return;}
   if(e.target.id==='impInbox'){importInbox();return;}
+  if(e.target.id==='unskipInbox'){unskipInbox();return;}
   if(e.target.id==='reloadInbox'){reloadInbox();return;}
   if(e.target.id==='impPO'&&oCase){importPO(oCase);return;}
   if(e.target.id==='applyPrice'&&oCase){applyPrices(oCase);return;}
@@ -2844,7 +2930,7 @@ document.addEventListener('click',e=>{
       save();render();} return;}
   if(e.target.id==='addCase'){
     snap(); DB.seq++; const id='N'+DB.seq+DEV;
-    DB.cases.unshift({id,client:fClient!=='すべて'?fClient:'',prop:'',kind:'清掃のみ',st:'新規案件',live:true,ord:'未',
+    DB.cases.unshift({id,client:fClient!=='すべて'?fClient:'',prop:'',kind:'清掃のみ',st:STATUS[0]||'受付',live:true,ord:'未',
       sales:0,add:0,bill:fMonth!=='すべて'&&fMonth!=='未設定'?fMonth+'-01':'',done:'',plan:'',report:'',photo:'未'});
     selCase=id; save(); render();
     const i=document.querySelector('[data-f="prop"]'); if(i)i.focus(); return;}
@@ -2865,9 +2951,10 @@ document.addEventListener('click',e=>{
     return;}
   if(e.target.id==='delCase'&&selCase){
     const c=DB.cases.find(x=>x.id===selCase); snap();
+    const skipped=!!(c&&c.recv&&DB.skip); if(skipped)DB.skip[c.recv]=1;   /* 受注受付から作った案件：消したら見送りにする */
     DB.cases=DB.cases.filter(x=>x.id!==selCase); DB.procs=DB.procs.filter(p=>p.case!==selCase);
     DB.lines=(DB.lines||[]).filter(l=>l.case!==selCase); DB.orders=(DB.orders||[]).filter(o=>o.case!==selCase);
-    selCase=null; save(); render(); toast(`${(c||{}).prop||'案件'} を削除した`,undo); return;}
+    selCase=null; save(); render(); toast(`${(c||{}).prop||'案件'} を削除した${skipped?'（受注受付は見送りにした）':''}`,undo); return;}
   if(e.target.id==='closeDw'){selCase=null;render();return;}
   if(e.target.id==='undoBtn'){undo();return;}
   if(e.target.id==='signOut'){signOut();return;}
@@ -3021,7 +3108,7 @@ document.addEventListener('change',e=>{
     const c=clientOf(el.dataset.c);
     if(c){snap('term:'+c.name+':'+el.dataset.f); c[el.dataset.f]=+el.value||(el.dataset.f==='close'?31:30);}
     save();renderSoon();return;}
-  if(el.classList.contains('rc')){snap('recv:'+el.dataset.k); DB.recv[el.dataset.k]=+el.value||0;save();return;}
+  if(el.classList.contains('rc')){snap('recv:'+el.dataset.k); DB.recv[el.dataset.k]=Math.round(+el.value||0);save();return;}
   if(el.dataset.f&&selCase){setField(selCase,el.dataset.f,el.value);renderSoon();return;}
   const pr=el.closest('[data-p]');
   if(pr&&el.dataset.pf){setProc(pr.dataset.p,el.dataset.pf,el.value);renderSoon();return;}
@@ -3072,18 +3159,27 @@ async function exportCsv(){
     procsOf(c.id).map(p=>`${p.kind}:${p.who||'未定'}:${p.date||'未定'}:${p.amt}`).join(' / ')]);
   const csv='﻿'+[head,...rows].map(r=>r.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
   try{
-    await DL.save({filename:'Aチーム統合台帳.csv',data:new Blob([csv],{type:'text/csv'})});
+    await DL.save({filename:'ワークス台帳.csv',data:new Blob([csv],{type:'text/csv'})});
     toast('CSVを書き出した');
   }catch(e){
     toast(e&&e.code==='declined'?'書き出しを取りやめた':'書き出せなかった');
   }
 }
 
+/* 旧台帳からの取り込み：マスタタブの一番下、#admin を付けて開いた時だけ出す（手配ボードには置かない） */
+function adminCards(){
+  if(location.hash!=='#admin')return '';
+  return `<div class="card" style="margin-top:18px"><h3 style="margin:0 0 6px">旧台帳（Artifact版）からの取り込み</h3>
+      <p class="note">旧台帳のマスタ画面（#admin）で「全データをコピーする」を押してから、ここに貼り付けて「取り込む」。同じ id は上書き、無いものは追加。</p>
+      <textarea id="impJson" style="width:100%;height:120px;font:11px ui-monospace,monospace" placeholder="ここに貼り付け"></textarea>
+      <div class="bar"><button class="btn small primary" id="impRun">取り込む</button><span id="impMsg" class="note"></span></div></div>`;
+}
+function vMaster(){ return vMaster0()+adminCards(); }
 function paintLogin(){
   const main=document.getElementById('main')||document.body;
   const email=(()=>{try{return localStorage.getItem('aw-email')||'';}catch(e){return '';}})();
   main.innerHTML=`<div class="card" style="max-width:420px;margin:60px auto;padding:24px">
-    <h2 style="margin:0 0 6px">Aチーム統合台帳</h2>
+    <h2 style="margin:0 0 6px">ワークス台帳</h2>
     <p class="note" style="margin:0 0 14px">会社のメールアドレスを入れると、ログイン用のリンクが届きます。</p>
     <input type="email" id="lgEmail" placeholder="name@and-w.co.jp" value="${esc(email)}" style="width:100%;margin-bottom:10px">
     <button class="btn primary" id="lgSend" style="width:100%">ログイン用リンクを送る</button>

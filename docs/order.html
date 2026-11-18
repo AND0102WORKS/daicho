@@ -159,7 +159,7 @@ table.plist tr.mine td{font-weight:700}
 <div class="sheet" id="sheet">読み込み中…</div>
 <script>
 const SB_URL='https://stcvyehefqnrxibanlxg.supabase.co', SB_KEY='sb_publishable_ZZelNGtUNXLpXs7j4Nd_zw_XFYwI3fx';
-const sb=window.supabase.createClient(SB_URL,SB_KEY);
+const sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});   /* 同じブラウザの台帳のログインに触らない */
 const token=new URLSearchParams(location.search).get('t')||'';
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const yen=v=>'¥'+Math.round(v||0).toLocaleString('ja-JP');
