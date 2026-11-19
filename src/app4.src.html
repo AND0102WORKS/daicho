@@ -1217,7 +1217,7 @@ function groupHead(c,g){
   return `<tr class="ghead" data-g="${esc(k)}"><td></td><td class="n">${free.length?`<input type="checkbox" class="gchk" ${allSel?'checked':''} title="この区分の行を全部選ぶ">`:''}</td>
     <td colspan="12"><div class="bar" style="margin:0;gap:8px">
       ${k?`<span class="cl" style="background:${kcol(k)};font-size:12.5px">${esc(k)}</span>`:`<b style="color:var(--warn)">区分なし</b><span class="note" style="margin:0">行をチェックして下の「区分をつける」で分ける</span>`}
-      <span class="note" style="margin:0">${g.rows.length}行　販売 ${yen(gs)}　原価 ${gc?yen(gc):'—'}　粗利 ${gs?yen(gs-gc):'—'}${free.length&&done.length?`　未発注 ${free.length}行 ${yen(amt)}`:''}</span>
+      <span class="note" style="margin:0">${g.rows.length}行　税抜：販売 ${yen(gs)}　原価 ${gc?yen(gc):'—'}　粗利 ${gs?yen(gs-gc):'—'}${free.length&&done.length?`　未発注 ${free.length}行 ${yen(amt)}`:''}</span>
       ${ocol?`<span class="ocol">${ocol}</span>`:''}
       ${k&&free.length?`<span class="grow"></span>
         <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px">発注先
@@ -1234,6 +1234,8 @@ function orderPanel(c){
   const sellSum=ls.reduce((a,l)=>a+lineSell(l),0);
   const sales=salesOf(c), ods=ordersOf(c.id), po=poRowsOf(c.id);
   const diff=sellSum&&c.sales&&sellSum!==(+c.sales);
+  /* 見出しの金額は案件台帳と同じ税込。原価＝工程の発注金額の合計（costOf）。下の明細表は単価なので税抜 */
+  const pcost=costOf(c.id), freeCost=Math.round(free.reduce((a,l)=>a+lineAmt(l),0)*1.1);
   const head=`<div class="card ohead">
     <div class="bar" style="margin:0;gap:8px">
       <h3 style="font-size:16px;margin:0">${esc(c.prop||'（物件未入力）')}</h3>
@@ -1242,12 +1244,13 @@ function orderPanel(c){
       <button class="btn small" data-open="${c.id}">台帳で開く</button>
       <button class="btn small" data-pcopen="${c.id}">工程を組む</button>
       <span class="grow"></span>
-      <span class="okpi"><small>売上 税抜</small><b>${yen(c.sales||0)}</b></span>
-      <span class="okpi"${diff?` title="明細の販売計 ${yen(sellSum)} が、受注受付の売上税抜 ${yen(c.sales)} と ${yen(Math.abs(sellSum-(+c.sales)))} 違う"`:''}><small>販売計</small><b style="color:${diff?'var(--warn)':'inherit'}">${sellSum?yen(sellSum):'—'}</b>${
-        diff?`<small style="color:var(--warn)">（${yen(Math.abs(sellSum-(+c.sales)))} 違う）</small>`:''}</span>
-      <span class="okpi"><small>原価</small><b>${cost?yen(cost):'—'}</b></span>
-      <span class="okpi"><small>粗利</small><b style="color:${(c.sales||0)-cost<0?'var(--warn)':'var(--ok)'}">${
-        c.sales?yen((+c.sales)-cost):'—'}</b><small>${c.sales?Math.round(((+c.sales)-cost)/(+c.sales)*1000)/10+'%':''}</small></span>
+      <span class="okpi" title="受注受付の売上（追加受注を含む）。案件台帳と同じ税込"><small>売上 税込</small><b>${yen(sales)}</b></span>
+      <span class="okpi" title="明細の販売の合計（税込）${diff?`。受注受付の売上税抜 ${yen(c.sales)} と、税抜で ${yen(Math.abs(sellSum-(+c.sales)))} 違う`:''}"><small>販売計 税込</small><b style="color:${diff?'var(--warn)':'inherit'}">${sellSum?yen(Math.round(sellSum*1.1)):'—'}</b>${
+        diff?`<small style="color:var(--warn)">（${yen(Math.round(Math.abs(sellSum-(+c.sales))*1.1))} 違う）</small>`:''}</span>
+      <span class="okpi" title="工程の発注金額の合計。案件台帳の原価と同じ税込${freeCost?`。まだ発注していない明細の原価が ${yen(freeCost)}（税込）ある`:''}"><small>原価 税込</small><b>${pcost?yen(pcost):'—'}</b>${
+        freeCost?`<small>＋未発注 ${yen(freeCost)}</small>`:''}</span>
+      <span class="okpi" title="売上 税込 − 原価 税込。案件台帳と同じ"><small>粗利 税込</small><b style="color:${sales-pcost<0?'var(--warn)':'var(--ok)'}">${
+        sales?yen(sales-pcost):'—'}</b><small>${sales?Math.round((sales-pcost)/sales*1000)/10+'%':''}</small></span>
     </div>${c.memo?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${esc(c.memo)}</p>`:''}</div>`;
   const tools=`<div class="bar" style="margin:0 0 8px">
     <h3 style="font-size:14px;margin:0">明細</h3>
@@ -1264,8 +1267,8 @@ function orderPanel(c){
       <th class="r" style="width:34px">No</th><th style="width:30px"></th><th style="width:110px">場所</th><th class="nmcol">名称</th>
       <th style="width:104px">工程区分</th>
       <th class="r" style="width:62px">数量</th><th style="width:58px">単位</th>
-      <th class="r" style="width:82px" title="販売＝依頼元からもらう">販売単価</th><th class="r" style="width:80px">販売</th>
-      <th class="r" style="width:104px" title="原価＝業者に払う">原価単価</th><th class="r" style="width:80px">原価</th>
+      <th class="r" style="width:82px" title="販売＝依頼元からもらう">販売単価</th><th class="r" style="width:80px" title="税抜">販売 <small style="font-weight:400">税抜</small></th>
+      <th class="r" style="width:104px" title="原価＝業者に払う">原価単価</th><th class="r" style="width:80px" title="税抜">原価 <small style="font-weight:400">税抜</small></th>
       <th class="r" style="width:74px">粗利</th>
       <th style="width:130px">備考</th><th style="width:26px"></th></tr></thead><tbody>
     ${lineGroups(ls).map(g=>groupHead(c,g)+g.rows.map(l=>{const o=l.order?DB.orders.find(x=>x.id===l.order):null;
@@ -1294,7 +1297,7 @@ function orderPanel(c){
           :'業者から来た見積を貼り付けるか、1行ずつ足す。'}</div>`;
   const selSell=free.filter(l=>oSel[l.id]).reduce((a,l)=>a+lineSell(l),0);
   const bar=selIds.length?`<div class="selbar">
-      <b>${selIds.length}行 選択　販売 ${yen(selSell)}　原価 ${yen(selAmt)}</b>
+      <b>${selIds.length}行 選択　販売 ${yen(selSell)}　原価 ${yen(selAmt)}（税抜）</b>
       <label style="display:inline-flex;align-items:center;gap:4px;font-size:12.5px">区分をつける
         <select id="selKind"><option value="">（選ぶ）</option>${opts(PKINDS,'')}</select></label>
       <span class="grow"></span>
