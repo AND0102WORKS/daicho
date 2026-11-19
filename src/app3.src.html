@@ -1894,7 +1894,6 @@ function procPanel(c){
             ready.length?`<span class="cnt">${ready.length}</span>`:''}</button>`;})()}
         <button class="btn small ${(c.ord||'未')==='未'?'primary':''}" data-ord="${c.id}" title="${(c.ord||'未')==='未'?'台帳の外（電話・LINE など）で発注したときに押す。案件が「発注 済」になり、発注前の一覧から外れる。発注タブで発注を送付済にした場合は自動で済になるので押さなくてよい':'「発注 済」を取り消して、発注前（未）に戻す'}">${
           (c.ord||'未')==='未'?'発注書を送った':'発注を取り消す'}</button>
-        <button class="btn small ${c.done?'':'primary'}" data-done="${c.id}" title="${c.done?'完工日を消して、状態を「発注書送付」に戻す':'完工日に完了予定日（無ければ今日）を入れ、状態を「完工」にする。請求（完工基準）と月次に載る'}">${c.done?'完工を取り消す':'完工にする'}</button>
       </div>
       ${warn.length?`<div style="margin-top:12px">${[...new Set(warn)].map(w=>
         `<div class="ck"><span class="t">要確認</span>${esc(w)}</div>`).join('')}</div>`:
