@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "description": "ワークス台帳 v4 のテスト（playwright は環境に入っているものを使う）",
+  "dependencies": { "pg": "^8.13.0" }
+}

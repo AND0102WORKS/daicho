@@ -22,7 +22,7 @@ async function handle(body){
 }
 pg.connect().then(()=>{
   http.createServer((req,res)=>{
-    if(req.method==='GET'){ const fs=require('fs'); const file=/^\/(me|order)\.html/.test(req.url)?req.url.split('?')[0].slice(1):'index.html'; let h=fs.readFileSync(__dirname+'/../site/'+file,'utf8').replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/,'<script src="/fake.js"></script>');
+    if(req.method==='GET'){ const fs=require('fs'); const file=/^\/(me|order)\.html/.test(req.url)?req.url.split('?')[0].slice(1):'index.html'; let h=fs.readFileSync(__dirname+'/../docs/'+file,'utf8').replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/,'<script src="/fake.js"></script>');
       if(req.url==='/fake.js'){res.setHeader('Content-Type','text/javascript');res.end(fs.readFileSync(__dirname+'/fakesb-client.js'));return;}
       res.setHeader('Content-Type','text/html;charset=utf-8'); res.end(h); return; }
     let b=''; req.on('data',c=>b+=c); req.on('end',async()=>{

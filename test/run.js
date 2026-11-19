@@ -3,7 +3,7 @@ const {chromium}=require('playwright');const fs=require('fs');const {spawn}=requ
   const srv=spawn('node',['fakesb-server.js'],{stdio:'ignore'}); await new Promise(r=>setTimeout(r,800));
   const b=await chromium.launch({args:['--no-proxy-server']}); const pg=await b.newPage({viewport:{width:1500,height:900}});
   pg.on('pageerror',e=>console.log('PAGEERR',e.message)); pg.on('console',m=>{ if(m.type()==='error')console.log('CONSOLE',m.text()); });
-  const html=fs.readFileSync('../site/index.html','utf8').replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/,'');
+  const html=fs.readFileSync('../docs/index.html','utf8').replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/,'');
   await pg.goto('http://localhost:8787/'); await pg.waitForTimeout(1500);
   const st=await pg.evaluate(()=>({me:ME&&ME.role,cases:DB.cases.length,procs:DB.procs.length,vend:DB.vendors.length,inbox:INBOX&&INBOX.length,state:dbState,tab}));
   console.log('loaded',st);
