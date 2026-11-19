@@ -54,6 +54,7 @@ create table if not exists vendors (            -- 発注先（職人・業者�
   site int default 30,
   phone text default '',
   email text default '',
+  taxable boolean default true,   -- 課税事業者か（インボイス登録あり）。false＝免税事業者：発注は税抜金額のまま（消費税を足さない）
   token text unique default encode(gen_random_bytes(12),'hex'),  -- 職人ページ用の個人リンク
   active boolean default true,
   src text default '',
@@ -170,9 +171,12 @@ create table if not exists orders (              -- 発注
   accepted_by text default '',
   token text unique default encode(gen_random_bytes(12),'hex'),  -- 業者の承諾ページ用URL
   proc_id text default '',
+  taxable boolean default true,   -- 発注した時点の発注先の課税区分。false＝消費税を足さない（免税事業者）
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+alter table vendors add column if not exists taxable boolean default true;
+alter table orders add column if not exists taxable boolean default true;
 create index if not exists orders_case on orders(case_id);
 create index if not exists orders_who on orders(who);
 
@@ -315,9 +319,11 @@ language sql security definer stable as $$
 -- 発注書 2ページ目の工程表用に、同じ案件の全工程（procs）と完了予定日（plan）も返す。鍵情報（key_info）も返す。
 -- 他社の名前・金額は出さない（区分・日付・工事内容だけ）。mine＝この発注の工程。戻り値の形を変えるので drop してから作る。
 drop function if exists order_view(text);
+-- 発注先が免税事業者なら消費税を足さない（taxable）。戻り値の形を変えるので drop してから作る。
+drop function if exists order_view(text);
 create or replace function order_view(p_token text)
 returns table(order_no text, who text, kind text, start_date date, end_date date, due date, naiyo text, memo text, st text, accepted_at timestamptz,
-              prop text, addr text, client text, lines jsonb, plan date, procs jsonb, key_info text)
+              prop text, addr text, client text, lines jsonb, plan date, procs jsonb, key_info text, taxable boolean)
 language sql security definer stable as $$
   select o.no, o.who, o.kind, o.start_date, o.end_date, o.due, o.naiyo, o.memo, o.st, o.accepted_at, c.prop, c.addr, c.client,
     (select jsonb_agg(jsonb_build_object('name',l.name,'spec',l.spec,'qty',l.qty,'unit',l.unit,'price',l.price,'memo',l.memo) order by l.no) from lines l where l.order_id=o.id),
@@ -329,7 +335,7 @@ language sql security definer stable as $$
         'items',(select jsonb_agg(trim(coalesce(l.spec,'')||' '||l.name) order by l.no, l.id) from lines l
                  where l.case_id=p.case_id and l.kind=p.kind and p.kind<>'' and not l.cut and l.qty>0)
       ) order by p.start_date nulls last, p.id) from procs p where p.case_id=o.case_id),
-    c.key_info
+    c.key_info, coalesce(o.taxable,true)
   from orders o join cases c on c.id=o.case_id where o.token=p_token $$;
 create or replace function order_accept(p_token text, p_by text) returns boolean
 language sql security definer as $$

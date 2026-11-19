@@ -206,7 +206,8 @@ async function load(){
   if(error||!data||!data.length){ el.innerHTML='<div class="err">発注書が見つかりません。リンクを確認してください。</div>'; return; }
   O=data[0]; const ls=O.lines||[];
   const amt=l=>Math.round((+l.qty||0)*(+l.price||0));
-  const sub=ls.reduce((a,l)=>a+amt(l),0), tax=Math.round(sub*0.1);
+  const taxable=O.taxable!==false;   // 発注先が免税事業者なら消費税を足さない
+  const sub=ls.reduce((a,l)=>a+amt(l),0), tax=taxable?Math.round(sub*0.1):0;
   const acc=O.st==='承諾'||O.st==='完了'||O.st==='請求済';
   const accAt=O.accepted_at?new Date(O.accepted_at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
   const term=md(O.start_date)+(O.end_date&&O.end_date!==O.start_date?` 〜 ${md(O.end_date)}`:'');
@@ -218,7 +219,7 @@ async function load(){
       <div class="from"><div class="k">発注元</div><b>アンドワークス株式会社</b><br>東京都江戸川区</div>
     </div>
     <div class="band">
-      <div class="amount"><span class="k">発注金額 <small>（税込）</small></span><span class="v">${yen(sub+tax)}</span></div>
+      <div class="amount"><span class="k">発注金額 <small>${taxable?'（税込）':'（消費税なし）'}</small></span><span class="v">${yen(sub+tax)}</span></div>
       <div class="info">${info.map(r=>`<div class="kv${r[0]==='鍵情報'?' wide':''}"><div class="k">${r[0]}</div><div class="v">${esc(r[1])}</div></div>`).join('')}</div>
     </div>
     ${O.naiyo||O.memo?`<div class="notes">${O.naiyo?`<div class="box"><div class="k">工事内容</div><div class="memo">${esc(O.naiyo)}</div></div>`:''}${O.memo?`<div class="box"><div class="k">備考</div><div class="memo">${esc(O.memo)}</div></div>`:''}</div>`:''}
@@ -232,9 +233,11 @@ async function load(){
           :`<div>上記の内容を承諾します。</div><div class="f"><div>承諾日　　　　年　　　月　　　日</div><div class="name"><span>氏名（会社名）</span><span>印</span></div></div>`}
       </div>
       <table class="tot"><tbody>
-        <tr><th>小計（税抜）</th><td class="r">${yen(sub)}</td></tr>
+        ${taxable?`<tr><th>小計（税抜）</th><td class="r">${yen(sub)}</td></tr>
         <tr><th>消費税（10%）</th><td class="r">${yen(tax)}</td></tr>
-        <tr class="sum"><th>合計（税込）</th><td class="r">${yen(sub+tax)}</td></tr>
+        <tr class="sum"><th>合計（税込）</th><td class="r">${yen(sub+tax)}</td></tr>`
+        :`<tr class="sum"><th>合計</th><td class="r">${yen(sub)}</td></tr>
+        <tr><th colspan="2" style="font-weight:400;font-size:11px">免税事業者として、消費税を含まない金額で発注しています</th></tr>`}
       </tbody></table>
     </div>
     ${schedule(O)}

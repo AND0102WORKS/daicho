@@ -330,10 +330,10 @@ const TABLES={
           map:{case:'case_id',date:'start_date',end:'end_date',order:'order_id'}, dates:['start_date','end_date'], bools:['auto']},
   lines: {cols:['id','org','case_id','no','name','spec','qty','unit','sell','price','kind','who','memo','cut','src','order_id'],
           map:{case:'case_id',order:'order_id'}, dates:[], bools:['cut']},
-  orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id'],
-          map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:[]},
-  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','active','src'],
-          map:{full:'full_name',defKind:'def_kind',close:'close_day'}, dates:[], bools:['active']},
+  orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable'],
+          map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
+  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','active','src'],
+          map:{full:'full_name',defKind:'def_kind',close:'close_day'}, dates:[], bools:['active','taxable']},
   clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src'],
           map:{full:'full_name',close:'close_day'}, dates:[], bools:[]},
   prices:{cols:['id','org','name','alias','kind','unit','price','who','client','memo'], map:{}, dates:[], bools:[]},
@@ -640,7 +640,13 @@ const salesEx=c=>(+c.sales||0)+(+c.add||0);
 const salesOf=c=>inc(salesEx(c));
 const grossOf=c=>salesEx(c)-costOf(c.id);
 /* 税抜を大きく、税込を小さく */
-const dual=v=>`${yen(v)}<small class="tx">税込 ${yen(inc(v))}</small>`;
+const dual=(v,vi)=>`${yen(v)}<small class="tx">税込 ${yen(vi==null?inc(v):vi)}</small>`;
+/* 課税事業者か。発注先マスタの「課税」。未設定は課税として扱う。免税事業者への発注・支払は消費税を足さない */
+const vendorTaxable=nm=>{ const v=(DB.vendors||[]).find(x=>x.name===nm); return !v||v.taxable!==false; };
+const orderTaxable=o=>!o||o.taxable!==false;
+const taxed=(v,taxable)=>taxable?inc(v):Math.round(+v||0);
+/* 原価の税込：工程ごとに発注先の課税区分で足す */
+const costIncOf=id=>procsOf(id).reduce((a,p)=>a+taxed(p.amt,vendorTaxable(p.who)),0);
 const planOf=c=>c.done||c.plan||'';
 /* 案件の並び替え。起算日・完了希望日は空欄を後ろに回す */
 const SORTS=['起算日が近い順','完了希望日が近い順','完了予定が近い順','受注が古い順','新しい順'];
@@ -1261,9 +1267,9 @@ function orderPanel(c){
       <span class="okpi" title="受注受付の売上（追加受注を含む）。税込 ${yen(inc(sales))}"><small>売上 税抜</small><b>${yen(sales)}</b></span>
       <span class="okpi" title="明細の販売の合計。税込 ${yen(inc(sellSum))}${diff?`。受注受付の売上税抜 ${yen(c.sales)} と ${yen(Math.abs(sellSum-(+c.sales)))} 違う`:''}"><small>販売計 税抜</small><b style="color:${diff?'var(--warn)':'inherit'}">${sellSum?yen(sellSum):'—'}</b>${
         diff?`<small style="color:var(--warn)">（${yen(Math.abs(sellSum-(+c.sales)))} 違う）</small>`:''}</span>
-      <span class="okpi" title="工程の発注金額の合計（案件台帳の原価と同じ）。税込 ${yen(inc(pcost))}${freeCost?`。まだ発注していない明細の原価が ${yen(freeCost)} ある`:''}"><small>原価 税抜</small><b>${pcost?yen(pcost):'—'}</b>${
+      <span class="okpi" title="工程の発注金額の合計（案件台帳の原価と同じ）。税込 ${yen(costIncOf(c.id))}${freeCost?`。まだ発注していない明細の原価が ${yen(freeCost)} ある`:''}"><small>原価 税抜</small><b>${pcost?yen(pcost):'—'}</b>${
         freeCost?`<small>＋未発注 ${yen(freeCost)}</small>`:''}</span>
-      <span class="okpi" title="税込 ${yen(inc(sales-pcost))}"><small>粗利 税抜</small><b style="color:${sales-pcost<0?'var(--warn)':'var(--ok)'}">${
+      <span class="okpi" title="税込 ${yen(inc(sales)-costIncOf(c.id))}"><small>粗利 税抜</small><b style="color:${sales-pcost<0?'var(--warn)':'var(--ok)'}">${
         sales?yen(sales-pcost):'—'}</b><small>${sales?Math.round((sales-pcost)/sales*1000)/10+'%':''}</small></span>
     </div>${c.memo?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${esc(c.memo)}</p>`:''}</div>`;
   const tools=`<div class="bar" style="margin:0 0 8px">
@@ -1327,7 +1333,7 @@ function orderPanel(c){
         return `<tr><td>${esc(o.no)}</td>
         <td><span class="cl" style="background:${kcol(o.kind)}">${esc(o.kind)}</span></td>
         <td>${esc(o.who||'業者未定')}</td><td>${o.start?spanLabel({date:o.start,end:o.end}):'—'}</td>
-        <td class="r">${yen(a)}</td><td class="r">${yen(Math.round(a*1.1))}</td>
+        <td class="r">${yen(a)}</td><td class="r">${orderTaxable(o)?yen(inc(a)):`${yen(a)}<small class="tx">免税・消費税なし</small>`}</td>
         <td><span class="st ${OSTC[o.st]}">${esc(o.st)}</span></td>
         <td><button class="btn small" data-osheet="${o.id}">発注書</button>
           ${OSTS.indexOf(o.st)<OSTS.length-1?`<button class="btn small" data-onext="${o.id}" data-ost="${esc(o.st)}">${
@@ -1464,7 +1470,7 @@ async function createOrder(cid,ids,f,quiet){
   const n=await allocOrderNo();
   const oid='O'+n+DEV, no='AW-H'+String(n).padStart(4,'0');
   const amt=DB.lines.filter(l=>ids.indexOf(l.id)>=0).reduce((a,l)=>a+lineAmt(l),0);
-  DB.orders.push({id:oid,no,case:cid,who:f.who,kind:f.kind,start:f.start,end:f.end,due:f.due,
+  DB.orders.push({id:oid,no,case:cid,who:f.who,kind:f.kind,start:f.start,end:f.end,due:f.due,taxable:vendorTaxable(f.who),
     naiyo:f.naiyo,memo:f.memo,st:'下書き',sent:'',
     name:`${c?c.prop||'':''} ${f.kind}_${f.who||'業者未定'}`.trim()});
   DB.lines.forEach(l=>{ if(ids.indexOf(l.id)>=0){l.order=oid;l.who=f.who;l.kind=f.kind;} });
@@ -1540,7 +1546,7 @@ function orderMessage(o,c,v){
   const body=[`${v.full||o.who||''} 様`,'','いつもお世話になっております。アンドワークスです。',
     '下記の工事を発注いたします。リンク先で内容をご確認のうえ、「承諾」を押してください。','',
     `発注No：${o.no}`,`現場：${c.prop||''}`,`工期：${o.start?spanLabel({date:o.start,end:o.end}):'未定'}`,
-    `金額：${yen(Math.round(amt*1.1))}（税込）`, ...(o.due?[`回答期限：${o.due}`]:[]),'',
+    orderTaxable(o)?`金額：${yen(inc(amt))}（税込）`:`金額：${yen(amt)}（消費税なし）`, ...(o.due?[`回答期限：${o.due}`]:[]),'',
     `発注書：${orderLink(o)}`,'','アンドワークス株式会社'].join('\n');
   return {subject,body};
 }
@@ -1567,7 +1573,8 @@ function orderSheet(oid){
         <td class="r">${l.qty}</td><td>${esc(l.unit)}</td><td class="r">${yen(l.price)}</td>
         <td class="r">${yen(lineAmt(l))}</td><td>${esc(l.memo||'')}</td></tr>`).join('')}
     </tbody></table>
-    <p class="amt">小計 ${yen(amt)}　消費税 ${yen(Math.round(amt*0.1))}　合計 ${yen(Math.round(amt*1.1))}</p>
+    <p class="amt">${orderTaxable(o)?`小計 ${yen(amt)}　消費税 ${yen(Math.round(amt*0.1))}　合計 ${yen(inc(amt))}`
+      :`合計 ${yen(amt)}　<small style="font-weight:400">（発注先が免税事業者のため消費税なし）</small>`}</p>
     <p class="note">支払条件：${esc(payTerm(v))}<br>アンドワークス株式会社</p>
     <div class="askbtn" style="margin-top:14px;flex-wrap:wrap;gap:6px">
       ${o.token?`<button class="btn small primary" id="oMail" title="${v.email?esc(v.email)+' 宛てのメールを、文面とリンクが入った状態で開く':'発注先マスタにメールが入っていない。宛先は開いたメールで入れる'}">メールで送る${v.email?'':'（宛先なし）'}</button>
@@ -1623,7 +1630,7 @@ function vLedger(){
     (fMonth==='すべて'||ym(c.bill)===fMonth||(fMonth==='未設定'&&!c.bill))&&
     (fStatus==='すべて'||c.st===fStatus)&&
     (!fQ||(c.prop+c.client+c.id).toLowerCase().includes(fQ.toLowerCase())));
-  const sales=list.reduce((a,c)=>a+salesEx(c),0), cost=list.reduce((a,c)=>a+costOf(c.id),0);
+  const sales=list.reduce((a,c)=>a+salesEx(c),0), cost=list.reduce((a,c)=>a+costOf(c.id),0), costI=list.reduce((a,c)=>a+costIncOf(c.id),0);
   const clients=['すべて',...CLIENTS().filter(c=>DB.cases.some(x=>x.client===c)),
     ...[...new Set(DB.cases.map(c=>c.client).filter(c=>c&&!isClient(c)))]];
   return `<div class="bar">
@@ -1643,8 +1650,8 @@ function vLedger(){
     <div class="kpi">
       <div class="k"><small>件数</small><b>${list.length}</b></div>
       <div class="k"><small>売上（税抜）</small><b>${dual(sales)}</b></div>
-      <div class="k"><small>原価（税抜）</small><b>${dual(cost)}</b></div>
-      <div class="k"><small>粗利（税抜）</small><b>${dual(sales-cost)}</b></div>
+      <div class="k"><small>原価（税抜）</small><b>${dual(cost,costI)}</b></div>
+      <div class="k"><small>粗利（税抜）</small><b>${dual(sales-cost,inc(sales)-costI)}</b></div>
       <div class="k"><small>粗利率</small><b>${sales?((sales-cost)/sales*100).toFixed(1):'0.0'}%</b></div>
     </div>
     <div class="layout"><div class="main"><div class="tw"><table>
@@ -1730,8 +1737,8 @@ function drawer(){
     </div>
     <div class="pl">
       <div class="tot"><span>売上（税抜）</span><b>${dual(s)}</b></div>
-      <div class="tot"><span>原価（税抜）</span><b>${dual(cost)}</b></div>
-      <div class="tot"><span>粗利（税抜）</span><b>${yen(s-cost)}　${s?((s-cost)/s*100).toFixed(1)+'%':''}<small class="tx">税込 ${yen(inc(s-cost))}</small></b></div>
+      <div class="tot"><span>原価（税抜）</span><b>${dual(cost,costIncOf(c.id))}</b></div>
+      <div class="tot"><span>粗利（税抜）</span><b>${yen(s-cost)}　${s?((s-cost)/s*100).toFixed(1)+'%':''}<small class="tx">税込 ${yen(inc(s)-costIncOf(c.id))}</small></b></div>
     </div>
     <div class="pl" style="display:flex;gap:7px">
       <button class="btn small danger" id="delCase">この案件を削除</button>
@@ -1845,8 +1852,8 @@ function procPanel(c){
         ${(c.ord||'未')==='未'?'<span class="flag">発注 未</span>':'<span class="st done">発注済</span>'}
         <span class="grow"></span>
         <span class="okpi" title="税込 ${yen(inc(sales))}"><small>売上 税抜</small><b>${yen(sales)}</b></span>
-        <span class="okpi" title="${cost?'税込 '+yen(inc(cost)):''}"><small>原価 税抜</small><b>${cost?yen(cost):'<span style="color:var(--warn)">未入力</span>'}</b></span>
-        <span class="okpi" title="税込 ${yen(inc(sales-cost))}"><small>粗利 税抜</small><b>${yen(sales-cost)}</b><small>${sales?((sales-cost)/sales*100).toFixed(0)+'%':''}</small></span>
+        <span class="okpi" title="${cost?'税込 '+yen(costIncOf(c.id)):''}"><small>原価 税抜</small><b>${cost?yen(cost):'<span style="color:var(--warn)">未入力</span>'}</b></span>
+        <span class="okpi" title="税込 ${yen(inc(sales)-costIncOf(c.id))}"><small>粗利 税抜</small><b>${yen(sales-cost)}</b><small>${sales?((sales-cost)/sales*100).toFixed(0)+'%':''}</small></span>
         ${c.done?`<span class="okpi"><small>完工</small><b>${md(c.done)}</b></span>`:''}
         <button class="btn small" data-open="${c.id}">案件台帳で開く</button></div>
       ${c.memo||c.items?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${
@@ -2421,7 +2428,7 @@ function vMaster0(){
     const list=DB.vendors.filter(v=>!q||(v.name+v.full+(v.inv||'')).toLowerCase().includes(q));
     return `${mBar(oldN)}
       <div class="tw"><table><thead><tr>
-        <th>入力名</th><th>正式名称</th><th title="発注書の「メールで送る」の宛先">メール（発注書の送り先）</th><th>区分</th><th>既定の工程区分</th>
+        <th>入力名</th><th>正式名称</th><th title="発注書の「メールで送る」の宛先">メール（発注書の送り先）</th><th title="免税事業者（インボイス未登録）への発注は、消費税を足さない税抜金額になる">課税</th><th>区分</th><th>既定の工程区分</th>
         <th>登録番号（インボイス）</th><th class="r">締日</th><th class="r">サイト</th>
         <th class="r">使用</th><th class="r">旧区分</th><th>スマホ用</th><th></th></tr></thead>
       <tbody>${list.map(v=>{const used=usedBy(v.name), old=oldKindOf(v.name);
@@ -2430,6 +2437,7 @@ function vMaster0(){
           ${v.src&&v.src!=='マスタ'?`<span class="flag" style="display:block;margin-top:2px">${esc(v.src)}</span>`:''}</td>
         <td><input type="text" class="mv" data-f="full" value="${esc(v.full||'')}" style="width:200px;height:28px;font-size:12.5px"></td>
         <td><input type="email" class="mv" data-f="email" value="${esc(v.email||'')}" placeholder="未登録" style="width:190px;height:28px;font-size:12px"></td>
+        <td><select class="mv" data-f="taxable" style="height:28px;font-size:12.5px;${v.taxable===false?'border-color:var(--warn)':''}"><option value="1"${v.taxable!==false?' selected':''}>課税事業者</option><option value="0"${v.taxable===false?' selected':''}>免税（消費税なし）</option></select></td>
         <td><select class="mv" data-f="type" style="height:28px;font-size:12.5px">${opts(VTYPES,v.type||'外注')}</select></td>
         <td><select class="mv" data-f="defKind" style="height:28px;font-size:12.5px">${opts(PKINDS,v.defKind||'内装')}</select></td>
         <td><input type="text" class="mv" data-f="inv" value="${esc(v.inv||'')}" placeholder="未取得"
@@ -2555,9 +2563,9 @@ function vPay(){
         return `<tr><td>${esc(nm)}${isVendor(nm)?'':'<span class="flag" style="margin-left:5px">マスタ外</span>'}</td>
         <td style="font-size:11px;color:var(--sub)">${inv[nm]?esc(inv[nm]):'<span class="flag">なし</span>'}</td>
         ${MS.map(m=>`<td class="r">${rows[nm][m]?yen(rows[nm][m]):'—'}</td>`).join('')}
-        <td class="r"><b>${yen(sum)}</b></td><td class="r">${yen(inc(sum))}</td></tr>`;}).join('')}
+        <td class="r"><b>${yen(sum)}</b></td><td class="r">${vendorTaxable(nm)?yen(inc(sum)):`${yen(sum)}<small class="tx">免税</small>`}</td></tr>`;}).join('')}
       <tr><td colspan="2"><b>合計</b></td>${MS.map(m=>`<td class="r"><b>${yen(tot[m]||0)}</b></td>`).join('')}
-        <td class="r"><b>${yen(Object.values(tot).reduce((a,b)=>a+b,0))}</b></td><td class="r"><b>${yen(inc(Object.values(tot).reduce((a,b)=>a+b,0)))}</b></td></tr>
+        <td class="r"><b>${yen(Object.values(tot).reduce((a,b)=>a+b,0))}</b></td><td class="r"><b>${yen(names.reduce((a,nm)=>{const sm=MS.reduce((x,m)=>x+(rows[nm][m]||0),0); return a+taxed(sm,vendorTaxable(nm));},0))}</b></td></tr>
       </tbody></table></div>
     <p class="note">登録番号が空の発注先は、インボイスの仕入税額控除が取れない可能性がある。発注先マスタに登録番号が入っていない職人が多い。
       いまの台帳の支払一覧は、工程ごとに手で打つ「月」列でしか集計していないので、その月が空だと支払から丸ごと落ちる。ここでは月が空なら予定日の月で拾うようにしてある。</p>`;
@@ -3239,7 +3247,7 @@ document.addEventListener('change',e=>{
   if(el.classList.contains('mv')){
     const tr=el.closest('[data-v]'); const v=vendorOf(tr.dataset.v); if(!v)return;
     const f=el.dataset.f, old=v.name; snap('vendor:'+old+':'+f);
-    if(f==='close'||f==='site')v[f]=+el.value||30; else if(f==='email')v[f]=el.value.trim(); else v[f]=el.value;
+    if(f==='close'||f==='site')v[f]=+el.value||30; else if(f==='email')v[f]=el.value.trim(); else if(f==='taxable')v[f]=el.value!=='0'; else v[f]=el.value;
     if(f==='name'&&el.value&&el.value!==old){
       if(DB.vendors.some(x=>x!==v&&x.name===el.value)){ v.name=old; toast(`「${el.value}」は既にある`); renderSoon(); return; }
       renameVendor(old,el.value);}

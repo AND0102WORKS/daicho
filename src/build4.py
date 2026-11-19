@@ -136,7 +136,7 @@ function orderMessage(o,c,v){
   const body=[`${v.full||o.who||''} 様`,'','いつもお世話になっております。アンドワークスです。',
     '下記の工事を発注いたします。リンク先で内容をご確認のうえ、「承諾」を押してください。','',
     `発注No：${o.no}`,`現場：${c.prop||''}`,`工期：${o.start?spanLabel({date:o.start,end:o.end}):'未定'}`,
-    `金額：${yen(Math.round(amt*1.1))}（税込）`, ...(o.due?[`回答期限：${o.due}`]:[]),'',
+    orderTaxable(o)?`金額：${yen(inc(amt))}（税込）`:`金額：${yen(amt)}（消費税なし）`, ...(o.due?[`回答期限：${o.due}`]:[]),'',
     `発注書：${orderLink(o)}`,'','アンドワークス株式会社'].join('\\n');
   return {subject,body};
 }
