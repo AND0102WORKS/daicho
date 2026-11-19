@@ -1467,6 +1467,11 @@ function recalcPlan(c){
   if(!c||c.done||c.planManual)return;   /* 手で入れた完了予定は工程で上書きしない */
   const d=lastDayOf(procsOf(c.id)); if(d)c.plan=d;
 }
+/* 発注に載っている明細の合計（税込）を、その発注の工程の発注金額に入れ直す。原価＝工程の発注金額の合計なので、明細を直すと原価も変わる */
+function syncOrderAmt(oid){
+  const amt=Math.round(DB.lines.filter(l=>l.order===oid).reduce((a,l)=>a+lineAmt(l),0)*1.1);
+  DB.procs.filter(p=>p.order===oid).forEach(p=>{ p.amt=amt; });
+}
 /* 発注の送付で '済' にした案件は、送付済以上の発注が1つも無くなったら '未' に戻す。手で '済' にしたものは触らない */
 function recalcOrd(c){
   if(!c||c.ordBy!=='order')return;
@@ -1511,6 +1516,17 @@ function payTerm(v){
   const c=(+v.close>=28)?'末日':v.close+'日', s=(+v.site>=28||!v.site)?'末日':v.site+'日';
   return `毎月${c}締め・翌月${s}払い`;
 }
+/* 業者に送る文面（メール・LINE 共通） */
+function orderMessage(o,c,v){
+  const amt=orderLines(o.id).reduce((a,l)=>a+lineAmt(l),0);
+  const subject=`【発注書】${o.no} ${c.prop||''}`;
+  const body=[`${v.full||o.who||''} 様`,'','いつもお世話になっております。アンドワークスです。',
+    '下記の工事を発注いたします。リンク先で内容をご確認のうえ、「承諾」を押してください。','',
+    `発注No：${o.no}`,`現場：${c.prop||''}`,`工期：${o.start?spanLabel({date:o.start,end:o.end}):'未定'}`,
+    `金額：${yen(Math.round(amt*1.1))}（税込）`, ...(o.due?[`回答期限：${o.due}`]:[]),'',
+    `発注書：${orderLink(o)}`,'','アンドワークス株式会社'].join('\n');
+  return {subject,body};
+}
 function orderSheet(oid){
   const o=DB.orders.find(x=>x.id===oid); if(!o)return;
   const c=DB.cases.find(x=>x.id===o.case)||{};
@@ -1537,13 +1553,21 @@ function orderSheet(oid){
     <p class="amt">小計 ${yen(amt)}　消費税 ${yen(Math.round(amt*0.1))}　合計 ${yen(Math.round(amt*1.1))}</p>
     <p class="note">支払条件：${esc(payTerm(v))}<br>アンドワークス株式会社</p>
     <div class="askbtn" style="margin-top:14px;flex-wrap:wrap;gap:6px">
-      ${o.token?`<button class="btn small primary" id="oLink">業者に送るリンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
-      ${o.st==='下書き'?`<button class="btn small" id="oSent">送付済にする</button>`:''}
+      ${o.token?`<button class="btn small primary" id="oMail" title="${v.email?esc(v.email)+' 宛てのメールを、文面とリンクが入った状態で開く':'発注先マスタにメールが入っていない。宛先は開いたメールで入れる'}">メールで送る${v.email?'':'（宛先なし）'}</button>
+        <button class="btn small primary" id="oLine" title="LINE を、文面とリンクが入った状態で開く。送り先の業者を選んで送る">LINEで送る</button>
+        <button class="btn small" id="oLink">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
+      ${o.st==='下書き'?`<button class="btn small" id="oSent" title="業者に送ったら押す。状態が「送付済」になり、案件が「発注 済」になる">送付済にする</button>`:''}
       <span class="grow"></span><button class="btn small" id="askNo">閉じる</button></div>
-    <p class="note" style="margin:6px 0 0">リンクを LINE やメールで業者に送ると、業者はログイン無しで発注書を見て「承諾」を押せる。承諾すると状態が「承諾」になり日時が残る。</p></div>`;
+    <p class="note" style="margin:6px 0 0">「メールで送る」「LINEで送る」を押すと、文面と発注書のリンクが入った状態で開くので、送信を押す。送ったら「送付済にする」。業者はログイン無しで発注書を見て「承諾」を押せる。承諾すると状態が「承諾」になり日時が残る。</p></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
   const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderLink(o),'業者用のリンクをコピーした');
+  const after=()=>{ if(o.st==='下書き')toast('送ったら「送付済にする」を押す', ()=>{ el.remove(); nextOrderSt(o.id); }, '送付済にする'); };
+  const om=el.querySelector('#oMail'); if(om)om.onclick=()=>{ const m=orderMessage(o,c,v);
+    const a=document.createElement('a'); a.href='mailto:'+encodeURIComponent(v.email||'')+'?subject='+encodeURIComponent(m.subject)+'&body='+encodeURIComponent(m.body);
+    document.body.appendChild(a); a.click(); a.remove(); after(); };
+  const ol=el.querySelector('#oLine'); if(ol)ol.onclick=()=>{ const m=orderMessage(o,c,v);
+    window.open('https://line.me/R/share?text='+encodeURIComponent(m.body),'_blank','noopener'); after(); };
   const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ el.remove(); nextOrderSt(o.id); };   /* 案件の発注表の「送る」と同じ処理（案件の 発注＝済・状態も進める） */
 }
 
@@ -2380,7 +2404,7 @@ function vMaster0(){
     const list=DB.vendors.filter(v=>!q||(v.name+v.full+(v.inv||'')).toLowerCase().includes(q));
     return `${mBar(oldN)}
       <div class="tw"><table><thead><tr>
-        <th>入力名</th><th>正式名称</th><th>区分</th><th>既定の工程区分</th>
+        <th>入力名</th><th>正式名称</th><th title="発注書の「メールで送る」の宛先">メール（発注書の送り先）</th><th>区分</th><th>既定の工程区分</th>
         <th>登録番号（インボイス）</th><th class="r">締日</th><th class="r">サイト</th>
         <th class="r">使用</th><th class="r">旧区分</th><th>スマホ用</th><th></th></tr></thead>
       <tbody>${list.map(v=>{const used=usedBy(v.name), old=oldKindOf(v.name);
@@ -2388,6 +2412,7 @@ function vMaster0(){
         <td><input type="text" class="mv" data-f="name" value="${esc(v.name)}" style="width:148px;height:28px;font-size:12.5px">
           ${v.src&&v.src!=='マスタ'?`<span class="flag" style="display:block;margin-top:2px">${esc(v.src)}</span>`:''}</td>
         <td><input type="text" class="mv" data-f="full" value="${esc(v.full||'')}" style="width:200px;height:28px;font-size:12.5px"></td>
+        <td><input type="email" class="mv" data-f="email" value="${esc(v.email||'')}" placeholder="未登録" style="width:190px;height:28px;font-size:12px"></td>
         <td><select class="mv" data-f="type" style="height:28px;font-size:12.5px">${opts(VTYPES,v.type||'外注')}</select></td>
         <td><select class="mv" data-f="defKind" style="height:28px;font-size:12.5px">${opts(PKINDS,v.defKind||'内装')}</select></td>
         <td><input type="text" class="mv" data-f="inv" value="${esc(v.inv||'')}" placeholder="未取得"
@@ -3183,6 +3208,7 @@ document.addEventListener('change',e=>{
     const nv=(f==='qty'||f==='price'||f==='sell')?(+el.value||0):el.value;
     if(String(was)===String(nv))return;
     snap('line:'+l.id+':'+f); l[f]=nv;
+    if(l.order&&(f==='qty'||f==='price'))syncOrderAmt(l.order);   /* 発注済の行を直したら、工程の発注金額（＝原価）も合わせる */
     if(f==='who'&&nv&&!l.kind){const vd=vendorOf(nv); if(vd&&vd.defKind)l.kind=vd.defKind;}   /* 業者を決めたら既定の区分が入る */
     save();renderSoon();
     setTimeout(()=>{const tr2=document.querySelector('tr[data-l="'+l.id+'"]');
@@ -3194,7 +3220,7 @@ document.addEventListener('change',e=>{
   if(el.classList.contains('mv')){
     const tr=el.closest('[data-v]'); const v=vendorOf(tr.dataset.v); if(!v)return;
     const f=el.dataset.f, old=v.name; snap('vendor:'+old+':'+f);
-    if(f==='close'||f==='site')v[f]=+el.value||30; else v[f]=el.value;
+    if(f==='close'||f==='site')v[f]=+el.value||30; else if(f==='email')v[f]=el.value.trim(); else v[f]=el.value;
     if(f==='name'&&el.value&&el.value!==old){
       if(DB.vendors.some(x=>x!==v&&x.name===el.value)){ v.name=old; toast(`「${el.value}」は既にある`); renderSoon(); return; }
       renameVendor(old,el.value);}

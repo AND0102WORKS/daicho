@@ -127,17 +127,39 @@ src2=src2.replace("function vMaster(){","function vMaster0(){")
 i=src2.index("render();\ninitAuth();")
 src2=src2[:i]+EXTRA+"\n"+src2[i:]
 # v4 固有の画面追加：発注書に業者用リンク、発注先マスタに職人用リンク
+n_os=src2.count('''    <div class="askbtn" style="margin-top:14px"><button class="btn small" id="askNo">閉じる</button></div></div>`;''')
+assert n_os==1, '発注書の差し替え先が見つからない（app3 の orderSheet が変わった？）'
+src2=src2.replace("function orderSheet(oid){",'''/* 業者に送る文面（メール・LINE 共通） */
+function orderMessage(o,c,v){
+  const amt=orderLines(o.id).reduce((a,l)=>a+lineAmt(l),0);
+  const subject=`【発注書】${o.no} ${c.prop||''}`;
+  const body=[`${v.full||o.who||''} 様`,'','いつもお世話になっております。アンドワークスです。',
+    '下記の工事を発注いたします。リンク先で内容をご確認のうえ、「承諾」を押してください。','',
+    `発注No：${o.no}`,`現場：${c.prop||''}`,`工期：${o.start?spanLabel({date:o.start,end:o.end}):'未定'}`,
+    `金額：${yen(Math.round(amt*1.1))}（税込）`, ...(o.due?[`回答期限：${o.due}`]:[]),'',
+    `発注書：${orderLink(o)}`,'','アンドワークス株式会社'].join('\\n');
+  return {subject,body};
+}
+function orderSheet(oid){''',1)
 src2=src2.replace('''    <div class="askbtn" style="margin-top:14px"><button class="btn small" id="askNo">閉じる</button></div></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
 }''','''    <div class="askbtn" style="margin-top:14px;flex-wrap:wrap;gap:6px">
-      ${o.token?`<button class="btn small primary" id="oLink">業者に送るリンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
-      ${o.st==='下書き'?`<button class="btn small" id="oSent">送付済にする</button>`:''}
+      ${o.token?`<button class="btn small primary" id="oMail" title="${v.email?esc(v.email)+' 宛てのメールを、文面とリンクが入った状態で開く':'発注先マスタにメールが入っていない。宛先は開いたメールで入れる'}">メールで送る${v.email?'':'（宛先なし）'}</button>
+        <button class="btn small primary" id="oLine" title="LINE を、文面とリンクが入った状態で開く。送り先の業者を選んで送る">LINEで送る</button>
+        <button class="btn small" id="oLink">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
+      ${o.st==='下書き'?`<button class="btn small" id="oSent" title="業者に送ったら押す。状態が「送付済」になり、案件が「発注 済」になる">送付済にする</button>`:''}
       <span class="grow"></span><button class="btn small" id="askNo">閉じる</button></div>
-    <p class="note" style="margin:6px 0 0">リンクを LINE やメールで業者に送ると、業者はログイン無しで発注書を見て「承諾」を押せる。承諾すると状態が「承諾」になり日時が残る。</p></div>`;
+    <p class="note" style="margin:6px 0 0">「メールで送る」「LINEで送る」を押すと、文面と発注書のリンクが入った状態で開くので、送信を押す。送ったら「送付済にする」。業者はログイン無しで発注書を見て「承諾」を押せる。承諾すると状態が「承諾」になり日時が残る。</p></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
   const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderLink(o),'業者用のリンクをコピーした');
+  const after=()=>{ if(o.st==='下書き')toast('送ったら「送付済にする」を押す', ()=>{ el.remove(); nextOrderSt(o.id); }, '送付済にする'); };
+  const om=el.querySelector('#oMail'); if(om)om.onclick=()=>{ const m=orderMessage(o,c,v);
+    const a=document.createElement('a'); a.href='mailto:'+encodeURIComponent(v.email||'')+'?subject='+encodeURIComponent(m.subject)+'&body='+encodeURIComponent(m.body);
+    document.body.appendChild(a); a.click(); a.remove(); after(); };
+  const ol=el.querySelector('#oLine'); if(ol)ol.onclick=()=>{ const m=orderMessage(o,c,v);
+    window.open('https://line.me/R/share?text='+encodeURIComponent(m.body),'_blank','noopener'); after(); };
   const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ el.remove(); nextOrderSt(o.id); };   /* 案件の発注表の「送る」と同じ処理（案件の 発注＝済・状態も進める） */
 }''')
 src2=src2.replace('''        <th class="r">使用</th><th class="r">旧区分</th><th></th></tr></thead>''','''        <th class="r">使用</th><th class="r">旧区分</th><th>スマホ用</th><th></th></tr></thead>''')
