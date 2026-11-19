@@ -1,4 +1,4 @@
-# Aチーム統合台帳 v4（Supabase 版）
+# ワークス台帳 v4（Supabase 版）　※旧称：Aチーム統合台帳
 
 - `site/index.html` … 台帳本体（スタッフ用。メールのリンクでログイン）
 - `site/me.html` … 職人用（自分の工程。`?t=<vendors.token>`）
