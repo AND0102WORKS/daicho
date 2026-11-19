@@ -268,6 +268,9 @@ table.bd th.fd-r,table.bd td.fd-r{box-shadow:inset 3px 0 0 #C8372D;background:#F
 table.bd th.fd-b,table.bd td.fd-b{box-shadow:inset 3px 0 0 #2F6DB5;background:#E8F0FA}
 table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#FBF3D6}
 .flagline{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;font-size:12.5px}
+.pbar{margin:10px 0 6px}
+.pbar .flagline{margin:0 0 0 10px}
+.ohead .kneed{margin:8px 0 0}
 .flagline .fi{display:inline-flex;gap:6px;align-items:center}
 .fdot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:2px;vertical-align:middle}
 .btn .cnt{display:inline-block;min-width:16px;padding:0 5px;margin-left:5px;border-radius:9px;background:rgba(255,255,255,.28);font-size:10.5px;line-height:16px;text-align:center}
@@ -1744,10 +1747,9 @@ function vProc(){
       <select id="pFilter" title="案件の絞り込み">${optsL(['発注前（未）','発注済・進行中','完工済','すべて'],pFilter,
         {'すべて':'案件：すべて'})}</select>
       <select id="pSort" title="並び替え">${optsL(SORTS,pSort,{})}</select>
-      <input type="search" id="pQ" placeholder="物件名で探す" value="${esc(pQ)}" style="min-width:170px">
+      <input type="search" id="pQ" placeholder="物件名で探す" value="${esc(pQ)}" style="width:150px">
       ${nav}
-      <span class="note" style="margin:0">発注前（未） <b style="color:var(--warn)">${mi}件</b>／うち工程が1つも無い ${noP}件
-        <br>2026発注手配・完工予定（9月タブ）の発注列が「未」の行を取り込んである</span></div>
+      <span class="note" style="margin:0" title="2026発注手配・完工予定（9月タブ）の発注列が「未」の行を取り込んである">発注前（未） <b style="color:var(--warn)">${mi}件</b>／工程なし ${noP}件</span></div>
     <div class="layout">${pHide?'':left}<div class="main">${c?procPanel(c):'<div class="card">'+(pHide?'該当する案件がない。絞り込みか検索を変える。':'左で案件を選ぶ。')+'</div>'}</div></div>`;
 }
 /* 工程表に立てる旗：起算日＝赤、依頼元の完了希望日＝青、弊社の完了予定日＝黄 */
@@ -1760,7 +1762,7 @@ function flagLine(c,m){
     return `<span class="fi"><span class="ftag ${f[2]}${v?'':' off'}">${f[1]}</span>${
       v?`<b>${md(v)}</b>${ym(v)!==m?`<button class="btn small" data-pjump="${v.slice(0,7)}" title="その月の工程表へ">${+v.slice(5,7)}月へ</button>`:''}`
        :'<span class="note" style="margin:0">—</span>'}</span>`;}).join('')}
-    <span class="note" style="margin:0 0 0 auto">発注が届くと自動で立つ。日付は案件台帳で直せる</span></div>`;
+</div>`;
 }
 function procPanel(c){
   const ps=procsOf(c.id).slice().sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
@@ -1801,51 +1803,50 @@ function procPanel(c){
         warn.push(`${p.who} は ${spanLabel(p)} に別の現場がある`);
     }
   });
-  return `<div class="card" style="margin-bottom:10px">
-      <div class="bar" style="margin:0 0 8px">
+  return `<div class="card ohead">
+      <div class="bar" style="margin:0;gap:8px">
         <h3 style="font-size:16px;margin:0">${esc(c.prop||'（物件未入力）')}</h3>
         <span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span>
         <span class="st ${stCls(c.st)}">${esc(c.st)}</span>
         ${(c.ord||'未')==='未'?'<span class="flag">発注 未</span>':'<span class="st done">発注済</span>'}
+        <span class="grow"></span>
+        <span class="okpi"><small>売上 税込</small><b>${yen(sales)}</b></span>
+        <span class="okpi"><small>原価</small><b>${cost?yen(cost):'<span style="color:var(--warn)">未入力</span>'}</b></span>
+        <span class="okpi"><small>粗利</small><b>${yen(sales-cost)}</b><small>${sales?((sales-cost)/sales*100).toFixed(0)+'%':''}</small></span>
+        ${c.done?`<span class="okpi"><small>完工</small><b>${md(c.done)}</b></span>`:''}
         ${(()=>{const un=ps.filter(p=>!p.order&&!isInsp(p.kind)), ready=un.filter(p=>p.who&&p.date);
-          return `<button class="btn small ${ready.length?'primary':''}" data-ocopen="${c.id}" style="margin-left:auto"
+          return `<button class="btn small ${ready.length?'primary':''}" data-ocopen="${c.id}"
             title="${ready.length?'業者と日程が決まった工程が'+ready.length+'件ある。発注の画面でその業者・期間が最初から入る':'工程に業者と日程を入れると、発注にそのまま引き継がれる'}">発注へ →${
             ready.length?`<span class="cnt">${ready.length}</span>`:''}</button>`;})()}
         <button class="btn small" data-open="${c.id}">案件台帳で開く</button></div>
-      ${c.memo?`<p class="note" style="margin:0 0 6px"><b>発注内容：</b>${esc(c.memo)}</p>`:''}
-      ${c.items?`<p class="note" style="margin:0 0 6px"><b>削除／追加項目：</b>${esc(c.items)}</p>`:''}
+      ${c.memo||c.items?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${
+        c.memo?`<b>発注内容：</b>${esc(c.memo)}`:''}${c.memo&&c.items?'　':''}${c.items?`<b>削除／追加項目：</b>${esc(c.items)}`:''}</p>`:''}
       ${(()=>{let nk=needKinds(c); const guess=nk.length;
         if(!nk.length)nk=KORDER;
         const have=new Set(ps.map(x=>x.kind));
         const miss=nk.filter(k=>!have.has(k));
+        if(!miss.length)return '';   /* 必要そうな工程が全部入っていれば、この行は出さない */
         return `<div class="kneed"><span class="note" style="margin:0">${guess?'必要そうな工程':'発注内容から読み取れない。工程を選ぶ'}</span>
           ${nk.map(k=>have.has(k)
             ? `<span class="kk on" style="background:${kcol(k)}">${esc(k)}　入力済</span>`
             : `<button class="kk" data-addkind="${c.id}|${esc(k)}" style="background:${kcol(k)}">＋ ${esc(k)}</button>`).join('')}
           ${miss.length>1?`<button class="btn small primary" data-addkinds="${c.id}">足りない${miss.length}件をまとめて作る</button>`:''}</div>`;})()}
-      <div class="kpi" style="margin-bottom:0">
-        <div class="k"><small>売上（税込）</small><b>${yen(sales)}</b></div>
-        <div class="k"><small>原価</small><b>${cost?yen(cost):'<span style="color:var(--warn)">未入力</span>'}</b></div>
-        <div class="k"><small>粗利</small><b>${yen(sales-cost)}${sales?`　${((sales-cost)/sales*100).toFixed(0)}%`:''}</b></div>
-        <div class="k"><small>完工予定日</small><b style="font-size:15px">${md(c.plan)||'—'}</b></div>
-        <div class="k"><small>完工日</small><b style="font-size:15px">${c.done?md(c.done):'未'}</b></div>
-      </div></div>
-    <div class="bar" style="margin-top:0">
-      <button class="btn small" id="pPrev">◀ 前の月</button>
+    </div>
+    <div class="bar pbar">
+      <button class="btn small" id="pPrev" title="前の月">◀</button>
       <b style="font-size:14px">${y}年${mo}月</b>
-      <button class="btn small" id="pNext">次の月 ▶</button>
-      <span class="note" style="margin:0">開始日を押す→終了日を押すで期間が入る（同じ日を2回で1日）。バーのドラッグは期間ごと移動</span></div>
-    ${flagLine(c,m)}
-    ${ps.length?`<div class="legend"><span><i style="background:var(--card);border:1px solid var(--line)"></i>空き</span>
+      <button class="btn small" id="pNext" title="次の月">▶</button>
+      ${flagLine(c,m)}
+      <span class="help" title="表で開始日を押す→終了日を押すと期間が入る（同じ日を2回で1日だけ）。バーのドラッグは期間ごと移動。旗（起算日・完了希望・完了予定）は発注が届くと自動で立ち、日付は案件台帳で直せる">？</span>
+    ${ps.length?`<div class="legend" style="margin:0 0 0 auto"><span><i style="background:var(--card);border:1px solid var(--line)"></i>空き</span>
       <span><i style="background:#FBEFE6"></i>その職人に別の現場がある</span>
       <span><i style="background:repeating-linear-gradient(135deg,#F1EFEA,#F1EFEA 3px,#E8E5DE 3px,#E8E5DE 6px)"></i>休み</span>
-      ${[...new Set(ps.map(p=>p.kind))].map(k=>`<span><i style="background:${kcol(k)}"></i>${esc(k)}</span>`).join('')}</div>`:''}
-    <div class="boardwrap" style="max-height:none;margin-bottom:10px">
-      <table class="bd" style="width:${112+86*D}px"><thead>${head}</thead><tbody>${body||
+      ${[...new Set(ps.map(p=>p.kind))].map(k=>`<span><i style="background:${kcol(k)}"></i>${esc(k)}</span>`).join('')}</div>`:''}</div>
+    <div class="boardwrap pcw" style="max-height:none;margin-bottom:10px">
+      <table class="bd" data-days="${D}" style="width:${112+86*D}px"><thead>${head}</thead><tbody>${body||
         `<tr><th class="nm"><small>工程なし</small></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">工程がまだ1つも無い。下の「＋ 工程を足す」から、工事・清掃・鍵交換・検査を足していく。旗の日を目安に組む。</td></tr>`}</tbody></table></div>
     <div class="card">
-      <label class="fl">工程（誰に・いつからいつまで）</label>
-      <p class="note" style="margin:0 0 6px">日付は期間で入れる。1日だけなら終了日は空欄。上の表では「開始日をクリック→終了日をクリック」でも引ける（同じ日を2回押すとその日だけ）。金額は案件台帳で入れる。</p>
+      <label class="fl" title="日付は期間で入れる。1日だけなら終了日は空欄。上の表では「開始日をクリック→終了日をクリック」でも引ける（同じ日を2回押すとその日だけ）。金額は案件台帳で入れる">工程（誰に・いつからいつまで）<span class="help" style="margin-left:6px;width:18px;height:18px;font-size:11px">？</span></label>
       ${ps.map(p=>`<div class="prow np" data-p="${p.id}">
         <select data-pf="kind">${kindOpts(p.kind)}</select>
         <select data-pf="who">${vendorSel(p.who)}</select>
@@ -2669,7 +2670,13 @@ function fitLnw(){
   if(h<320)h=window.innerHeight-nav-24;   /* 上が詰められないほど低い画面では、従来どおり画面のほぼ全部 */
   t.style.maxHeight=Math.max(240,Math.round(h))+'px';
 }
-window.addEventListener('resize',()=>{ if(tab==='order')fitLnw(); });
+/* 工程を組む：日の幅を、表の枠に1か月が収まる幅にする（52〜86px。狭い画面では横にスクロール） */
+function fitProc(){
+  const w=document.querySelector('#main .boardwrap.pcw'), t=w&&w.querySelector('table.bd'); if(!t)return;
+  const D=+t.dataset.days||31, col=Math.max(52,Math.min(86,Math.floor((w.clientWidth-114)/D)));
+  t.style.setProperty('--col',col+'px'); t.style.width=(112+col*D)+'px';
+}
+window.addEventListener('resize',()=>{ if(tab==='order')fitLnw(); if(tab==='proc')fitProc(); });
 function render(){
   if(!SESSION||!ME){ paintLogin(); return; }
   tipHide();
@@ -2677,6 +2684,7 @@ function render(){
   renderTabs();
   paint();
   if(tab==='order')fitLnw();
+  if(tab==='proc')fitProc();
   const hitBoard=restoreView(mem);
   if(tab==='proc'){
     /* 工程表は、案件か月が変わったときだけ最初のチップに寄せる（同じ表を触っている間は位置を保つ） */
