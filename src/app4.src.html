@@ -143,6 +143,7 @@ td.pc.ng{outline:2px dashed var(--warn);outline-offset:-2px;background:var(--war
 .fg .full{grid-column:1/-1}
 .fg input,.fg select{width:100%}
 .pl{margin-top:12px;border-top:1px solid var(--line2);padding-top:10px}
+small.tx{display:block;font-size:10.5px;font-weight:400;color:var(--sub);font-variant-numeric:tabular-nums}
 /* 工程の行：1段目＝区分・発注先・×、2段目＝開始〜終了・金額（右パネルの幅に収める。欄が無い行はその場所が空くだけ） */
 .prow{display:grid;grid-template-columns:minmax(0,1fr) 14px minmax(0,1fr) 62px 22px;grid-template-areas:"k w w w x" "d t e a a";gap:5px;align-items:center;margin-bottom:10px}
 .prow [data-pf="kind"]{grid-area:k}.prow [data-pf="who"]{grid-area:w}.prow [data-pf="date"]{grid-area:d}.prow .tl{grid-area:t}
@@ -624,9 +625,15 @@ function setDone(c,d){
   else if(c.st==='完工')c.st='発注書送付';
 }
 const procsOf=id=>DB.procs.filter(p=>p.case===id);
+/* 金額は入力も計算も税抜（2026-11 から）。税込は表示と請求額だけ。
+   costOf＝工程の発注金額（税抜）の合計、salesEx＝売上＋追加受注（税抜）、salesOf＝その税込（請求額） */
+const inc=v=>Math.round((+v||0)*1.1);
 const costOf=id=>procsOf(id).reduce((a,p)=>a+(+p.amt||0),0);
-const salesOf=c=>Math.round(((+c.sales||0)+(+c.add||0))*1.1);
-const grossOf=c=>salesOf(c)-costOf(c);
+const salesEx=c=>(+c.sales||0)+(+c.add||0);
+const salesOf=c=>inc(salesEx(c));
+const grossOf=c=>salesEx(c)-costOf(c.id);
+/* 税抜を大きく、税込を小さく */
+const dual=v=>`${yen(v)}<small class="tx">税込 ${yen(inc(v))}</small>`;
 const planOf=c=>c.done||c.plan||'';
 /* 案件の並び替え。起算日・完了希望日は空欄を後ろに回す */
 const SORTS=['起算日が近い順','完了希望日が近い順','完了予定が近い順','受注が古い順','新しい順'];
@@ -852,7 +859,7 @@ const mopts=(v,extra)=>(extra||[]).map(o=>`<option value="${esc(o)}"${o===v?' se
 function issues(){
   const out=[]; const B=byId(); const seen={};
   DB.cases.forEach(c=>{
-    const cost=costOf(c.id), sales=salesOf(c), ps=procsOf(c.id);
+    const cost=costOf(c.id), sales=salesEx(c), ps=procsOf(c.id);
     if(sales>0&&cost===0) out.push({k:'原価なし',c:c.id,t:`${c.prop}`,d:`売上 ${yen(sales)} に対して発注が1件も入っていない。粗利が過大に出る`});
     if(sales>0&&cost>sales) out.push({k:'赤字',c:c.id,t:`${c.prop}`,d:`売上 ${yen(sales)} ＜ 原価 ${yen(cost)}（${yen(cost-sales)} の持ち出し）`});
     if(sales>0&&!c.bill) out.push({k:'請求月なし',c:c.id,t:`${c.prop}`,d:`売上 ${yen(sales)} が請求一覧に出てこない`});
@@ -1217,7 +1224,7 @@ function groupHead(c,g){
   return `<tr class="ghead" data-g="${esc(k)}"><td></td><td class="n">${free.length?`<input type="checkbox" class="gchk" ${allSel?'checked':''} title="この区分の行を全部選ぶ">`:''}</td>
     <td colspan="12"><div class="bar" style="margin:0;gap:8px">
       ${k?`<span class="cl" style="background:${kcol(k)};font-size:12.5px">${esc(k)}</span>`:`<b style="color:var(--warn)">区分なし</b><span class="note" style="margin:0">行をチェックして下の「区分をつける」で分ける</span>`}
-      <span class="note" style="margin:0">${g.rows.length}行　税抜：販売 ${yen(gs)}　原価 ${gc?yen(gc):'—'}　粗利 ${gs?yen(gs-gc):'—'}${free.length&&done.length?`　未発注 ${free.length}行 ${yen(amt)}`:''}</span>
+      <span class="note" style="margin:0">${g.rows.length}行　販売 ${yen(gs)}　原価 ${gc?yen(gc):'—'}　粗利 ${gs?yen(gs-gc):'—'}${free.length&&done.length?`　未発注 ${free.length}行 ${yen(amt)}`:''}</span>
       ${ocol?`<span class="ocol">${ocol}</span>`:''}
       ${k&&free.length?`<span class="grow"></span>
         <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px">発注先
@@ -1232,10 +1239,10 @@ function orderPanel(c){
   const selAmt=free.filter(l=>oSel[l.id]).reduce((a,l)=>a+lineAmt(l),0);
   const cost=ls.reduce((a,l)=>a+lineAmt(l),0);
   const sellSum=ls.reduce((a,l)=>a+lineSell(l),0);
-  const sales=salesOf(c), ods=ordersOf(c.id), po=poRowsOf(c.id);
+  const sales=salesEx(c), ods=ordersOf(c.id), po=poRowsOf(c.id);
   const diff=sellSum&&c.sales&&sellSum!==(+c.sales);
-  /* 見出しの金額は案件台帳と同じ税込。原価＝工程の発注金額の合計（costOf）。下の明細表は単価なので税抜 */
-  const pcost=costOf(c.id), freeCost=Math.round(free.reduce((a,l)=>a+lineAmt(l),0)*1.1);
+  /* 見出しの金額は案件台帳と同じ税抜（税込は吹き出し）。原価＝工程の発注金額の合計（costOf） */
+  const pcost=costOf(c.id), freeCost=Math.round(free.reduce((a,l)=>a+lineAmt(l),0));
   const head=`<div class="card ohead">
     <div class="bar" style="margin:0;gap:8px">
       <h3 style="font-size:16px;margin:0">${esc(c.prop||'（物件未入力）')}</h3>
@@ -1244,12 +1251,12 @@ function orderPanel(c){
       <button class="btn small" data-open="${c.id}">台帳で開く</button>
       <button class="btn small" data-pcopen="${c.id}">工程を組む</button>
       <span class="grow"></span>
-      <span class="okpi" title="受注受付の売上（追加受注を含む）。案件台帳と同じ税込"><small>売上 税込</small><b>${yen(sales)}</b></span>
-      <span class="okpi" title="明細の販売の合計（税込）${diff?`。受注受付の売上税抜 ${yen(c.sales)} と、税抜で ${yen(Math.abs(sellSum-(+c.sales)))} 違う`:''}"><small>販売計 税込</small><b style="color:${diff?'var(--warn)':'inherit'}">${sellSum?yen(Math.round(sellSum*1.1)):'—'}</b>${
-        diff?`<small style="color:var(--warn)">（${yen(Math.round(Math.abs(sellSum-(+c.sales))*1.1))} 違う）</small>`:''}</span>
-      <span class="okpi" title="工程の発注金額の合計。案件台帳の原価と同じ税込${freeCost?`。まだ発注していない明細の原価が ${yen(freeCost)}（税込）ある`:''}"><small>原価 税込</small><b>${pcost?yen(pcost):'—'}</b>${
+      <span class="okpi" title="受注受付の売上（追加受注を含む）。税込 ${yen(inc(sales))}"><small>売上 税抜</small><b>${yen(sales)}</b></span>
+      <span class="okpi" title="明細の販売の合計。税込 ${yen(inc(sellSum))}${diff?`。受注受付の売上税抜 ${yen(c.sales)} と ${yen(Math.abs(sellSum-(+c.sales)))} 違う`:''}"><small>販売計 税抜</small><b style="color:${diff?'var(--warn)':'inherit'}">${sellSum?yen(sellSum):'—'}</b>${
+        diff?`<small style="color:var(--warn)">（${yen(Math.abs(sellSum-(+c.sales)))} 違う）</small>`:''}</span>
+      <span class="okpi" title="工程の発注金額の合計（案件台帳の原価と同じ）。税込 ${yen(inc(pcost))}${freeCost?`。まだ発注していない明細の原価が ${yen(freeCost)} ある`:''}"><small>原価 税抜</small><b>${pcost?yen(pcost):'—'}</b>${
         freeCost?`<small>＋未発注 ${yen(freeCost)}</small>`:''}</span>
-      <span class="okpi" title="売上 税込 − 原価 税込。案件台帳と同じ"><small>粗利 税込</small><b style="color:${sales-pcost<0?'var(--warn)':'var(--ok)'}">${
+      <span class="okpi" title="税込 ${yen(inc(sales-pcost))}"><small>粗利 税抜</small><b style="color:${sales-pcost<0?'var(--warn)':'var(--ok)'}">${
         sales?yen(sales-pcost):'—'}</b><small>${sales?Math.round((sales-pcost)/sales*1000)/10+'%':''}</small></span>
     </div>${c.memo?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${esc(c.memo)}</p>`:''}</div>`;
   const tools=`<div class="bar" style="margin:0 0 8px">
@@ -1267,8 +1274,8 @@ function orderPanel(c){
       <th class="r" style="width:34px">No</th><th style="width:30px"></th><th style="width:110px">場所</th><th class="nmcol">名称</th>
       <th style="width:104px">工程区分</th>
       <th class="r" style="width:62px">数量</th><th style="width:58px">単位</th>
-      <th class="r" style="width:82px" title="販売＝依頼元からもらう">販売単価</th><th class="r" style="width:80px" title="税抜">販売 <small style="font-weight:400">税抜</small></th>
-      <th class="r" style="width:104px" title="原価＝業者に払う">原価単価</th><th class="r" style="width:80px" title="税抜">原価 <small style="font-weight:400">税抜</small></th>
+      <th class="r" style="width:82px" title="販売＝依頼元からもらう">販売単価</th><th class="r" style="width:80px">販売</th>
+      <th class="r" style="width:104px" title="原価＝業者に払う">原価単価</th><th class="r" style="width:80px">原価</th>
       <th class="r" style="width:74px">粗利</th>
       <th style="width:130px">備考</th><th style="width:26px"></th></tr></thead><tbody>
     ${lineGroups(ls).map(g=>groupHead(c,g)+g.rows.map(l=>{const o=l.order?DB.orders.find(x=>x.id===l.order):null;
@@ -1297,7 +1304,7 @@ function orderPanel(c){
           :'業者から来た見積を貼り付けるか、1行ずつ足す。'}</div>`;
   const selSell=free.filter(l=>oSel[l.id]).reduce((a,l)=>a+lineSell(l),0);
   const bar=selIds.length?`<div class="selbar">
-      <b>${selIds.length}行 選択　販売 ${yen(selSell)}　原価 ${yen(selAmt)}（税抜）</b>
+      <b>${selIds.length}行 選択　販売 ${yen(selSell)}　原価 ${yen(selAmt)}</b>
       <label style="display:inline-flex;align-items:center;gap:4px;font-size:12.5px">区分をつける
         <select id="selKind"><option value="">（選ぶ）</option>${opts(PKINDS,'')}</select></label>
       <span class="grow"></span>
@@ -1456,10 +1463,10 @@ async function createOrder(cid,ids,f,quiet){
   DB.lines.forEach(l=>{ if(ids.indexOf(l.id)>=0){l.order=oid;l.who=f.who;l.kind=f.kind;} });
   /* 「工程を組む」で作った工程があればそれに紐づける（期間を直していればそちらを正にする）。無ければ新しく1本作る */
   const p=f.proc?DB.procs.find(x=>x.id===f.proc&&x.case===cid&&!x.order):null;
-  if(p){ p.order=oid; p.who=f.who; p.kind=f.kind; p.date=f.start; p.end=f.end; p.amt=Math.round(amt*1.1); }
+  if(p){ p.order=oid; p.who=f.who; p.kind=f.kind; p.date=f.start; p.end=f.end; p.amt=Math.round(amt); }
   else { DB.pseq++;
     DB.procs.push({id:'Q'+DB.pseq+DEV,case:cid,kind:f.kind,who:f.who,date:f.start,end:f.end,
-      amt:Math.round(amt*1.1),month:'',prog:'',order:oid,auto:1}); }
+      amt:Math.round(amt),month:'',prog:'',order:oid,auto:1}); }
   recalcPlan(c);
   oSel={}; if(quiet)return; save(); render();
   toast(p?`${no} を作って、工程（${f.kind}／${f.who||'業者未定'}）に紐づけた`
@@ -1470,9 +1477,9 @@ function recalcPlan(c){
   if(!c||c.done||c.planManual)return;   /* 手で入れた完了予定は工程で上書きしない */
   const d=lastDayOf(procsOf(c.id)); if(d)c.plan=d;
 }
-/* 発注に載っている明細の合計（税込）を、その発注の工程の発注金額に入れ直す。原価＝工程の発注金額の合計なので、明細を直すと原価も変わる */
+/* 発注に載っている明細の合計（税抜）を、その発注の工程の発注金額に入れ直す。原価＝工程の発注金額の合計なので、明細を直すと原価も変わる */
 function syncOrderAmt(oid){
-  const amt=Math.round(DB.lines.filter(l=>l.order===oid).reduce((a,l)=>a+lineAmt(l),0)*1.1);
+  const amt=Math.round(DB.lines.filter(l=>l.order===oid).reduce((a,l)=>a+lineAmt(l),0));
   DB.procs.filter(p=>p.order===oid).forEach(p=>{ p.amt=amt; });
 }
 /* 発注の送付で '済' にした案件は、送付済以上の発注が1つも無くなったら '未' に戻す。手で '済' にしたものは触らない */
@@ -1609,7 +1616,7 @@ function vLedger(){
     (fMonth==='すべて'||ym(c.bill)===fMonth||(fMonth==='未設定'&&!c.bill))&&
     (fStatus==='すべて'||c.st===fStatus)&&
     (!fQ||(c.prop+c.client+c.id).toLowerCase().includes(fQ.toLowerCase())));
-  const sales=list.reduce((a,c)=>a+salesOf(c),0), cost=list.reduce((a,c)=>a+costOf(c.id),0);
+  const sales=list.reduce((a,c)=>a+salesEx(c),0), cost=list.reduce((a,c)=>a+costOf(c.id),0);
   const clients=['すべて',...CLIENTS().filter(c=>DB.cases.some(x=>x.client===c)),
     ...[...new Set(DB.cases.map(c=>c.client).filter(c=>c&&!isClient(c)))]];
   return `<div class="bar">
@@ -1628,19 +1635,19 @@ function vLedger(){
     </div>
     <div class="kpi">
       <div class="k"><small>件数</small><b>${list.length}</b></div>
-      <div class="k"><small>売上（税込）</small><b>${yen(sales)}</b></div>
-      <div class="k"><small>原価</small><b>${yen(cost)}</b></div>
-      <div class="k"><small>粗利</small><b>${yen(sales-cost)}</b></div>
+      <div class="k"><small>売上（税抜）</small><b>${dual(sales)}</b></div>
+      <div class="k"><small>原価（税抜）</small><b>${dual(cost)}</b></div>
+      <div class="k"><small>粗利（税抜）</small><b>${dual(sales-cost)}</b></div>
       <div class="k"><small>粗利率</small><b>${sales?((sales-cost)/sales*100).toFixed(1):'0.0'}%</b></div>
     </div>
     <div class="layout"><div class="main"><div class="tw"><table>
       <thead><tr><th>顧客</th><th>物件</th><th>区分</th><th>ステータス</th>
-        <th class="r">売上</th><th class="r">原価</th><th class="r">粗利率</th>
+        <th class="r">売上 <small style="font-weight:400">税抜</small></th><th class="r">原価 <small style="font-weight:400">税抜</small></th><th class="r">粗利率</th>
         <th>起算</th><th>希望<br><small>依頼元</small></th><th>完了予定<br><small>弊社</small></th>
         <th>完了</th><th>請求月</th></tr></thead>
       <tbody>${list.slice(0,400).map(c=>{
-        const s=salesOf(c), k=costOf(c.id);
-        return `<tr class="${selCase===c.id?'on':''}" data-c="${c.id}">
+        const s=salesEx(c), k=costOf(c.id);
+        return `<tr class=""${selCase===c.id?'on':''}" data-c="${c.id}">
           <td><span class="cl" style="background:${col(c.client)}">${esc(c.client||'（未設定）')}</span></td>
           <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis">${esc(c.prop||'（物件未入力）')}${
             c.keyx==='有'?'<span class="st" style="margin-left:5px;background:#DCDCD2">鍵</span>':''}${
@@ -1667,7 +1674,7 @@ function drawer(){
   if(!c) return `<div class="drawer"><h3>案件の中身</h3>
     <p class="note">左の行をクリックすると、ここで顧客・物件・金額・ステータス・工程（誰にいつ何円で発注したか）を直せる。<br><br>
     「＋ 案件を追加」で新しい案件を作れる。工程を足すと、手配ボードと完工予定と支払に自動で載る。</p></div>`;
-  const ps=procsOf(c.id), cost=costOf(c.id), s=salesOf(c);
+  const ps=procsOf(c.id), cost=costOf(c.id), s=salesEx(c);
   return `<div class="drawer" id="dw">
     <h3>${esc(c.prop||'（物件未入力）')}</h3>
     <p class="note" style="margin-top:0">${esc(c.id)}</p>
@@ -1710,14 +1717,14 @@ function drawer(){
         <input type="date" data-pf="date" value="${esc(p.date||'')}" title="開始日">
         <span class="tl">〜</span>
         <input type="date" data-pf="end" value="${esc(p.end&&p.end>p.date?p.end:'')}" title="終了日（1日だけなら空欄）">
-        <input type="number" data-pf="amt" value="${p.amt||0}" step="100">
+        <input type="number" data-pf="amt" value="${p.amt||0}" step="100" title="発注金額（税抜）" placeholder="税抜">
         <button class="x" data-del="${p.id}" title="削除">×</button></div>`).join('')}
       <button class="btn small" id="addProc">＋ 工程を足す</button>
     </div>
     <div class="pl">
-      <div class="tot"><span>売上（税込）</span><b>${yen(s)}</b></div>
-      <div class="tot"><span>原価</span><b>${yen(cost)}</b></div>
-      <div class="tot"><span>粗利</span><b>${yen(s-cost)}　${s?((s-cost)/s*100).toFixed(1)+'%':''}</b></div>
+      <div class="tot"><span>売上（税抜）</span><b>${dual(s)}</b></div>
+      <div class="tot"><span>原価（税抜）</span><b>${dual(cost)}</b></div>
+      <div class="tot"><span>粗利（税抜）</span><b>${yen(s-cost)}　${s?((s-cost)/s*100).toFixed(1)+'%':''}<small class="tx">税込 ${yen(inc(s-cost))}</small></b></div>
     </div>
     <div class="pl" style="display:flex;gap:7px">
       <button class="btn small danger" id="delCase">この案件を削除</button>
@@ -1787,7 +1794,7 @@ function flagLine(c,m){
 function procPanel(c){
   const ps=procsOf(c.id).slice().sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
   const m=procMonth(c,ps), D=daysIn(m), y=+m.slice(0,4), mo=+m.slice(5,7);
-  const sales=salesOf(c), cost=costOf(c.id);
+  const sales=salesEx(c), cost=costOf(c.id);
   const head=`<tr><th class="nm">工程</th>${Array.from({length:D},(_,i)=>{
     const d=i+1,w=new Date(y,mo-1,d).getDay(), ds=iso(y,mo,d);
     return `<th class="${w===6?'sat':w===0?'sun':''} ${flagCls(c,ds)}"><b>${d}</b><small>${WD[w]}</small>${flagHtml(c,ds)}</th>`;}).join('')}</tr>`;
@@ -1830,9 +1837,9 @@ function procPanel(c){
         <span class="st ${stCls(c.st)}">${esc(c.st)}</span>
         ${(c.ord||'未')==='未'?'<span class="flag">発注 未</span>':'<span class="st done">発注済</span>'}
         <span class="grow"></span>
-        <span class="okpi"><small>売上 税込</small><b>${yen(sales)}</b></span>
-        <span class="okpi"><small>原価</small><b>${cost?yen(cost):'<span style="color:var(--warn)">未入力</span>'}</b></span>
-        <span class="okpi"><small>粗利</small><b>${yen(sales-cost)}</b><small>${sales?((sales-cost)/sales*100).toFixed(0)+'%':''}</small></span>
+        <span class="okpi" title="税込 ${yen(inc(sales))}"><small>売上 税抜</small><b>${yen(sales)}</b></span>
+        <span class="okpi" title="${cost?'税込 '+yen(inc(cost)):''}"><small>原価 税抜</small><b>${cost?yen(cost):'<span style="color:var(--warn)">未入力</span>'}</b></span>
+        <span class="okpi" title="税込 ${yen(inc(sales-cost))}"><small>粗利 税抜</small><b>${yen(sales-cost)}</b><small>${sales?((sales-cost)/sales*100).toFixed(0)+'%':''}</small></span>
         ${c.done?`<span class="okpi"><small>完工</small><b>${md(c.done)}</b></span>`:''}
         <button class="btn small" data-open="${c.id}">案件台帳で開く</button></div>
       ${c.memo||c.items?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${
@@ -2534,16 +2541,16 @@ function vPay(){
     Object.values(rows[b]).reduce((x,y)=>x+y,0)-Object.values(rows[a]).reduce((x,y)=>x+y,0));
   const MS=MS_LIST();
   const inv=Object.fromEntries(DB.vendors.map(v=>[v.name,v.inv]));
-  return `<div class="bar"><h2>支払（発注先別）</h2></div>
+  return `<div class="bar"><h2>支払（発注先別）</h2><span class="note" style="margin:0">月ごとの金額は税抜（工程の発注金額）</span></div>
     <div class="tw"><table><thead><tr><th>発注先</th><th>登録番号</th>
-      ${MS.map(m=>`<th class="r">${mlabel(m)}</th>`).join('')}<th class="r">合計</th></tr></thead>
+      ${MS.map(m=>`<th class="r">${mlabel(m)}</th>`).join('')}<th class="r">合計（税抜）</th><th class="r">合計（税込）</th></tr></thead>
       <tbody>${names.map(nm=>{const sum=MS.reduce((a,m)=>a+(rows[nm][m]||0),0);
         return `<tr><td>${esc(nm)}${isVendor(nm)?'':'<span class="flag" style="margin-left:5px">マスタ外</span>'}</td>
         <td style="font-size:11px;color:var(--sub)">${inv[nm]?esc(inv[nm]):'<span class="flag">なし</span>'}</td>
         ${MS.map(m=>`<td class="r">${rows[nm][m]?yen(rows[nm][m]):'—'}</td>`).join('')}
-        <td class="r"><b>${yen(sum)}</b></td></tr>`;}).join('')}
+        <td class="r"><b>${yen(sum)}</b></td><td class="r">${yen(inc(sum))}</td></tr>`;}).join('')}
       <tr><td colspan="2"><b>合計</b></td>${MS.map(m=>`<td class="r"><b>${yen(tot[m]||0)}</b></td>`).join('')}
-        <td class="r"><b>${yen(Object.values(tot).reduce((a,b)=>a+b,0))}</b></td></tr>
+        <td class="r"><b>${yen(Object.values(tot).reduce((a,b)=>a+b,0))}</b></td><td class="r"><b>${yen(inc(Object.values(tot).reduce((a,b)=>a+b,0)))}</b></td></tr>
       </tbody></table></div>
     <p class="note">登録番号が空の発注先は、インボイスの仕入税額控除が取れない可能性がある。発注先マスタに登録番号が入っていない職人が多い。
       いまの台帳の支払一覧は、工程ごとに手で打つ「月」列でしか集計していないので、その月が空だと支払から丸ごと落ちる。ここでは月が空なら予定日の月で拾うようにしてある。</p>`;
@@ -2553,25 +2560,27 @@ function vPay(){
 function vPl(){
   const MS=MS_LIST();
   const bill={}, done={};
-  DB.cases.forEach(c=>{const s=salesOf(c), k=costOf(c.id);
+  DB.cases.forEach(c=>{const s=salesEx(c), k=costOf(c.id);
     const mb=ym(c.bill), mdn=ym(planOf(c));
     if(mb){bill[mb]=bill[mb]||{s:0,c:0,n:0}; bill[mb].s+=s; bill[mb].c+=k; bill[mb].n++;}
     if(mdn){done[mdn]=done[mdn]||{s:0,c:0,n:0}; done[mdn].s+=s; done[mdn].c+=k; done[mdn].n++;}});
   const tb=(o,t)=>`<div class="card" style="margin-bottom:12px"><h3 style="font-size:14px;margin-bottom:8px">${t}</h3>
     <div class="tw" style="max-height:none"><table><thead><tr><th></th>
     ${MS.map(m=>`<th class="r">${mlabel(m)}</th>`).join('')}<th class="r">合計</th></tr></thead><tbody>
-    ${[['件数','n',v=>v],['売上（税込）','s',yen],['原価','c',yen]].map(([l,f,fmt])=>
+    ${[['件数','n',v=>v],['売上（税抜）','s',yen],['原価（税抜）','c',yen]].map(([l,f,fmt])=>
       `<tr><td>${l}</td>${MS.map(m=>`<td class="r">${fmt((o[m]||{})[f]||0)}</td>`).join('')}
        <td class="r"><b>${fmt(MS.reduce((a,m)=>a+((o[m]||{})[f]||0),0))}</b></td></tr>`).join('')}
-    <tr><td><b>粗利</b></td>${MS.map(m=>{const x=o[m]||{s:0,c:0};
+    <tr><td><b>粗利（税抜）</b></td>${MS.map(m=>{const x=o[m]||{s:0,c:0};
       return `<td class="r"><b>${yen(x.s-x.c)}</b></td>`;}).join('')}
       <td class="r"><b>${yen(MS.reduce((a,m)=>a+((o[m]||{s:0}).s-(o[m]||{c:0}).c),0))}</b></td></tr>
     <tr><td>粗利率</td>${MS.map(m=>{const x=o[m]||{s:0,c:0};
       return `<td class="r">${x.s?((x.s-x.c)/x.s*100).toFixed(1)+'%':'—'}</td>`;}).join('')}
       <td class="r">${(()=>{const s=MS.reduce((a,m)=>a+((o[m]||{s:0}).s),0),c=MS.reduce((a,m)=>a+((o[m]||{c:0}).c),0);
         return s?((s-c)/s*100).toFixed(1)+'%':'—';})()}</td></tr>
+    <tr><td style="color:var(--sub)">売上（税込）</td>${MS.map(m=>`<td class="r" style="color:var(--sub)">${yen(inc((o[m]||{}).s||0))}</td>`).join('')}
+      <td class="r" style="color:var(--sub)">${yen(inc(MS.reduce((a,m)=>a+((o[m]||{}).s||0),0)))}</td></tr>
     </tbody></table></div></div>`;
-  const z=DB.cases.filter(c=>salesOf(c)>0&&costOf(c.id)===0);
+  const z=DB.cases.filter(c=>salesEx(c)>0&&costOf(c.id)===0);
   const A=tb(done,'完工（予定）月ベース　工事が実際に動いた月で見る'+(DB.basis==='完工'?'　← いま採用中':''));
   const Bt=tb(bill,'請求月ベース　いまの月次決算表と同じ見方'+(DB.basis==='請求'?'　← いま採用中':''));
   return `<div class="bar"><h2>月次</h2>
@@ -2580,7 +2589,7 @@ function vPl(){
       <span class="note" style="margin:0">請求タブの締め方も一緒に切り替わる</span></div>
     ${DB.basis==='完工'?A+Bt:Bt+A}
     <div class="card"><h3 style="font-size:14px;margin-bottom:6px">この粗利率が信用できない理由</h3>
-      <p class="note" style="margin-top:0">売上はあるのに発注が1件も入っていない案件が <b>${z.length}件・${yen(z.reduce((a,c)=>a+salesOf(c),0))}</b> ある。
+      <p class="note" style="margin-top:0">売上はあるのに発注が1件も入っていない案件が <b>${z.length}件・${yen(z.reduce((a,c)=>a+salesEx(c),0))}（税抜）</b> ある。
       その分だけ原価が抜け、粗利が過大に出る。販管費はこの台帳にそもそも入っていないので（経費シートは見出しだけ）、
       月次決算表の営業利益＝売上総利益になっている。販管費はfreee側にあるので、そちらと突き合わせないと営業利益は出ない。</p></div>`;
 }
@@ -2593,7 +2602,7 @@ function fixCost(cid){
       <select data-pf="kind">${kindOpts(p.kind)}</select>
       <select data-pf="who">${vendorSel(p.who)}</select>
       <input type="date" data-pf="date" value="${esc(p.date||'')}">
-      <input type="number" data-pf="amt" value="${p.amt||0}" step="100">
+      <input type="number" data-pf="amt" value="${p.amt||0}" step="100" title="発注金額（税抜）" placeholder="税抜">
       <button class="x" data-del="${p.id}" title="削除">×</button></div>`).join('')}
     <div style="display:flex;gap:7px;margin-top:6px">
       <button class="btn small primary" data-addcost="${cid}">＋ 発注を入れる</button>
@@ -3298,7 +3307,7 @@ const DL={save:async({filename,data})=>{ const u=URL.createObjectURL(data); cons
 let canDl=true;
 async function exportCsv(){
   if(!DL){toast('この画面ではファイルの書き出しが使えない');return;}
-  const head=['案件ID','顧客','物件','区分','ステータス','売上税抜','追加','売上税込','原価','粗利',
+  const head=['案件ID','顧客','物件','区分','ステータス','売上税抜','追加税抜','売上税込','原価税抜','粗利税抜',
     '完工予定','完工日','請求月','工程'];
   const rows=DB.cases.map(c=>[c.id,c.client,c.prop,c.kind,c.st,c.sales,c.add,salesOf(c),costOf(c.id),
     grossOf(c),planOf(c),c.done,ym(c.bill),
