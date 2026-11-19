@@ -318,8 +318,7 @@ language sql security definer stable as $$
   order by p.start_date, c.prop $$;
 -- 発注書 2ページ目の工程表用に、同じ案件の全工程（procs）と完了予定日（plan）も返す。鍵情報（key_info）も返す。
 -- 他社の名前・金額は出さない（区分・日付・工事内容だけ）。mine＝この発注の工程。戻り値の形を変えるので drop してから作る。
-drop function if exists order_view(text);
--- 発注先が免税事業者なら消費税を足さない（taxable）。戻り値の形を変えるので drop してから作る。
+-- 発注先が免税事業者なら消費税を足さない（taxable）も返す。
 drop function if exists order_view(text);
 create or replace function order_view(p_token text)
 returns table(order_no text, who text, kind text, start_date date, end_date date, due date, naiyo text, memo text, st text, accepted_at timestamptz,
