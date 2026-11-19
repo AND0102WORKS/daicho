@@ -1850,10 +1850,6 @@ function procPanel(c){
         <span class="okpi"><small>原価</small><b>${cost?yen(cost):'<span style="color:var(--warn)">未入力</span>'}</b></span>
         <span class="okpi"><small>粗利</small><b>${yen(sales-cost)}</b><small>${sales?((sales-cost)/sales*100).toFixed(0)+'%':''}</small></span>
         ${c.done?`<span class="okpi"><small>完工</small><b>${md(c.done)}</b></span>`:''}
-        ${(()=>{const un=ps.filter(p=>!p.order&&!isInsp(p.kind)), ready=un.filter(p=>p.who&&p.date);
-          return `<button class="btn small ${ready.length?'primary':''}" data-ocopen="${c.id}"
-            title="${ready.length?'業者と日程が決まった工程が'+ready.length+'件ある。発注の画面でその業者・期間が最初から入る':'工程に業者と日程を入れると、発注にそのまま引き継がれる'}">発注へ →${
-            ready.length?`<span class="cnt">${ready.length}</span>`:''}</button>`;})()}
         <button class="btn small" data-open="${c.id}">案件台帳で開く</button></div>
       ${c.memo||c.items?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${
         c.memo?`<b>発注内容：</b>${esc(c.memo)}`:''}${c.memo&&c.items?'　':''}${c.items?`<b>削除／追加項目：</b>${esc(c.items)}`:''}</p>`:''}
@@ -1892,9 +1888,13 @@ function procPanel(c){
         <button class="x" data-del="${p.id}" title="削除">×</button></div>`).join('')}
       <div style="display:flex;gap:7px;margin-top:8px">
         <button class="btn small" id="addProc2">＋ 工程を足す</button>
-        <button class="btn small ${(c.ord||'未')==='未'?'primary':''}" data-ord="${c.id}">${
+        ${(()=>{const un=ps.filter(p=>!p.order&&!isInsp(p.kind)), ready=un.filter(p=>p.who&&p.date);
+          return `<button class="btn small ${ready.length?'primary':''}" data-ocopen="${c.id}"
+            title="${ready.length?'業者と日程が決まった工程が'+ready.length+'件ある。発注の画面でその業者・期間が最初から入る':'工程に業者と日程を入れると、発注にそのまま引き継がれる'}">発注へ →${
+            ready.length?`<span class="cnt">${ready.length}</span>`:''}</button>`;})()}
+        <button class="btn small ${(c.ord||'未')==='未'?'primary':''}" data-ord="${c.id}" title="${(c.ord||'未')==='未'?'台帳の外（電話・LINE など）で発注したときに押す。案件が「発注 済」になり、発注前の一覧から外れる。発注タブで発注を送付済にした場合は自動で済になるので押さなくてよい':'「発注 済」を取り消して、発注前（未）に戻す'}">${
           (c.ord||'未')==='未'?'発注書を送った':'発注を取り消す'}</button>
-        <button class="btn small ${c.done?'':'primary'}" data-done="${c.id}">${c.done?'完工を取り消す':'完工にする'}</button>
+        <button class="btn small ${c.done?'':'primary'}" data-done="${c.id}" title="${c.done?'完工日を消して、状態を「発注書送付」に戻す':'完工日に完了予定日（無ければ今日）を入れ、状態を「完工」にする。請求（完工基準）と月次に載る'}">${c.done?'完工を取り消す':'完工にする'}</button>
       </div>
       ${warn.length?`<div style="margin-top:12px">${[...new Set(warn)].map(w=>
         `<div class="ck"><span class="t">要確認</span>${esc(w)}</div>`).join('')}</div>`:
