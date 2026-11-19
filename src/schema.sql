@@ -302,10 +302,12 @@ create trigger on_auth_user_created after insert on auth.users for each row exec
 
 -- ---------- 職人・業者向け（ログイン無し、トークンで） ----------
 -- 職人：自分の工程（vendors.token で引く）。業者：発注1件（orders.token で引く）。anon から RPC だけ許す。
+-- 鍵情報（key_info）も返す（職人が現場に入るのに要る）。戻り値の形を変えるので drop してから作る。
+drop function if exists my_schedule(text,date,date);
 create or replace function my_schedule(p_token text, p_from date, p_to date)
-returns table(proc_id text, case_id text, prop text, addr text, kind text, start_date date, end_date date, prog text, memo text, client text)
+returns table(proc_id text, case_id text, prop text, addr text, kind text, start_date date, end_date date, prog text, memo text, client text, key_info text)
 language sql security definer stable as $$
-  select p.id, c.id, c.prop, c.addr, p.kind, p.start_date, p.end_date, p.prog, p.memo, c.client
+  select p.id, c.id, c.prop, c.addr, p.kind, p.start_date, p.end_date, p.prog, p.memo, c.client, c.key_info
   from procs p join cases c on c.id=p.case_id join vendors v on v.name=p.who
   where v.token=p_token and v.active
     and p.start_date<=p_to and coalesce(p.end_date,p.start_date)>=p_from   -- 期間に少しでも掛かる工程（前の週から続く工程も出す）

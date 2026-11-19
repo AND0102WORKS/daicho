@@ -79,7 +79,15 @@ table.bd thead th.nm,table.bd tbody th.nm{width:112px}
 table.bd tbody th.nm{position:sticky;left:0;z-index:3;background:var(--ground);text-align:left;
   padding:6px 8px;font-weight:700;min-width:104px;width:104px;border-right:1px solid var(--line);font-size:12.5px}
 table.bd tbody th.nm small{display:block;font-weight:400;color:var(--sub);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-td.c{width:var(--col);height:calc(var(--slots) * var(--slot) + 6px);padding:2px;position:relative}
+td.c{width:var(--col);height:calc(var(--slots) * var(--slot) + 6px);padding:2px;position:relative;cursor:cell}
+td.c:hover{box-shadow:inset 0 0 0 2px var(--acc)}
+.badd-list{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:6px}
+.badd-list button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line2);background:var(--card);color:var(--ink);font-family:inherit;padding:7px 10px;font-size:13.5px;line-height:1.45;cursor:pointer}
+.badd-list button:last-child{border-bottom:0}
+.badd-list button.on{background:var(--ok-bg);font-weight:700}
+.badd-list button small{display:block;color:var(--sub);font-weight:400;font-size:11.5px;margin-top:2px}
+.badd-row{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.badd-row label{font-size:12px;color:var(--sub)}
 table.bd th.sm,table.bd td.sm{width:54px;text-align:center;background:var(--ground);font-weight:700}
 .more{position:absolute;right:3px;bottom:2px;font-size:10px;font-weight:700;color:var(--warn);background:var(--warn-bg);border-radius:4px;padding:0 4px;line-height:1.5}
 td.c.off{background:repeating-linear-gradient(135deg,#F1EFEA,#F1EFEA 5px,#E8E5DE 5px,#E8E5DE 10px)}
@@ -90,6 +98,9 @@ td.c.ng{outline:2px dashed var(--warn);outline-offset:-2px;background:var(--warn
   font-family:inherit;font-size:11px;line-height:1.3;cursor:grab;color:var(--ink)}
 .chip.sel{outline:2px solid var(--ink);outline-offset:-2px}
 .chip.drag{opacity:.35}
+.chip.tent{outline:1.5px dashed var(--ink);outline-offset:-2px;opacity:.78}
+.chip .tentb{display:inline-block;font-size:9.5px;font-weight:900;background:var(--card);border:1px solid var(--ink);border-radius:3px;padding:0 3px;margin-right:3px;line-height:1.25}
+.ctag{display:inline-block;font-size:11px;font-weight:700;color:var(--ink);border-radius:9px;padding:0 8px;margin-right:6px;line-height:1.6}
 .chip .p{display:block;font-weight:700;font-size:10.5px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip .y{display:block;font-size:9.5px;line-height:1.25;color:var(--sub);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .legend{display:flex;gap:11px;flex-wrap:wrap;font-size:12px;color:var(--sub);margin-bottom:9px;align-items:center}
@@ -1753,7 +1764,7 @@ function procPanel(c){
       const pend=pendStart&&pendStart.pid===p.id&&pendStart.day===ds;
       const cls=['pc',off.has(d)?'off':'',busy?'busy':'',pend?'pending':'',flagCls(c,ds)].filter(Boolean).join(' ');
       return `<td class="${cls}" data-pid="${p.id}" data-day="${ds}">${on?
-        `<button class="chip pc ${selProc===p.id?'sel':''}" draggable="true" data-p="${p.id}"
+        `<button class="chip pc ${selProc===p.id?'sel':''} ${p.prog==='仮'?'tent':''}" draggable="true" data-p="${p.id}"
           style="background:${kcol(p.kind)}">
           <span class="p">${esc(p.kind)}${first?'':'<span class="cont">続</span>'}</span>
           <span class="y">${esc(p.who||'業者未定')}</span></button>`:''}</td>`;}).join('');
@@ -1854,6 +1865,92 @@ function boardRows(m){
     return {name:nm,days,off:offDays(nm,m),sen:SEN.indexOf(nm)>=0};
   });
 }
+/* 顧客名の短い表示（チップ用） */
+const clientShort=n=>{ n=String(n||''); return n.length>5?n.slice(0,5):n; };
+/* 「仮で入れる」で作ったままの案件か（他に工程・明細・発注・売上・受注受付が無い）。そうなら仮予定の取り消しで案件ごと消す */
+function tentOnly(c,pid){
+  return !!(c&&c.id&&c.src==='仮予定'&&!c.recv&&!(+c.sales)&&!DB.procs.some(x=>x.case===c.id&&x.id!==pid)
+    &&!(DB.lines||[]).some(l=>l.case===c.id)&&!(DB.orders||[]).some(o=>o.case===c.id));
+}
+/* 仮予定（procs.prog==='仮'）のチップを押した時：確定する・取り消す・案件を開く */
+function askTent(pid){
+  const p=DB.procs.find(x=>x.id===pid); if(!p)return;
+  const c=DB.cases.find(x=>x.id===p.case)||{};
+  const span=p.end&&p.end!==p.date?`${md(p.date)} 〜 ${md(p.end)}`:md(p.date);
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg"><h4>仮予定　${esc(c.prop||'（物件未入力）')}</h4>
+    <p style="margin:0 0 4px"><span class="ctag" style="background:${col(c.client)}">${esc(c.client||'顧客なし')}</span>${esc(p.who||'担当未定')}　${esc(span)}　${esc(p.kind||'')}</p>
+    ${p.memo?`<p style="margin:6px 0 4px;padding:7px 10px;background:var(--card2);border:1px solid var(--line2);border-radius:7px;font-size:13px">${esc(p.memo)}</p>`:''}
+    <p class="note" style="margin:0 0 12px">確定すると通常の工程になる。取り消すとこの予定が消える${tentOnly(c,pid)?'（仮で作った案件なので、案件も一緒に消える）':'（案件は残る）'}。</p>
+    <div class="askbtn" style="flex-wrap:wrap"><button class="btn small" id="tOpen">案件を開く</button><span class="grow"></span>
+      <button class="btn small danger" id="tDel">仮予定を取り消す</button>
+      <button class="btn small primary" id="tFix">確定する</button>
+      <button class="btn small" id="askNo">閉じる</button></div></div>`;
+  document.body.appendChild(el);
+  el.querySelector('#askNo').onclick=()=>el.remove();
+  el.querySelector('#tOpen').onclick=()=>{ el.remove(); selProc=pid; openCase(p.case); };
+  el.querySelector('#tFix').onclick=()=>{ snap(); p.prog=''; save(); el.remove(); render(); toast(`「${c.prop||''}」の仮予定を確定した`, undo); };
+  el.querySelector('#tDel').onclick=()=>{ const both=tentOnly(c,pid); snap(); DB.procs=DB.procs.filter(x=>x.id!==pid);
+    if(both)DB.cases=DB.cases.filter(x=>x.id!==c.id); else recalcPlan(c);
+    save(); el.remove(); render(); toast(`「${c.prop||''}」の仮予定を取り消した${both?'（案件も消した）':''}`, undo); };
+}
+/* 手配ボードのマスを押して工程を追加する。既にある案件を選ぶか、その場で新しい案件を作る */
+function askBoardAdd(who,day){
+  const vd=vendorOf(who)||{}, off=offDays(who,ym(day)).includes(+day.slice(8,10));
+  const kind0=PKINDS.indexOf(vd.defKind||'')>=0?vd.defKind:'清掃';
+  let pick=null, mode='pick';     /* pick＝台帳にある案件から選ぶ／quick＝管理会社・物件名・メモだけで入れる */
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg"><h4>${esc(who)}　${md(day)} に予定を入れる</h4>
+    ${off?'<p class="note" style="margin:0 0 8px;color:var(--warn)">この日は休みに入っている</p>':''}
+    <div class="seg" style="margin-bottom:10px"><button data-bam="pick" class="on">案件から選ぶ</button><button data-bam="quick">仮で入れる（物件名とメモ）</button></div>
+    <div id="baPick">
+      <input type="text" id="baQ" placeholder="物件名・管理会社で探す" style="width:100%">
+      <div class="badd-list" id="baList"></div></div>
+    <div id="baQuick" style="display:none">
+      <div class="badd-row" style="margin-top:0"><label style="width:64px">管理会社</label><select id="baClient" style="flex:1;min-width:160px">${opts(CLIENTS(),'','（選ぶ）')}</select></div>
+      <div class="badd-row"><label style="width:64px">物件名</label><input type="text" id="baProp" style="flex:1;min-width:180px" placeholder="例：○○マンション 101（分かる範囲で）"></div>
+      <p class="note" style="margin:6px 0 0">台帳にまだ無い話を、先にスケジュールへ置いておく時に使う。案件台帳には「受付」の案件として載る。</p></div>
+    <div class="badd-row"><label style="width:64px">メモ</label><input type="text" id="baMemo" style="flex:1;min-width:180px" placeholder="例：11/20 までに返事。鍵は現地"></div>
+    <div class="badd-row"><label style="width:64px">区分</label><select id="baKind">${opts(PKINDS,kind0)}</select>
+      <label>日数</label><input type="number" id="baDays" value="1" min="1" max="60" style="width:64px">
+      <span class="note" style="margin:0" id="baSpan"></span></div>
+    <div class="badd-row"><label style="font-size:13px;color:var(--ink);cursor:pointer"><input type="checkbox" id="baTent"> 仮予定として入れる</label>
+      <span class="note" style="margin:0">点線の枠と「仮」で表示。後で確定・取り消しができる</span></div>
+    <div class="askbtn" style="margin-top:14px"><button class="btn small" id="askNo">やめる</button>
+      <button class="btn small primary" id="askYes">追加</button></div></div>`;
+  document.body.appendChild(el);
+  const $=id=>el.querySelector('#'+id);
+  const nDays=()=>Math.max(1,Math.min(60,Math.round(+$('baDays').value||1)));
+  const drawSpan=()=>{ const n=nDays(); $('baSpan').textContent=n>1?`${md(day)} 〜 ${md(addDays(day,n-1))}`:''; };
+  const drawList=()=>{
+    const q=nkey($('baQ').value||'');
+    const list=DB.cases.filter(c=>c.live&&!c.done&&(!q||nkey((c.prop||'')+(c.client||'')).indexOf(q)>=0)).slice(0,60);
+    $('baList').innerHTML=list.map(c=>`<button data-bac="${esc(c.id)}" class="${pick===c.id?'on':''}">${esc(c.prop||'（物件未入力）')}<small><span class="ctag" style="background:${col(c.client)}">${esc(c.client||'管理会社なし')}</span>${esc(c.st||'')}${planOf(c)?'　予定 '+md(planOf(c)):''}</small></button>`).join('')
+      ||'<p class="note" style="margin:8px 10px">当てはまる運用中の案件が無い。「仮で入れる」から物件名とメモで入れられる</p>';
+  };
+  const setMode=m=>{ mode=m; $('baPick').style.display=m==='pick'?'':'none'; $('baQuick').style.display=m==='quick'?'':'none';
+    el.querySelectorAll('[data-bam]').forEach(b=>b.classList.toggle('on',b.dataset.bam===m));
+    $('baTent').checked=(m==='quick');          /* 仮で入れる時は最初から「仮予定」。外せば確定の予定として入る */
+    if(m==='quick'){ if(!$('baProp').value)$('baProp').value=$('baQ').value||''; $('baClient').focus(); } else $('baQ').focus(); };
+  drawList(); drawSpan(); $('baQ').focus();
+  $('baQ').oninput=drawList; $('baDays').oninput=drawSpan;
+  $('baList').onclick=e=>{ const b=e.target.closest('[data-bac]'); if(!b)return; pick=b.dataset.bac; drawList(); };
+  el.querySelectorAll('[data-bam]').forEach(b=>{ b.onclick=()=>setMode(b.dataset.bam); });
+  $('askNo').onclick=()=>el.remove();
+  $('askYes').onclick=()=>{
+    const n=nDays(), kind=$('baKind').value, end=addDays(day,n-1), tent=$('baTent').checked, memo=($('baMemo').value||'').trim();
+    let c=null; const isNew=mode==='quick';
+    if(isNew){
+      if(!$('baClient').value){ toast('管理会社を選んでください'); $('baClient').focus(); return; }
+      const prop=($('baProp').value||'').trim(); if(!prop){ toast('物件名を入れてください（分かる範囲で）'); $('baProp').focus(); return; }
+      snap(); DB.seq++; c={id:'N'+DB.seq+DEV,client:$('baClient').value,prop,kind:'清掃のみ',st:STATUS[0]||'受付',live:true,ord:'未',
+        sales:0,add:0,bill:'',done:'',plan:'',report:'',photo:'未',src:'仮予定',memo}; DB.cases.unshift(c); }
+    else { c=DB.cases.find(x=>x.id===pick); if(!c){ toast('案件を選んでください。台帳に無い話は「仮で入れる」から'); return; } snap(); }
+    DB.pseq++; DB.procs.push({id:'Q'+DB.pseq+DEV,case:c.id,kind,who,date:day,end,amt:0,month:'',prog:tent?'仮':'',memo});
+    recalcPlan(c); save(); el.remove(); render();
+    toast(`${who} の ${md(day)} に「${c.prop}」（${c.client||'管理会社なし'}）を${tent?'仮予定で':''}入れた`, undo);
+  };
+}
 function vBoard(){
   const m=bMonth, D=daysIn(m), rows=boardRows(m), B=byId();
   const y=+m.slice(0,4), mo=+m.slice(5,7);
@@ -1873,10 +1970,10 @@ function vBoard(){
       const cls=['c',off?'off':''].filter(Boolean).join(' ');
       const show=ps.slice(0,slots), rest=ps.length-show.length;
       const inner=show.map(p=>{const c=B[p.case]||{};
-        return `<button class="chip ${selProc===p.id?'sel':''}" draggable="true" data-p="${p.id}"
+        return `<button class="chip ${selProc===p.id?'sel':''} ${p.prog==='仮'?'tent':''}" draggable="true" data-p="${p.id}"
           style="background:${col(c.client)}">
-          <span class="p">${esc(c.prop||'（物件未入力）')}${p.date===ds?'':'<span class="cont">続</span>'}</span>
-          <span class="y">${esc(p.kind)}${p.amt?' '+yen(p.amt):''}</span></button>`;}).join('')
+          <span class="p">${p.prog==='仮'?'<span class="tentb">仮</span>':''}${esc(c.prop||'（物件未入力）')}${p.date===ds?'':'<span class="cont">続</span>'}</span>
+          <span class="y">${esc(clientShort(c.client))}${c.client?'・':''}${esc(p.kind)}${p.amt?' '+yen(p.amt):''}</span></button>`;}).join('')
         +(rest>0?`<span class="more">＋${rest}件</span>`:'');
       return `<td class="${cls}" ${attr}>${inner}</td>`;
     }).join('');
@@ -1891,7 +1988,7 @@ function vBoard(){
       <textarea readonly style="width:100%;height:260px;font:11px/1.4 ui-monospace,monospace">${esc(AWLOG.slice().reverse().map(r=>r.join('  ')).join('\n'))}</textarea></div>`:''}
     <div class="legend">${Object.keys(CC).map(k=>`<span><i style="background:${col(k)}"></i>${esc(k)}</span>`).join('')}
       <span><i style="background:var(--c-other)"></i>その他</span>
-      <span style="margin-left:6px">チップをドラッグすると別の職人・別の日に移せる（期間はそのまま平行移動）。「続」は前日からの続き</span></div>
+      <span style="margin-left:6px">空いているマスを押すと、その職人・その日に予定を入れられる（台帳に無い話も、管理会社・物件名・メモだけで仮に置ける）。チップをドラッグすると別の職人・別の日に移せる（期間はそのまま平行移動）。「続」は前日からの続き</span></div>
     <div class="boardwrap"><table class="bd" style="--slots:${slots};width:${112+86*D+54}px"><thead>${head}</thead><tbody>${body}</tbody></table></div>
     <p class="note">ここに出ているのは案件台帳の工程そのもの。動かすと台帳の予定日・担当も変わり、完工予定と支払にも同時に反映される。
       休み（斜線）は2026年10月のスケジュール管理から取り込んだもの。</p>`;
@@ -2908,6 +3005,8 @@ document.addEventListener('click',e=>{
   if(e.target.id==='addProc2'&&pCase){
     snap(); DB.pseq++; DB.procs.push({id:'Q'+DB.pseq+DEV,case:pCase,kind:'清掃',who:'',date:'',end:'',amt:0,month:'',prog:''});
     save(); render(); return;}
+  const btd=e.target.closest('table.bd td.c[data-who]');
+  if(btd&&!e.target.closest('.chip')&&tab==='board'){askBoardAdd(btd.dataset.who,btd.dataset.day);return;}
   const ptd=e.target.closest('td.pc[data-pid]');
   if(ptd&&!e.target.closest('.chip')){clickDay(ptd.dataset.pid,ptd.dataset.day);return;}
   const pch=e.target.closest('.chip.pc'); if(pch){
@@ -3025,6 +3124,7 @@ document.addEventListener('click',e=>{
     save(); render(); return;}
   const ch=e.target.closest('.chip[data-p]'); if(ch){
     const p=DB.procs.find(x=>x.id===ch.dataset.p);
+    if(p&&p.prog==='仮'){askTent(p.id);return;}      /* 仮予定は、確定・取り消しの小窓を出す */
     selProc=ch.dataset.p; if(p)openCase(p.case); return;}
   const tr=e.target.closest('tr[data-c]'); if(tr){selCase=tr.dataset.c;render();return;}
 });
