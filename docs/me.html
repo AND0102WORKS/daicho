@@ -29,6 +29,8 @@ main{padding:12px 16px 48px;max-width:640px;margin:0 auto}
 .job .when{font-size:14px;margin-top:6px}
 .job .addr{font-size:14.5px;margin-top:6px}
 .job .memo{font-size:14px;margin-top:6px;padding:8px 10px;background:var(--amber-bg);border-radius:7px;white-space:pre-wrap}
+.job .key{font-size:14.5px;margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;white-space:pre-wrap}
+.job .key b{font-size:12px;color:var(--sub);font-weight:700;margin-right:6px}
 .job .row{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
 .tag{display:inline-block;font-size:12.5px;padding:1px 8px;border-radius:9px;background:#EEE;color:var(--ink)}
 a.map{color:var(--acc);font-size:15px;text-decoration:none;border:1px solid var(--acc);padding:10px 14px;border-radius:8px}
@@ -76,7 +78,7 @@ async function load(){
     .sort((x,y)=>x.s<y.s?-1:x.s>y.s?1:String(x.prop).localeCompare(String(y.prop)));
   if(!rows.length){ list.innerHTML='<div class="empty">この期間の工程はありません</div>'; return; }
   const today=fmt(new Date());
-  const left=rows.filter(p=>p.prog!=='完了').length;
+  const left=rows.filter(p=>p.prog!=='完了'&&p.prog!=='仮').length;
   let html=`<p class="sum">${md(a)}〜${md(b)}　全 <b>${rows.length}</b> 件／未完了 <b>${left}</b> 件</p>`, last=null;
   rows.forEach(p=>{
     const carry=p.s<a;                              /* 表示期間より前に始まって、まだ続いている工程 */
@@ -84,16 +86,17 @@ async function load(){
     if(key!==last){ last=key;
       html+=carry?`<div class="day">前から続いている工程</div>`
                  :`<div class="day ${p.s===today?'today':''}">${md(p.s)}${p.s===today?'　今日':''}</div>`; }
-    const done=p.prog==='完了', multi=p.e!==p.s, now=!done&&p.s<=today&&today<=p.e;
+    const done=p.prog==='完了', tent=p.prog==='仮', multi=p.e!==p.s, now=!done&&!tent&&p.s<=today&&today<=p.e;
     const q=encodeURIComponent(p.addr||p.prop||'');
     html+=`<div class="job ${done?'done':''} ${now?'now':''}" data-id="${esc(p.proc_id)}">
       <div class="prop">${esc(p.prop)}</div>
-      <div class="meta"><span class="tag">${esc(p.kind||'工程')}</span>${p.client?'　'+esc(p.client):''}</div>
+      <div class="meta">${tent?'<span class="tag" style="background:var(--amber-bg);font-weight:700">仮予定</span> ':''}<span class="tag">${esc(p.kind||'工程')}</span>${p.client?'　'+esc(p.client):''}</div>
       ${multi||carry?`<div class="when">${md(p.s)} 〜 ${md(p.e)}（${days(p.s,p.e)}日間）</div>`:''}
       ${p.addr?`<div class="addr">${esc(p.addr)}</div>`:''}
+      ${p.key_info?`<div class="key"><b>鍵</b>${esc(p.key_info)}</div>`:''}
       ${p.memo?`<div class="memo">${esc(p.memo)}</div>`:''}
       <div class="row">${q?`<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${q}">${p.addr?'地図':'地図（物件名で検索）'}</a>`:''}
-        <button class="done" type="button" data-done="${done?'0':'1'}">${done?'完了済み':'完了にする'}</button></div></div>`;
+        ${tent?'<span class="meta">まだ確定していない予定です</span>':`<button class="done" type="button" data-done="${done?'0':'1'}">${done?'完了済み':'完了にする'}</button>`}</div></div>`;
   });
   list.innerHTML=html;
 }
