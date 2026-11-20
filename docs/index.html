@@ -174,7 +174,7 @@ small.tx{display:block;font-size:10.5px;font-weight:400;color:var(--sub);font-va
 .tip{position:fixed;z-index:90;pointer-events:none;background:var(--ink);color:var(--ground);
   border-radius:9px;padding:8px 11px;font-size:12px;line-height:1.55;max-width:320px;
   box-shadow:0 12px 32px rgba(30,42,50,.34)}
-.tip b{display:block;font-size:13.5px;margin-bottom:3px;line-height:1.35}
+.tip b{display:block;font-size:13.5px;margin-bottom:3px;line-height:1.35}.tip strong{font-weight:900;font-size:14px;color:#FFE08A}
 .tip .s{color:#BFCBD1}
 .tip .w{color:#BFCBD1;margin-top:3px;display:block}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--ground);
@@ -281,8 +281,10 @@ table.bd th.fd-b,table.bd td.fd-b{box-shadow:inset 3px 0 0 #2F6DB5;background:#E
 table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#FBF3D6}
 .flagline{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;font-size:12.5px}
 .pbar{margin:10px 0 6px}
-.avblock{margin:-2px 0 10px}.avwrap{max-height:190px;overflow:auto;margin:0;border-top:0}
-.avwrap tr.avrow td,.avwrap tr.avrow th{height:52px}
+.avblock{margin:-2px 0 10px}.avwrap{max-height:206px;overflow:auto;margin:0;border-top:0}
+.avwrap tr.avrow td,.avwrap tr.avrow th{height:64px}
+td.av.busy .chip{margin:0 0 2px;cursor:pointer}td.av .chip.me{outline:2px solid var(--acc);outline-offset:-2px}
+td.av .chip.q{outline:1.5px dashed #B07A00;outline-offset:-2px}
 .avhead{background:#3E4A46;color:#fff;border-radius:10px 10px 0 0;padding:7px 10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .avhead>b{font-size:13.5px;font-weight:900;min-width:96px}
 .avblock .avwrap{border-radius:0 0 10px 10px;margin-top:0}
@@ -303,7 +305,7 @@ table.bd tbody tr.avrow th.nm{background:#E6EBEA;border-left:4px solid #3E4A46}
 
 td.av{height:34px;text-align:center;vertical-align:middle;font-size:11px;padding:1px}
 td.av.free{background:#fff}
-td.av.busy{background:#F4E3CF;font-size:11px;vertical-align:top;padding:3px 3px}
+td.av.busy{background:#fff;font-size:11px;vertical-align:top;padding:3px 3px}
 td.av.mine{outline:2px solid var(--acc);outline-offset:-2px}
 td.av.off{background:repeating-linear-gradient(135deg,#F1EFEA,#F1EFEA 5px,#E8E5DE 5px,#E8E5DE 10px);color:var(--sub)}
 td.av .chip{height:auto;margin:1px 0;cursor:pointer}
@@ -1905,22 +1907,26 @@ function askSheet(cid,who,ds){
   const want=avCur==='全部'?(isInsp(v.defKind)?'AW検査':v.defKind):avCur;
   const same=p=>p.case===cid&&(isInsp(want)?isInsp(p.kind):p.kind===want);
   const tgt=DB.procs.find(p=>same(p)&&!p.who)||null;
+  /* 先に工程へ入れる（業者・開始日）。打診を送るかはこのあと選ぶ */
+  snap('ask:'+cid);
+  let p=tgt; if(!p){ DB.pseq++; p={id:'Q'+DB.pseq+DEV,case:cid,kind:want,who:'',date:'',amt:0,month:'',prog:''}; DB.procs.push(p); }
+  p.who=who; p.date=ds; p.end=''; p.month=''; p.ask=''; p.askAt=null; recalcPlan(c);
+  save(); render();
   const el=document.createElement('div'); el.className='ask';
-  el.innerHTML=`<div class="askbox" style="max-width:440px"><h4>${esc(who)} さんに打診する</h4>
-    <p style="margin:4px 0 10px;font-size:14px;line-height:1.7"><b>${md(ds)}</b>　${esc(want)}<br>${esc(c.prop||'')}</p>
-    <p class="note" style="margin:0 0 12px">${tgt?`この案件の「${esc(tgt.kind)}」の工程に、${esc(who)} さん・${md(ds)} を「打診中」で入れます。`:`この案件に「${esc(want)}」の工程を1本足して、「打診中」で入れます。`}
-      送ると、業者ページに「受けられる／都合が悪い」のボタンが出ます。返事はこの画面に自動で出ます。</p>
+  el.innerHTML=`<div class="askbox" style="max-width:440px"><h4>工程に入れました</h4>
+    <p style="margin:4px 0 10px;font-size:14px;line-height:1.7">${esc(p.kind)}　<b>${esc(who)}</b> さん　<b>${md(ds)}</b><br>${esc(c.prop||'')}</p>
+    <p class="note" style="margin:0 0 12px">続けて ${esc(who)} さんに日程を聞くときは、送り方を選んでください。「打診中」の印が付き、業者ページに「受けられる／都合が悪い」が出ます。
+      もう決まっている日なら「送らない」。期間が2日以上なら、下の工程の終了日を入れてください。</p>
     <div class="askbtn" style="flex-wrap:wrap;gap:6px">
       ${askLink(v)?`<button class="btn small primary" data-askgo="line">LINEで送る</button>
       <button class="btn small primary" data-askgo="mail">メールで送る${v.email?'':'（宛先なし）'}</button>
       <button class="btn small" data-askgo="copy">文面をコピー</button>`:`<span class="note">この業者は業者ページのリンクがまだありません（発注先マスタ）</span>`}
-      <button class="btn small" data-askgo="only" title="電話などで聞くとき。打診中の印だけ付ける">印だけ付ける</button>
-      <span class="grow"></span><button class="btn small" data-askgo="no">やめる</button></div></div>`;
+      <button class="btn small" data-askgo="only" title="電話などで聞くとき。打診中の印だけ付ける">打診中の印だけ</button>
+      <span class="grow"></span><button class="btn small" data-askgo="no">送らない</button></div></div>`;
   document.body.appendChild(el);
-  el.onclick=e=>{ const b=e.target.closest('[data-askgo]'); if(!b)return; const g=b.dataset.askgo; el.remove(); if(g==='no')return;
-    snap('ask:'+cid);
-    let p=tgt; if(!p){ DB.pseq++; p={id:'Q'+DB.pseq+DEV,case:cid,kind:want,who:'',date:'',amt:0,month:'',prog:''}; DB.procs.push(p); }
-    p.who=who; p.date=ds; p.end=''; p.month=''; p.ask='打診中'; p.askAt=new Date().toISOString();
+  el.onclick=e=>{ const b=e.target.closest('[data-askgo]'); if(!b)return; const g=b.dataset.askgo; el.remove();
+    if(g==='no'){ toast(`${p.kind}：${who} さん ${md(ds)} を工程に入れた`); return; }
+    p.ask='打診中'; p.askAt=new Date().toISOString();
     save(); render();
     const m=askMessage(c,p,v);
     if(g==='line')window.open('https://line.me/R/share?text='+encodeURIComponent(m.body),'_blank','noopener');
@@ -1957,17 +1963,20 @@ function availRows(c,ps,m,D,y,mo){
   const cell=(who,d)=>{ const ds=iso(y,mo,d), js=DB.procs.filter(p=>p.who===who&&p.date&&onDay(p,ds));
     if(isOff(who,ds))return `<td class="av off" title="休み">休</td>`;
     const ak=` data-ask="${esc(who)}|${ds}"`;
-    if(!js.length)return `<td class="av free"${ak} title="${esc(who)} ${md(ds)}：空き。押すと打診する"></td>`;
+    if(!js.length)return `<td class="av free"${ak} title="${esc(who)} ${md(ds)}：空き。押すと下の工程に入る"></td>`;
     const mine=js.some(p=>p.case===c.id);
-    const one=p=>`<div class="avj${p.case===c.id?' me':''}${p.ask==='打診中'?' q':''}"><i>${p.ask==='打診中'?'打診':esc(KABBR[p.kind]||p.kind.slice(0,1))}</i>${esc((B[p.case]||{}).prop||'')}</div>`;
-    return `<td class="av busy${mine?' mine':''}"${ak} title="${esc(js.map(p=>`${(B[p.case]||{}).prop||''}（${p.kind}${p.ask==='打診中'?'・打診中':''}）`).join('\n'))}
-押すと、この日でさらに打診する">${js.slice(0,2).map(one).join('')}${js.length>2?`<div class="avmore">ほか${js.length-2}件</div>`:''}</td>`; };
+    const one=p=>{ const k=B[p.case]||{};
+      return `<span class="chip avc${p.case===c.id?' me':''}${p.ask==='打診中'?' q':''}" data-tp="${p.id}" style="background:${col(k.client)}">
+        <span class="p">${p.ask==='打診中'?'<span class="tentb">打診</span>':''}${esc(k.prop||'（物件未入力）')}${p.date===ds?'':'<span class="cont">続</span>'}</span>
+        <span class="y">${esc(clientShort(k.client))}${k.client?'・':''}${esc(p.kind)}</span></span>`; };
+    return `<td class="av busy${mine?' mine':''}"${ak}>${js.slice(0,2).map(one).join('')}${js.length>2?`<div class="avmore">＋${js.length-2}件</div>`:''}</td>`; };
   const days=Array.from({length:D},(_,i)=>i+1);
   return {head:`<div class="avhead"><b>職人の予定表</b>
     <span class="seg">${[...all,'全部'].map(k=>`<button type="button" class="${k===one?'on':''}" data-avk="${esc(k)}">${esc(k)}</button>`).join('')}</span>
-    <span class="avhelp">日付のマスを押すと業者に打診。白＝空き　マス＝その日の現場（清＝清掃、検＝検査…）　休＝休み　太枠＝この案件</span></div>`,
+    <span class="avhelp">日付のマスを押すと下の工程に入る（打診も送れる）。札に乗せると作業量。名前に乗せるとその月の量</span></div>`,
     rows:(people.length?'':`<tr class="avrow"><th class="nm"></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">この区分の業者は発注先マスタにいません</td></tr>`)+
-    people.map(n=>`<tr class="avrow"><th class="nm">${esc(n)}<small>${esc([vendorOf(n).defKind,canInspect(vendorOf(n))&&!isInsp(vendorOf(n).defKind)?'検査も':''].filter(Boolean).join('・'))}</small></th>${days.map(d=>cell(n,d)).join('')}</tr>`).join('')};
+    people.map(n=>{ const v=vendorOf(n), off=offDays(n,m), kd=[v.defKind,canInspect(v)&&!isInsp(v.defKind)?'検査も':''].filter(Boolean).join('・');
+      return `<tr class="avrow"><th class="nm" data-tw="${esc(n)}|${m}">${esc(n)}<small>${v.type==='専属'?`<button class="lnk" data-avoff="${esc(n)}|${m}" title="この月の休みを入れる">休み${off.length}日 ✎</button>`:esc(kd||'外注')}</small></th>${days.map(d=>cell(n,d)).join('')}</tr>`; }).join('')};
 }
 function procPanel(c){
   const ps=procsOf(c.id).slice().sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
@@ -3318,8 +3327,34 @@ function tipMove(x,y){
   if(T+h>innerHeight-8) T=y-h-12;
   tipEl.style.left=Math.max(8,L)+'px'; tipEl.style.top=Math.max(8,T)+'px';
 }
+/* その工程の作業量：間取り・大きさ（大中小）と、その人が受け持つ明細（検査の人は自社施工、ほかはその区分の明細） */
+function workOf(p,c){
+  const ls=linesOf(c.id).filter(l=>!l.cut&&+l.qty>0&&(isInsp(p.kind)?l.kind==='自社施工':(l.kind===p.kind||(p.who&&l.who===p.who))));
+  return {vol:volumeOf(c),ls};
+}
+function workHtml(p,c){
+  const w=workOf(p,c), v=w.vol;
+  const head=`間取り ${v.madori?esc(v.madori)+(v.guess?'（推測）':''):'未設定'}　大きさ <strong>${v.size}</strong>`;
+  const lab=isInsp(p.kind)?'自社施工':esc(p.kind)+'の明細';
+  const list=w.ls.slice(0,6).map(l=>`・${esc(l.name)} ${+l.qty}${esc(l.unit||'')}`).join('<br>');
+  return `<span class="w">${head}</span><span class="w">${lab} <strong>${w.ls.length}</strong>件${w.ls.length?'<br>'+list+(w.ls.length>6?`<br>ほか${w.ls.length-6}件`:''):''}</span>`;
+}
+/* 名前に乗せる：その月の受け持ち（件数・区分ごと・検査なら大中小） */
+function tipWho(th,x,y){
+  const [n,m]=th.dataset.tw.split('|'), B=byId();
+  const ps=DB.procs.filter(p=>p.who===n&&p.date&&(p.date.slice(0,7)===m||(p.end||p.date).slice(0,7)===m));
+  const byK={}; ps.forEach(p=>{ byK[p.kind]=(byK[p.kind]||0)+1; });
+  const ins=ps.filter(p=>isInsp(p.kind)), sz={大:0,中:0,小:0}; let self=0;
+  ins.forEach(p=>{ const c=B[p.case]; if(!c)return; const w=workOf(p,c); sz[w.vol.size]++; self+=w.ls.length; });
+  tipHide(); tipEl=document.createElement('div'); tipEl.className='tip';
+  tipEl.innerHTML=`<b>${esc(n)}　${+m.slice(5,7)}月の受け持ち</b>
+    <span class="w">全部で <strong>${ps.length}</strong> 件${Object.keys(byK).length?'（'+Object.entries(byK).map(([k,v])=>esc(k)+' '+v).join('・')+'）':''}</span>
+    ${ins.length?`<span class="w">検査 ${ins.length}件：大 ${sz.大}・中 ${sz.中}・小 ${sz.小}　自社施工 計${self}件</span>`:''}
+    <span class="w">休み ${offDays(n,m).length}日</span>`;
+  document.body.appendChild(tipEl); tipMove(x,y);
+}
 function tipShow(ch,x,y){
-  const p=DB.procs.find(q=>q.id===ch.dataset.p); if(!p)return;
+  const p=DB.procs.find(q=>q.id===(ch.dataset.p||ch.dataset.tp)); if(!p)return;
   const c=DB.cases.find(q=>q.id===p.case)||{};
   const v=vendorOf(p.who);
   const span=(typeof spanLabel==='function')?spanLabel(p):(p.date?md(p.date):'');
@@ -3331,18 +3366,20 @@ function tipShow(ch,x,y){
     <span class="w">${esc(span||'日付未定')}${p.amt?'　'+yen(p.amt):'　金額未入力'}</span>
     ${p.memo?`<span class="w">${esc(p.memo)}</span>`:''}
     ${c.done?`<span class="w">完工 ${md(c.done)}</span>`:(c.plan?`<span class="w">完工予定 ${md(c.plan)}</span>`:'')}
-    ${c.memo?`<span class="w">${esc(c.memo)}</span>`:''}`;
+    ${c.memo?`<span class="w">${esc(c.memo)}</span>`:''}
+    ${c.id?workHtml(p,c):''}`;
   document.body.appendChild(tipEl);
   tipMove(x,y);
 }
 document.addEventListener('mouseover',e=>{
-  const ch=e.target.closest&&e.target.closest('.chip[data-p]');
-  if(ch)tipShow(ch,e.clientX,e.clientY); else if(!e.target.closest||!e.target.closest('.tip'))tipHide();
+  const ch=e.target.closest&&e.target.closest('.chip[data-p],.chip[data-tp]');
+  const tw=!ch&&e.target.closest&&e.target.closest('[data-tw]');
+  if(ch)tipShow(ch,e.clientX,e.clientY); else if(tw)tipWho(tw,e.clientX,e.clientY); else if(!e.target.closest||!e.target.closest('.tip'))tipHide();
 });
 document.addEventListener('mousemove',e=>{ if(tipEl)tipMove(e.clientX,e.clientY); });
 document.addEventListener('mouseout',e=>{
-  const ch=e.target.closest&&e.target.closest('.chip[data-p]');
-  if(ch&&!(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest('.chip[data-p]')))tipHide();
+  const ch=e.target.closest&&e.target.closest('.chip[data-p],.chip[data-tp],[data-tw]');
+  if(ch&&!(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest('.chip[data-p],.chip[data-tp],[data-tw]')))tipHide();
 });
 window.addEventListener('scroll',tipHide,true);
 document.addEventListener('wheel',e=>{
@@ -3490,6 +3527,7 @@ document.addEventListener('drop',e=>{ if(tab!=='case'||!isFileDrag(e))return; e.
 document.addEventListener('click',e=>{
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
   const cpl=e.target.closest('[data-cpage]'); if(cpl){ openCasePage(cpl.dataset.cpage); return; }
+  const avo=e.target.closest('[data-avoff]'); if(avo){ const [n,mm]=avo.dataset.avoff.split('|'); askOff(n,mm); return; }
   const ask=e.target.closest('[data-ask]'); if(ask&&pCase){ const i=ask.dataset.ask.lastIndexOf('|'); askSheet(pCase,ask.dataset.ask.slice(0,i),ask.dataset.ask.slice(i+1)); return; }
   const avk=e.target.closest('[data-avk]'); if(avk){ avOne=avk.dataset.avk; avRedraw(); return; }
   if(e.target.id==='cpBack'){ tab=cpBack||'ledger'; render(); return; }
