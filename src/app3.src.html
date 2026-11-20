@@ -280,7 +280,8 @@ table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#F
 .avwrap tr.avrow td,.avwrap tr.avrow th{height:64px}
 td.av.busy .chip{margin:0 0 2px;cursor:pointer}
 /* 予定表の札：物件名を3行まで折り返して見せる。日付の幅が狭いときは2行目（依頼元・区分）を外して物件名に使う（色で依頼元は分かる） */
-td.av .chip{padding:2px 3px}td.av .chip .p{white-space:normal;word-break:break-all;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;font-size:9.5px;line-height:1.22;letter-spacing:-.02em}
+td.av .chip{padding:2px 3px}td.av .chip .p{white-space:normal;word-break:break-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:9.5px;line-height:1.22;letter-spacing:-.02em}
+td.av .avn{display:block;text-align:right;font-size:10px;font-weight:900;color:var(--ink);line-height:1.1;margin:-1px 0 1px}td.av .avn b{background:var(--ink);color:#fff;border-radius:8px;padding:0 5px}
 table.narrow td.av .chip .y{display:none}td.av .chip.me{outline:2px solid var(--acc);outline-offset:-2px}
 td.av .chip.q{outline:1.5px dashed #B07A00;outline-offset:-2px}
 .avhead{background:#3E4A46;color:#fff;border-radius:10px 10px 0 0;padding:7px 10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -1970,7 +1971,7 @@ function availRows(c,ps,m,D,y,mo){
       return `<span class="chip avc${p.case===c.id?' me':''}${p.ask==='打診中'?' q':''}" data-tp="${p.id}" style="background:${col(k.client)}">
         <span class="p">${p.ask==='打診中'?'<span class="tentb">打診</span>':''}${esc(k.prop||'（物件未入力）')}${p.date===ds?'':'<span class="cont">続</span>'}</span>
         <span class="y">${esc(clientShort(k.client))}${k.client?'・':''}${esc(p.kind)}</span></span>`; };
-    return `<td class="av busy${mine?' mine':''}"${ak}>${js.slice(0,2).map(one).join('')}${js.length>2?`<div class="avmore">＋${js.length-2}件</div>`:''}</td>`; };
+    return `<td class="av busy${mine?' mine':''}"${ak}><span class="avn"><b>${js.length}件</b></span>${js.slice(0,2).map(one).join('')}${js.length>2?`<div class="avmore">＋${js.length-2}件</div>`:''}</td>`; };
   const days=Array.from({length:D},(_,i)=>i+1);
   return {head:`<div class="avhead"><b>職人の予定表</b>
     <span class="seg">${[...all,'全部'].map(k=>`<button type="button" class="${k===one?'on':''}" data-avk="${esc(k)}">${esc(k)}</button>`).join('')}</span>
