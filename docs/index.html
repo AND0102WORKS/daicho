@@ -281,19 +281,24 @@ table.bd th.fd-b,table.bd td.fd-b{box-shadow:inset 3px 0 0 #2F6DB5;background:#E
 table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#FBF3D6}
 .flagline{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;font-size:12.5px}
 .pbar{margin:10px 0 6px}
-.avwrap{max-height:222px;overflow:auto;margin:-4px 0 10px;border-top:0}
-.avwrap tr.avsec th,.avwrap tr.avsec td{position:sticky;top:0;z-index:4}.avwrap tr.avsec th.nm{z-index:6}
+.avblock{margin:-2px 0 10px}.avwrap{max-height:190px;overflow:auto;margin:0;border-top:0}
 .avwrap tr.avrow td,.avwrap tr.avrow th{height:52px}
+.avhead{background:#3E4A46;color:#fff;border-radius:10px 10px 0 0;padding:7px 10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.avhead>b{font-size:13.5px;font-weight:900;min-width:96px}
+.avblock .avwrap{border-radius:0 0 10px 10px;margin-top:0}
 td.av .avj{font-size:10px;line-height:1.25;text-align:left;white-space:normal;word-break:break-all;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-bottom:2px}
 td.av .avj i{font-style:normal;font-weight:900;margin-right:2px;color:#7A4B1C}td.av .avj.me{font-weight:700}
 td.av .avmore{font-size:10px;color:var(--sub);text-align:left}
-tr.avsec th,tr.avsec td{background:#3E4A46;color:#fff;font-size:12px;text-align:left;padding:7px 10px;height:auto;font-weight:400;border-color:#3E4A46}
-tr.avsec th{font-weight:900;font-size:13.5px;color:#fff}
+td.av[data-ask]{cursor:pointer}td.av.free[data-ask]:hover{background:var(--ok-bg)}
+td.av.free[data-ask]:hover::after{content:'＋打診';font-size:11px;font-weight:700;color:var(--ok)}
+td.av.busy[data-ask]:hover{filter:brightness(.96)}
+td.av .avj.q{color:#8A5A00}td.av .avj.q i{background:#F2C14E;color:#1E2A32;border-radius:3px;padding:0 2px}
+.askst{display:inline-block;font-size:10.5px;font-weight:700;padding:0 6px;border-radius:8px;margin-left:4px;vertical-align:1px}
+.askst.wait{background:#FBEFD0;color:#8A5A00}.askst.ok{background:var(--ok-bg);color:var(--ok)}.askst.ng{background:var(--warn-bg);color:var(--warn)}
 .seg{display:inline-flex;border:1px solid #8A9792;border-radius:8px;overflow:hidden;margin-right:14px;vertical-align:middle}
 .seg button{all:unset;cursor:pointer;padding:5px 14px;font-size:13px;font-weight:700;color:#DDE3E1;border-left:1px solid #8A9792;white-space:nowrap}
 .seg button:first-child{border-left:0}.seg button:hover{background:#56635E}.seg button.on{background:#fff;color:var(--ink)}
 .avhelp{font-size:11.5px;color:#C9D1CE;white-space:nowrap}
-table.bd tbody tr.avsec th.nm,table.bd tbody tr.avsec td{background:#3E4A46;color:#fff}
 table.bd tbody tr.avrow th.nm{background:#E6EBEA;border-left:4px solid #3E4A46}
 
 td.av{height:34px;text-align:center;vertical-align:middle;font-size:11px;padding:1px}
@@ -358,8 +363,8 @@ function alog(ev,x){ try{ AWLOG.push([new Date().toISOString().slice(5,19),DEV,e
 const TABLES={
   cases: {cols:['id','org','client','prop','kind','st','live','ord','ord_by','sales','add_amt','bill','kisan','want','plan','plan_manual','done','keyx','warr','recv','case_no','src','memo','items','report','photo','addr','key_info','madori'],
           map:{add:'add_amt',planManual:'plan_manual',caseNo:'case_no',ordBy:'ord_by',keyInfo:'key_info'}, dates:['kisan','want','plan','done'], bools:['live','plan_manual']},
-  procs: {cols:['id','org','case_id','kind','who','start_date','end_date','amt','month','prog','order_id','auto','memo'],
-          map:{case:'case_id',date:'start_date',end:'end_date',order:'order_id'}, dates:['start_date','end_date'], bools:['auto']},
+  procs: {cols:['id','org','case_id','kind','who','start_date','end_date','amt','month','prog','order_id','auto','memo','ask','ask_at'],
+          map:{case:'case_id',date:'start_date',end:'end_date',order:'order_id',askAt:'ask_at'}, dates:['start_date','end_date'], bools:['auto'], ts:['ask_at']},
   lines: {cols:['id','org','case_id','no','name','spec','qty','unit','sell','price','kind','who','memo','cut','src','order_id'],
           map:{case:'case_id',order:'order_id'}, dates:[], bools:['cut']},
   orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable'],
@@ -1874,7 +1879,7 @@ function flagLine(c,m){
 const KABBR={'清掃':'清','AW検査':'検','検査':'検','内装':'内','リペア補修':'リ','水道設備':'水','電気設備':'電','現地調査':'調','自社施工':'自','鍵交換':'鍵'};
 /* 帯の中の区分のボタンで、その区分の業者だけ出す（1つ選ぶ。「全部」もある）。区分は発注先マスタの「既定の工程区分」から自動で並ぶ。
    最初は、この案件で業者が決まっていない工程の区分。下の工程の行の業者欄を押すと、その行の区分に自動で切り替わる */
-let avOne=null, avLast=null;
+let avOne=null, avLast=null, avCur='';
 const AV_SKIP=['現地調査','自社施工'];
 function avKinds(){
   const act=DB.vendors.filter(v=>v.active!==false);
@@ -1884,14 +1889,57 @@ function avKinds(){
   return ks;
 }
 const avMatch=(v,k)=>isInsp(k)?canInspect(v):vendorKinds(v).indexOf(k)>=0;
+/* ---- 打診：予定表のマスを押す → この案件の工程にその業者・日付を「打診中」で入れ、LINE・メールで聞く。
+   業者は業者ページで「受けられる／都合が悪い」を押す。受けると「受諾」、断ると工程の業者が空に戻り「○○さんが辞退」と残る ---- */
+const askLink=v=>(typeof vendorLink==='function'&&v&&v.token)?vendorLink(v):'';
+function askMessage(c,p,v){
+  const lk=askLink(v);
+  const body=[`${v.full||v.name} 様`,'',`お疲れさまです。下記の日程でお願いできるか、ご都合を教えてください。`,'',
+    `日程：${spanLabel(p)}`,`作業：${p.kind}`,`物件：${c.prop||''}`,...(c.addr?[`住所：${c.addr}`]:[]),'',
+    ...(lk?[`こちらのページで「受けられる／都合が悪い」を押してください（ログイン不要）：`,lk+'&m=orders','']:['このメッセージにご返信ください。','']),
+    (DB.cfg&&DB.cfg.company)||'アンドワークス株式会社'].join('\n');
+  return {subject:`【日程の打診】${md(p.date)} ${p.kind} ${c.prop||''}`,body};
+}
+function askSheet(cid,who,ds){
+  const c=byId()[cid], v=vendorOf(who); if(!c||!v)return;
+  const want=avCur==='全部'?(isInsp(v.defKind)?'AW検査':v.defKind):avCur;
+  const same=p=>p.case===cid&&(isInsp(want)?isInsp(p.kind):p.kind===want);
+  const tgt=DB.procs.find(p=>same(p)&&!p.who)||null;
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="askbox" style="max-width:440px"><h4>${esc(who)} さんに打診する</h4>
+    <p style="margin:4px 0 10px;font-size:14px;line-height:1.7"><b>${md(ds)}</b>　${esc(want)}<br>${esc(c.prop||'')}</p>
+    <p class="note" style="margin:0 0 12px">${tgt?`この案件の「${esc(tgt.kind)}」の工程に、${esc(who)} さん・${md(ds)} を「打診中」で入れます。`:`この案件に「${esc(want)}」の工程を1本足して、「打診中」で入れます。`}
+      送ると、業者ページに「受けられる／都合が悪い」のボタンが出ます。返事はこの画面に自動で出ます。</p>
+    <div class="askbtn" style="flex-wrap:wrap;gap:6px">
+      ${askLink(v)?`<button class="btn small primary" data-askgo="line">LINEで送る</button>
+      <button class="btn small primary" data-askgo="mail">メールで送る${v.email?'':'（宛先なし）'}</button>
+      <button class="btn small" data-askgo="copy">文面をコピー</button>`:`<span class="note">この業者は業者ページのリンクがまだありません（発注先マスタ）</span>`}
+      <button class="btn small" data-askgo="only" title="電話などで聞くとき。打診中の印だけ付ける">印だけ付ける</button>
+      <span class="grow"></span><button class="btn small" data-askgo="no">やめる</button></div></div>`;
+  document.body.appendChild(el);
+  el.onclick=e=>{ const b=e.target.closest('[data-askgo]'); if(!b)return; const g=b.dataset.askgo; el.remove(); if(g==='no')return;
+    snap('ask:'+cid);
+    let p=tgt; if(!p){ DB.pseq++; p={id:'Q'+DB.pseq+DEV,case:cid,kind:want,who:'',date:'',amt:0,month:'',prog:''}; DB.procs.push(p); }
+    p.who=who; p.date=ds; p.end=''; p.month=''; p.ask='打診中'; p.askAt=new Date().toISOString();
+    save(); render();
+    const m=askMessage(c,p,v);
+    if(g==='line')window.open('https://line.me/R/share?text='+encodeURIComponent(m.body),'_blank','noopener');
+    else if(g==='mail'){ const a=document.createElement('a'); a.href='mailto:'+encodeURIComponent(v.email||'')+'?subject='+encodeURIComponent(m.subject)+'&body='+encodeURIComponent(m.body); document.body.appendChild(a); a.click(); a.remove(); }
+    else if(g==='copy')copyText(m.body,'打診の文面をコピーした');
+    toast(`${who} さんに ${md(ds)} ${p.kind} を打診中にした`); };
+}
+const askBadge=p=>p.ask==='打診中'?'<span class="askst wait">打診中</span>':p.ask==='受諾'?'<span class="askst ok">受諾</span>':
+  String(p.ask||'').startsWith('辞退')?`<span class="askst ng">${esc(p.ask.slice(3)||'')}さん辞退</span>`:'';
 /* 予定表だけ描き直す（業者欄の選択画面を開いたままにするため、画面全体は描き直さない） */
 function avRedraw(){
-  const tb=document.querySelector('.avwrap tbody'); if(!tb||!avLast)return;
-  tb.innerHTML=availRows(...avLast); tb.closest('.avwrap').scrollTop=0;
+  const tb=document.querySelector('.avwrap tbody'), hd=document.querySelector('.avhead'); if(!tb||!hd||!avLast)return;
+  const r=availRows(...avLast); if(!r)return;
+  hd.outerHTML=r.head; tb.innerHTML=r.rows; tb.closest('.avwrap').scrollTop=0;
 }
+/* 帯（区分のボタン）は横にスクロールしない場所に置き、職人の行だけを箱の中でスクロールさせる */
 function availBlock(c,ps,m,D,y,mo){
-  const rows=availRows(c,ps,m,D,y,mo); if(!rows)return '';
-  return `<div class="boardwrap avwrap"><table class="bd" style="width:${112+86*D}px"><colgroup><col style="width:112px">${'<col style="width:var(--col)">'.repeat(D)}</colgroup><tbody>${rows}</tbody></table></div>`;
+  const r=availRows(c,ps,m,D,y,mo); if(!r)return '';
+  return `<div class="avblock">${r.head}<div class="boardwrap avwrap"><table class="bd" style="width:${112+86*D}px"><colgroup><col style="width:112px">${'<col style="width:var(--col)">'.repeat(D)}</colgroup><tbody>${r.rows}</tbody></table></div></div>`;
 }
 /* 予定表と上の工程の表は、横スクロールを合わせる */
 document.addEventListener('scroll',e=>{ const t=e.target; if(!t.classList)return;
@@ -1899,25 +1947,27 @@ document.addEventListener('scroll',e=>{ const t=e.target; if(!t.classList)return
   if(o&&Math.abs(o.scrollLeft-t.scrollLeft)>1)o.scrollLeft=t.scrollLeft; },true);
 function avFollow(kind){ const k=isInsp(kind)?'AW検査':kind; if(k&&avKinds().indexOf(k)>=0&&k!==avOne){ avOne=k; avRedraw(); } }
 function availRows(c,ps,m,D,y,mo){
-  const all=avKinds(); if(!all.length)return '';
+  const all=avKinds(); if(!all.length)return null;
   avLast=[c,ps,m,D,y,mo];
   const chip=k=>isInsp(k)?'AW検査':k, ok=k=>k==='全部'||all.indexOf(k)>=0;
-  const one=(avOne&&ok(avOne))?avOne:(ps.filter(p=>!p.who).map(p=>chip(p.kind)).find(ok)||ps.map(p=>chip(p.kind)).find(ok)||all[0]);
+  const one=avCur=(avOne&&ok(avOne))?avOne:(ps.filter(p=>!p.who).map(p=>chip(p.kind)).find(ok)||ps.map(p=>chip(p.kind)).find(ok)||all[0]);
   const sel=one==='全部'?all:[one];
   const people=DB.vendors.filter(v=>v.active!==false&&sel.some(k=>avMatch(v,k))).map(v=>v.name);
   const B=byId();
   const cell=(who,d)=>{ const ds=iso(y,mo,d), js=DB.procs.filter(p=>p.who===who&&p.date&&onDay(p,ds));
     if(isOff(who,ds))return `<td class="av off" title="休み">休</td>`;
-    if(!js.length)return `<td class="av free" title="${esc(who)} ${md(ds)}：空き"></td>`;
+    const ak=` data-ask="${esc(who)}|${ds}"`;
+    if(!js.length)return `<td class="av free"${ak} title="${esc(who)} ${md(ds)}：空き。押すと打診する"></td>`;
     const mine=js.some(p=>p.case===c.id);
-    const one=p=>`<div class="avj${p.case===c.id?' me':''}"><i>${esc(KABBR[p.kind]||p.kind.slice(0,1))}</i>${esc((B[p.case]||{}).prop||'')}</div>`;
-    return `<td class="av busy${mine?' mine':''}" title="${esc(js.map(p=>`${(B[p.case]||{}).prop||''}（${p.kind}）`).join('\n'))}">${js.slice(0,2).map(one).join('')}${js.length>2?`<div class="avmore">ほか${js.length-2}件</div>`:''}</td>`; };
+    const one=p=>`<div class="avj${p.case===c.id?' me':''}${p.ask==='打診中'?' q':''}"><i>${p.ask==='打診中'?'打診':esc(KABBR[p.kind]||p.kind.slice(0,1))}</i>${esc((B[p.case]||{}).prop||'')}</div>`;
+    return `<td class="av busy${mine?' mine':''}"${ak} title="${esc(js.map(p=>`${(B[p.case]||{}).prop||''}（${p.kind}${p.ask==='打診中'?'・打診中':''}）`).join('\n'))}
+押すと、この日でさらに打診する">${js.slice(0,2).map(one).join('')}${js.length>2?`<div class="avmore">ほか${js.length-2}件</div>`:''}</td>`; };
   const days=Array.from({length:D},(_,i)=>i+1);
-  return `<tr class="avsec"><th class="nm">職人の予定表</th><td colspan="${D}">
+  return {head:`<div class="avhead"><b>職人の予定表</b>
     <span class="seg">${[...all,'全部'].map(k=>`<button type="button" class="${k===one?'on':''}" data-avk="${esc(k)}">${esc(k)}</button>`).join('')}</span>
-    <span class="avhelp">下の業者欄を押すと自動で切り替わる。白＝空き　マス＝その日の現場（清＝清掃、検＝検査…）　休＝休み　太枠＝この案件</span></td></tr>`+
-    (people.length?'':`<tr class="avrow"><th class="nm"></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">この区分の業者は発注先マスタにいません</td></tr>`)+
-    people.map(n=>`<tr class="avrow"><th class="nm">${esc(n)}<small>${esc([vendorOf(n).defKind,canInspect(vendorOf(n))&&!isInsp(vendorOf(n).defKind)?'検査も':''].filter(Boolean).join('・'))}</small></th>${days.map(d=>cell(n,d)).join('')}</tr>`).join('');
+    <span class="avhelp">日付のマスを押すと業者に打診。白＝空き　マス＝その日の現場（清＝清掃、検＝検査…）　休＝休み　太枠＝この案件</span></div>`,
+    rows:(people.length?'':`<tr class="avrow"><th class="nm"></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">この区分の業者は発注先マスタにいません</td></tr>`)+
+    people.map(n=>`<tr class="avrow"><th class="nm">${esc(n)}<small>${esc([vendorOf(n).defKind,canInspect(vendorOf(n))&&!isInsp(vendorOf(n).defKind)?'検査も':''].filter(Boolean).join('・'))}</small></th>${days.map(d=>cell(n,d)).join('')}</tr>`).join('')};
 }
 function procPanel(c){
   const ps=procsOf(c.id).slice().sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
@@ -1938,7 +1988,7 @@ function procPanel(c){
           style="background:${kcol(p.kind)}">
           <span class="p">${esc(p.kind)}${first?'':'<span class="cont">続</span>'}</span>
           <span class="y">${esc(p.who||'業者未定')}</span></button>`:''}</td>`;}).join('');
-    return `<tr><th class="nm">${esc(p.kind)}<small>${esc(p.who||'業者未定')}${
+    return `<tr><th class="nm">${esc(p.kind)}${askBadge(p)}<small>${esc(p.who||'業者未定')}${
       p.date?'　'+spanLabel(p):(p.memo?'　'+esc(p.memo):'')}</small></th>${tds}</tr>`;
   }).join('');
   const warn=[];
@@ -1949,7 +1999,8 @@ function procPanel(c){
   if(s.length&&v.length){const ls=s.map(endOf).sort().pop(), fv=v.map(p=>p.date).sort()[0];
     if(fv<ls)warn.push(`AW検査 ${md(fv)} が清掃 ${md(ls)} より前になっている`);}
   ps.forEach(p=>{
-    if(!p.who)warn.push(`${p.kind}の業者が決まっていない`);
+    if(p.ask==='打診中')warn.push(`${p.who} さんに${p.kind}（${p.date?md(p.date):''}）を打診中。返事待ち`);
+    if(!p.who)warn.push(String(p.ask||'').startsWith('辞退')?`${p.kind}：${p.ask.slice(3)} さんが都合が悪いと返事。別の業者に打診する`:`${p.kind}の業者が決まっていない`);
     else if(!p.date)warn.push(`${p.who}（${p.kind}）の日付が決まっていない`);
     else{
       const offHit=SEN.indexOf(p.who)>=0?spanDays(p).find(d=>isOff(p.who,d)):null;
@@ -3247,6 +3298,7 @@ function setProc(pid,f,v){
   snap('proc:'+pid+':'+f);
   if(f==='amt')v=+v||0;
   p[f]=v; if(f==='date'||f==='end')p.month='';
+  if((f==='who'||f==='date')&&p.ask){ p.ask=''; p.askAt=null; }
   if(f==='who'&&v){const mv=vendorOf(v); if(mv&&mv.defKind&&PKINDS.indexOf(p.kind)<0)p.kind=mv.defKind;}
   if(f==='end'&&p.end&&(!p.date||p.end<=p.date))p.end='';          // 開始以前＝1日だけ
   if(f==='date'&&p.end&&p.end<=p.date)p.end='';
@@ -3438,6 +3490,7 @@ document.addEventListener('drop',e=>{ if(tab!=='case'||!isFileDrag(e))return; e.
 document.addEventListener('click',e=>{
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
   const cpl=e.target.closest('[data-cpage]'); if(cpl){ openCasePage(cpl.dataset.cpage); return; }
+  const ask=e.target.closest('[data-ask]'); if(ask&&pCase){ const i=ask.dataset.ask.lastIndexOf('|'); askSheet(pCase,ask.dataset.ask.slice(0,i),ask.dataset.ask.slice(i+1)); return; }
   const avk=e.target.closest('[data-avk]'); if(avk){ avOne=avk.dataset.avk; avRedraw(); return; }
   if(e.target.id==='cpBack'){ tab=cpBack||'ledger'; render(); return; }
   const est=e.target.closest('[data-estimate]'); if(est){ showEstimate(est.dataset.estimate); return; }

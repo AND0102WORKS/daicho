@@ -72,6 +72,10 @@ a.route{display:block;text-align:center;padding:9px;border-radius:8px;border:1px
 .ins{margin-top:6px}.ins .works{margin-top:4px;font-size:13.5px}.ins .works div{padding:2px 0}
 .wt{font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:8px;margin-right:6px}.wt.ok{background:var(--ok-bg);color:var(--ok)}.wt.ng{background:var(--warn-bg);color:var(--warn)}
 .warnline{margin-top:4px;font-size:12.5px;color:var(--warn);font-weight:700}
+.askc{background:#fff;border:2px solid #E0A21B;border-radius:12px;padding:12px 14px;margin:0 0 10px}
+.askc .prop{font-weight:900;font-size:16px;margin-bottom:4px}.askc .meta{font-size:13.5px;color:var(--sub);margin-top:2px}.askc .meta b{color:var(--ink);font-size:15px}
+.askb{display:flex;gap:8px;margin-top:10px}.askb button{flex:1;padding:12px 0;border-radius:10px;font-size:15px;font-weight:900;border:1px solid var(--line);background:#fff}
+.askb .ok{background:var(--acc);color:#fff;border-color:var(--acc)}.askb .ng{color:var(--warn)}
 .rst{font-size:14px;font-weight:700;padding:8px 10px;border-radius:7px;flex-basis:100%}
 .rst.wait{background:var(--amber-bg)}.rst.ok{background:var(--ok-bg);color:var(--ok)}.rst.ng{background:var(--warn-bg);color:var(--warn)}
 button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:14px;color:var(--ink)}
@@ -165,7 +169,7 @@ const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${Str
 const md=s=>{ if(!s)return ''; s=String(s).slice(0,10); return `${+s.slice(5,7)}/${+s.slice(8,10)}（${WD[new Date(s+'T00:00:00').getDay()]}）`; };
 const days=(a,b)=>Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000)+1;
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let range='week', ME=null, busy=false, mode='', ROWS={};
+let range='week', ME=null, busy=false, mode='', ROWS={}, ASKS=[];
 const yen=n=>'¥'+Math.round(+n||0).toLocaleString('ja-JP');
 const SLABEL={'送付済':['承諾待ち','wait'],'承諾':['承諾済み','ok'],'完了':['完了',''],'請求済':['請求済み','']};
 /* 発注の一覧（送付済み以降）。承諾待ちを上に。押すと発注書（承諾ボタンのあるページ）を開く */
@@ -174,8 +178,16 @@ async function loadOrders(){
   const {data,error}=await sb.rpc('my_orders',{p_token:token});
   if(error){ el.innerHTML='<div class="err">読み込めませんでした。電波の良いところで「更新」を押してください。</div>'; return null; }
   const rows=data||[], wait=rows.filter(o=>o.st==='送付済');
-  const c=document.getElementById('waitCnt'); c.hidden=!wait.length; c.textContent=wait.length;
-  if(!rows.length){ el.innerHTML='<div class="empty">発注はまだありません</div>'; return rows; }
+  /* 日程の打診（返事待ち）。発注の一覧の一番上に出す */
+  const ra=await sb.rpc('my_asks',{p_token:token}); ASKS=(ra.data||[]);
+  const askHtml=ASKS.length?`<div class="sec" style="margin-top:0">日程の打診（${ASKS.length}件）　お返事ください</div>`+ASKS.map(a=>{
+    const s=String(a.start_date||'').slice(0,10), e=String(a.end_date||'').slice(0,10);
+    return `<div class="askc"><div class="prop">${esc(a.prop)}</div>
+      <div class="meta"><span class="tag">${esc(a.kind)}</span>　<b>${md(s)}${e&&e!==s?' 〜 '+md(e):''}</b></div>
+      ${a.addr?`<div class="meta">${esc(a.addr)}</div>`:''}
+      <div class="askb"><button type="button" class="ok" data-ans="${esc(a.proc_id)}|1">受けられる</button><button type="button" class="ng" data-ans="${esc(a.proc_id)}|0">都合が悪い</button></div></div>`; }).join(''):'';
+  const c=document.getElementById('waitCnt'); c.hidden=!(wait.length+ASKS.length); c.textContent=wait.length+ASKS.length;
+  if(!rows.length){ el.innerHTML=askHtml+(ASKS.length?'':'<div class="empty">発注はまだありません</div>'); return rows; }
   const card=o=>{ const [lab,cls]=SLABEL[o.st]||[o.st,''], tax=o.taxable!==false, amt=tax?Math.round(o.amount*1.1):o.amount;
     const term=o.start_date?md(o.start_date)+(o.end_date&&String(o.end_date).slice(0,10)!==String(o.start_date).slice(0,10)?' 〜 '+md(o.end_date):''):'未定';
     return `<a class="ord ${o.st==='送付済'?'wait':''}" href="order.html?t=${encodeURIComponent(o.order_token)}&v=${encodeURIComponent(token)}">
@@ -185,7 +197,7 @@ async function loadOrders(){
       <div class="amt">${yen(amt)} <small>${tax?'（税込）':'（消費税なし）'}</small></div>
       <div class="go">${o.st==='送付済'?'発注書を見て承諾する':'発注書を見る'}</div></a>`; };
   const act=rows.filter(o=>o.st==='送付済'||o.st==='承諾'), past=rows.filter(o=>o.st!=='送付済'&&o.st!=='承諾');
-  el.innerHTML=(wait.length?`<p class="sum">承諾待ちが <b>${wait.length}</b> 件あります</p>`:'')+
+  el.innerHTML=askHtml+(wait.length?`<p class="sum">承諾待ちが <b>${wait.length}</b> 件あります</p>`:'')+
     (act.length?act.map(card).join(''):'<div class="empty">進行中の発注はありません</div>')+
     (past.length?`<div class="sec">完了した発注（${past.length}件）</div>`+past.slice(0,20).map(card).join(''):'');
   return rows;
@@ -429,11 +441,20 @@ async function start(){
   if(error||!data||!data.length){ setMode('sched'); load(); return; }   /* 無効なリンクの表示は load() に任せる */
   ME=data[0]; document.getElementById('who').textContent=ME.name+' さん';
   const rows=await loadOrders();
-  setMode(rows&&rows.some(o=>o.st==='送付済')?'orders':(rows&&rows.length&&ME.type==='外注'?'orders':'sched'));
+  setMode(ASKS.length||(rows&&rows.some(o=>o.st==='送付済'))?'orders':(rows&&rows.length&&ME.type==='外注'?'orders':'sched'));
   load();
 }
 document.addEventListener('click',async e=>{
   const mb=e.target.closest('[data-m]'); if(mb){ setMode(mb.dataset.m); return; }
+  const an=e.target.closest('[data-ans]'); if(an){ const [pid,ok]=an.dataset.ans.split('|');
+    const a=ASKS.find(x=>x.proc_id===pid)||{};
+    if(!confirm(ok==='1'?`${a.prop||''}\n${md(a.start_date)} ${a.kind||''}\nを受けます。よろしいですか？`:`${a.prop||''}\n${md(a.start_date)} ${a.kind||''}\nは都合が悪いと返事します。よろしいですか？`))return;
+    an.disabled=true;
+    sb.rpc('answer_ask',{p_token:token,p_proc:pid,p_ok:ok==='1'}).then(({data,error})=>{
+      if(error||data==='ng'){ alert('送れませんでした。もう取り消されたか、電波が弱い可能性があります。「更新」を押してください。'); }
+      else alert(ok==='1'?'受けると返事しました。工程に入りました。':'都合が悪いと返事しました。');
+      loadOrders(); });
+    return; }
   if(e.target.id==='reload'){ loadOrders(); load(); if(mode==='bill')loadBill(); return; }
   /* 完了報告 */
   const rb=e.target.closest('[data-rep]'); if(rb){ openReport(rb.closest('.job').dataset.id); return; }

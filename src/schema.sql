@@ -134,6 +134,8 @@ create table if not exists procs (               -- 工程
 create index if not exists procs_case on procs(case_id);
 create index if not exists procs_who_date on procs(who,start_date);
 
+alter table procs add column if not exists ask text default '';      -- 日程の打診：''／打診中／受諾／辞退:業者名（断られたら工程の業者は空に戻る）
+alter table procs add column if not exists ask_at timestamptz;          -- 打診・返事の日時
 create table if not exists lines (               -- 明細
   id text primary key,
   org text not null default 'hq' references orgs(id),
@@ -373,7 +375,7 @@ language sql security definer stable as $$
          when (now() at time zone 'Asia/Tokyo')::date between p.start_date-3 and coalesce(p.end_date,p.start_date)+1 then c.key_info
          else '（作業日の3日前から表示されます）' end
   from procs p join cases c on c.id=p.case_id join vendors v on v.name=p.who
-  where v.token=p_token and v.active
+  where v.token=p_token and v.active and coalesce(p.ask,'')<>'打診中'      -- 打診中は出さない（受けたら出る）
     and p.start_date<=p_to and coalesce(p.end_date,p.start_date)>=p_from   -- 期間に少しでも掛かる工程（前の週から続く工程も出す）
   order by p.start_date, c.prop $$;
 -- 業者ページの工程（今はこちらを使う）：my_schedule に、発注金額（amt・税抜）と完了報告（rep）を足したもの
@@ -437,6 +439,28 @@ begin
   update vendors set token=t where name=p_name;
   return t;
 end $$;
+-- ---------- 業者ページ：日程の打診（工程を組む画面の予定表から） ----------
+-- 業者ページ：自分への打診（返事待ち）。鍵情報・金額は出さない
+create or replace function my_asks(p_token text)
+returns table(proc_id text, prop text, addr text, client text, kind text, start_date date, end_date date, asked_at timestamptz)
+language sql security definer stable as $$
+  select p.id, c.prop, c.addr, c.client, p.kind, p.start_date, p.end_date, p.ask_at
+  from procs p join cases c on c.id=p.case_id join vendors v on v.name=p.who
+  where v.token=p_token and v.active and p.ask='打診中'
+  order by p.start_date, c.prop $$;
+
+-- 業者ページ：打診に返事。受ける→'受諾'。都合が悪い→工程の業者を空に戻し '辞退:業者名'
+create or replace function answer_ask(p_token text, p_proc text, p_ok boolean)
+returns text language plpgsql security definer as $$
+declare nm text; r text;
+begin
+  select name into nm from vendors where token=p_token and active; if nm is null then return 'ng'; end if;
+  update procs set ask=case when p_ok then '受諾' else '辞退:'||nm end,
+                   who=case when p_ok then who else '' end, ask_at=now()
+   where id=p_proc and who=nm and ask='打診中' returning ask into r;
+  return coalesce(r,'ng');
+end $$;
+
 -- ---------- 業者ページ：検査の予定とボリューム ----------
 -- 検査（AW検査）の工程ごとに：間取り（無ければ発注内容・明細の文字から推測）、自社施工の明細の行数、
 -- 同じ現場の他の工程（区分・業者・完了報告の状態）、写真の枚数。業者ページで「大・中・小」と「検査に行ってよいか」を出す
@@ -629,7 +653,7 @@ exception when others then null; end $$;
 
 -- ---------- 仕上げ：security definer 関数の search_path 固定、anon に不要な実行権を外す ----------
 do $$ declare f text; begin
-  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','my_inspections(text,date,date)','close_period(text,int)','add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','staff_add_photos(text,text,text,jsonb)','staff_del_photo(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
+  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','my_inspections(text,date,date)','my_asks(text)','answer_ask(text,text,boolean)','close_period(text,int)','add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','staff_add_photos(text,text,text,jsonb)','staff_del_photo(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function next_no(text,text) from anon;
@@ -687,3 +711,6 @@ begin
   return new;
 end $$;
 revoke execute on function handle_new_user() from public, anon, authenticated;
+
+revoke execute on function my_asks(text), answer_ask(text,text,boolean) from public;
+grant execute on function my_asks(text), answer_ask(text,text,boolean) to anon, authenticated;
