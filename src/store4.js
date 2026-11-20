@@ -33,6 +33,12 @@ const TABLES={
   clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src'],
           map:{full:'full_name',close:'close_day'}, dates:[], bools:[]},
   prices:{cols:['id','org','name','alias','kind','unit','price','who','client','memo'], map:{}, dates:[], bools:[]},
+  /* 完了報告（業者ページから出る）。スタッフは承認・差し戻しだけ書く */
+  reports:{cols:['id','org','proc_id','case_id','who','done_date','note','base','extra','extra_note','photos','st','reply','approved_at','invoice_id'],
+          map:{proc:'proc_id',case:'case_id',done:'done_date',extraNote:'extra_note',approvedAt:'approved_at',invoiceId:'invoice_id'}, dates:['done_date'], bools:[], ts:['approved_at']},
+  /* 業者の請求書（業者ページで発行）／支払明細書（台帳で発行） */
+  invoices:{cols:['id','org','who','kind','month','period_from','period_to','items','subtotal','tax','total','taxable','inv','st','issued_at','confirmed_at','paid_date'],
+          map:{from:'period_from',to:'period_to',issuedAt:'issued_at',confirmedAt:'confirmed_at',paidDate:'paid_date'}, dates:['period_from','period_to','paid_date'], bools:['taxable'], ts:['issued_at','confirmed_at']},
 };
 const REV={}; Object.keys(TABLES).forEach(t=>{ REV[t]={}; Object.entries(TABLES[t].map).forEach(([j,c])=>{REV[t][c]=j;}); });
 /* 行（DBの列）→ JS のレコード */
@@ -54,8 +60,9 @@ function recToRow(t,rec){
     if(c==='org'){ row.org=rec.org||ORG; return; }
     if(v===undefined) return;
     if(T.dates.indexOf(c)>=0) v=(v&&/^\d{4}-\d{2}-\d{2}/.test(String(v)))?String(v).slice(0,10):null;
+    else if((T.ts||[]).indexOf(c)>=0) v=v?String(v):null;   /* 日時。空は null */
     else if(T.bools.indexOf(c)>=0) v=!!v;
-    else if(['sales','add_amt','amt','sell','price','close_day','site'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
+    else if(['sales','add_amt','amt','sell','price','close_day','site','base','extra','subtotal','tax','total'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
     else if(c==='qty') v=(v===''||v==null)?0:(+v||0);
     else if(v===null) v='';
     row[c]=v; });
@@ -68,7 +75,7 @@ const vendorLink=v=>v&&v.token?siteBase()+'me.html?t='+v.token:'';
 const orderLink=o=>o&&o.token?siteBase()+'order.html?t='+o.token:'';
 function copyText(t,msg){ navigator.clipboard.writeText(t).then(()=>toast(msg||'コピーした')).catch(()=>prompt('コピーできなかった。手で選んでコピー：',t)); }
 let recLast={};   /* 'table:id' → sig。変わった行を見つけるため */
-const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1};
+const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1,reports:1,invoices:1};
 function rememberAll(){ recLast={}; Object.keys(COLS).forEach(t=>(DB[t]||[]).forEach(r=>{ if(r.id)recLast[t+':'+r.id]=sig(r); })); kvSaved=kvFlat(); }
 /* 入金・支払済・休み・計上基準・見送り：最後に保存した値（キーごと）。
    全件をまとめて書くと、古い画面の人が他の人の入力を古い値で上書きしてしまうので、変わったキーだけ書く */
@@ -90,12 +97,14 @@ async function fetchAll(t,select){
   return out;
 }
 async function dbLoad(){
-  const [cases,procs,lines,orders,vendors,clients,prices,recv,paid,off,settings]=await Promise.all([
+  const [cases,procs,lines,orders,vendors,clients,prices,recv,paid,off,settings,reports,invoices]=await Promise.all([
     fetchAll('cases'),fetchAll('procs'),fetchAll('lines'),fetchAll('orders'),fetchAll('vendors'),fetchAll('clients'),fetchAll('prices'),
-    fetchAll('receipts'),fetchAll('payments'),fetchAll('days_off'),fetchAll('settings')]);
+    fetchAll('receipts'),fetchAll('payments'),fetchAll('days_off'),fetchAll('settings'),
+    fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[])]);   /* 表がまだ無い DB でも台帳は開けるように */
   DB={cases:cases.map(r=>rowToRec('cases',r)),procs:procs.map(r=>rowToRec('procs',r)),lines:lines.map(r=>rowToRec('lines',r)),
       orders:orders.map(r=>rowToRec('orders',r)),vendors:vendors.map(r=>rowToRec('vendors',r)),clients:clients.map(r=>rowToRec('clients',r)),
       prices:prices.map(r=>rowToRec('prices',r)),
+      reports:reports.map(r=>rowToRec('reports',r)),invoices:invoices.map(r=>rowToRec('invoices',r)),
       recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
   recv.forEach(r=>{ if(+r.amount)DB.recv[r.client+'|'+r.month]=r.amount; });      /* 0 は「消した」の意味 */
   paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
@@ -119,7 +128,7 @@ function migrate(){
     if(c.st==='新規案件')c.st='受付'; });   /* v4 の状態一覧に「新規案件」は無い */
 }
 function reset(){ toast('v4 では「元データに戻す」は無い（データベースが正）'); }
-function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
+function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],reports:[],invoices:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
 
 /* ---- 保存：変わった行だけ ---- */
 function save(){ dbSaveSoon(); }

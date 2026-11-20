@@ -4,7 +4,7 @@
 
 ## 置き場
 - `docs/index.html` … 台帳本体（スタッフ用。メールのリンクでログイン）。**build4.py が生成する。直接編集しない**
-- `docs/me.html` … 職人用スマホページ（`?t=<vendors.token>`）
+- `docs/me.html` … 業者・職人用スマホページ（`?t=<vendors.token>`）。発注の一覧・工程・完了報告・請求
 - `docs/order.html` … 業者用の発注書・承諾ページ（`?t=<orders.token>`）
 - `src/app3.src.html` … 画面コード（CSS+JS 一体。ここを直す）
 - `src/store4.js` … 保存層（Supabase の読み書き・Realtime・ログイン）
@@ -16,7 +16,7 @@
 ## 直し方
 1. `src/app3.src.html` または `src/store4.js` を直す
 2. `python3 src/build4.py` で `docs/index.html` を作り直す
-3. `cd test && ./reset.sh && node run.js`（台帳）／`node pages.js`（職人・業者ページ）が通ること
+3. `cd test && ./reset.sh && node run.js`（台帳）／`node pages.js`（業者ページ・発注書）／`node report.js`（完了報告〜請求）が通ること。テストごとに `./reset.sh` からやり直す
 4. commit → push。GitHub Pages（`docs/`）が数十秒で更新される
 5. DB の表を変えるときは `src/schema.sql` を直し、同じ SQL を Supabase の migration として適用（Claude の Supabase コネクタ `apply_migration`、または SQL Editor）
 

@@ -17,6 +17,7 @@ python3 src/build4.py
 ```
 cd test && npm install                     # 初回だけ（pg を入れる。playwright は環境のものを使う）
 cd test && ./reset.sh && node run.js       # 台帳：読み込み→編集→取り込み→発注→再読み込み
-cd test && ./reset.sh && node pages.js     # 職人ページ（鍵情報・完了）・業者ページ（承諾）
+cd test && ./reset.sh && node pages.js     # 業者ページ（鍵情報・発注の一覧・承諾）・発注書
+cd test && ./reset.sh && node report.js    # 完了報告（写真・追加金額）→ 承認 → 請求書／支払明細書
 ```
 `test/stub.sql` は Supabase の土台（auth.users・auth.uid()・anon などの役割）の、テスト用の代わり。

@@ -47,6 +47,7 @@ button.done:disabled{opacity:.5}
 .mode{display:flex;gap:0;margin:2px 0 12px;border:1px solid var(--acc);border-radius:10px;overflow:hidden}
 .mode button{flex:1;padding:11px 4px;border:0;background:var(--card);font-size:15px;font-weight:700;color:var(--acc)}
 .mode button.on{background:var(--acc);color:#fff}
+.mode .cnt[hidden]{display:none}
 .mode .cnt{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:10px;background:var(--warn);color:#fff;font-size:12px;line-height:20px}
 .ord{display:block;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:8px 0;color:var(--ink);text-decoration:none}
 .ord.wait{border-color:var(--warn);border-width:2px}
@@ -63,13 +64,52 @@ button.done:disabled{opacity:.5}
 .ord:not(.wait) .go{background:var(--card);color:var(--acc);border:1px solid var(--acc)}
 .sec{margin:16px 0 4px;font-weight:700;color:var(--sub);font-size:14px}
 .hint{font-size:12.5px;color:var(--sub);margin:18px 0 0;line-height:1.7}
+.rst{font-size:14px;font-weight:700;padding:8px 10px;border-radius:7px;flex-basis:100%}
+.rst.wait{background:var(--amber-bg)}.rst.ok{background:var(--ok-bg);color:var(--ok)}.rst.ng{background:var(--warn-bg);color:var(--warn)}
+button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:14px;color:var(--ink)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:10;display:flex;align-items:flex-end;justify-content:center}
+.modal[hidden]{display:none}
+.msheet{background:var(--card);width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:14px 14px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+.msheet h3{margin:0 0 4px;font-size:17px}
+.msheet label{display:block;font-size:13px;color:var(--sub);margin-top:12px}
+.msheet input,.msheet textarea{display:block;width:100%;margin-top:4px;font-size:16px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;color:var(--ink);background:#fff}
+.thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.thumbs .t{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;background:#EEE}
+.thumbs img{width:100%;height:100%;object-fit:cover}
+.thumbs button{position:absolute;top:2px;right:2px;border:0;background:rgba(0,0,0,.6);color:#fff;border-radius:50%;width:24px;height:24px;font-size:14px;line-height:24px;padding:0}
+.btns{display:flex;gap:8px;margin-top:16px}
+.btns button{flex:1;padding:12px;border-radius:8px;font-size:16px;font-weight:700;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.btns button.primary{background:var(--acc);color:#fff;border-color:var(--acc)}
+.btns button:disabled{opacity:.5}
+.bm{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0}
+.bm h4{margin:0 0 6px;font-size:15px}
+.bm .it{display:flex;gap:8px;font-size:14px;padding:6px 0;border-top:1px solid #EEE}
+.bm .it .p{flex:1}.bm .it .a{white-space:nowrap;font-weight:700}
+.bm .it small{display:block;color:var(--sub);font-weight:400}
+.bm .tot{text-align:right;font-size:14px;margin-top:8px}
+.bm .tot b{font-size:17px}
+.bm .act{margin-top:10px}
+.bm .act button{width:100%;padding:11px;border-radius:8px;background:var(--acc);color:#fff;border:0;font-size:15px;font-weight:700}
+.doc{background:#fff;color:#000;font-size:13px;line-height:1.6}
+.doc h2{text-align:center;letter-spacing:.4em;font-size:20px;margin:4px 0 12px}
+.doc .two{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.doc table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px}
+.doc th,.doc td{border-bottom:1px solid #CCC;padding:5px 4px;text-align:left;vertical-align:top}
+.doc td.r,.doc th.r{text-align:right;white-space:nowrap}
+.doc .dsum{margin-top:8px;margin-left:auto;width:min(100%,280px);color:#000;font-size:13px}
+.doc .dsum div{display:flex;justify-content:space-between;padding:2px 0}
+.doc .dsum .g{font-weight:700;font-size:15px;border-top:2px solid #000;margin-top:4px;padding-top:4px}
+.doc .dnote{font-size:11.5px;color:#333;margin-top:10px}
+@media print{ body *{visibility:hidden} #docm, #docm *{visibility:visible} #docm{position:absolute;inset:0;background:#fff} #docm .msheet{max-height:none;border-radius:0;box-shadow:none} #docm .noprint{display:none} }
 .err{background:var(--warn-bg);color:var(--warn);padding:12px;border-radius:8px}
 </style>
 </head>
 <body>
 <header><h1>発注と工程</h1><span class="who" id="who"></span><button id="reload" type="button">更新</button></header>
 <main>
-  <div class="mode"><button data-m="orders">発注<span class="cnt" id="waitCnt" hidden></span></button><button data-m="sched">工程</button></div>
+  <div class="mode"><button data-m="orders">発注<span class="cnt" id="waitCnt" hidden></span></button><button data-m="sched">工程</button><button data-m="bill">請求</button></div>
+  <div id="billView" hidden><div id="blist"><div class="empty">読み込み中…</div></div>
+    <p class="hint">完了報告を会社が承認すると、ここに締めの月ごとに並びます。「この月の請求書を発行する」で請求書ができます。<br>会社から支払明細書が届いたときも、ここに出ます。</p></div>
   <div id="ordersView" hidden><div id="olist"><div class="empty">読み込み中…</div></div>
     <p class="hint">このページはあなた専用です。ほかの人に教えないでください。<br>スマホの「ホーム画面に追加」をしておくと、アプリのようにすぐ開けます。</p></div>
   <div id="schedView">
@@ -77,6 +117,19 @@ button.done:disabled{opacity:.5}
   <div id="list"><div class="empty">読み込み中…</div></div>
   </div>
 </main>
+<div class="modal" id="rm" hidden><div class="msheet">
+  <h3>完了報告</h3><div class="meta" id="rProp"></div>
+  <label>完了日<input type="date" id="rDone"></label>
+  <label>コメント（任意）<textarea id="rNote" rows="3" placeholder="作業の内容、気づいたことなど"></textarea></label>
+  <label>写真（任意・何枚でも）<input type="file" id="rFiles" accept="image/*" multiple></label>
+  <div class="thumbs" id="rThumbs"></div>
+  <label>発注金額<input type="text" id="rBase" disabled></label>
+  <label>追加金額（税抜・ある場合だけ）<input type="number" id="rExtra" min="0" step="100" inputmode="numeric" placeholder="0"></label>
+  <label>追加の理由（追加金額があるときは必ず）<input type="text" id="rExtraNote" placeholder="例：下地補修が追加で必要だった"></label>
+  <div class="btns"><button type="button" id="rClose">やめる</button><button type="button" class="primary" id="rSend">報告を送る</button></div>
+</div></div>
+<div class="modal" id="docm" hidden><div class="msheet"><div id="docBody" class="doc"></div>
+  <div class="btns noprint"><button type="button" id="docClose">閉じる</button><button type="button" id="docOk" class="primary" hidden>内容を確認しました</button><button type="button" id="docPrint">印刷・PDF</button></div></div></div>
 <script>
 const SB_URL='https://stcvyehefqnrxibanlxg.supabase.co', SB_KEY='sb_publishable_ZZelNGtUNXLpXs7j4Nd_zw_XFYwI3fx';
 /* ログイン情報は持たない・更新しない（同じブラウザで台帳にログインしていても、そのログインに触らない） */
@@ -87,7 +140,7 @@ const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${Str
 const md=s=>{ if(!s)return ''; s=String(s).slice(0,10); return `${+s.slice(5,7)}/${+s.slice(8,10)}（${WD[new Date(s+'T00:00:00').getDay()]}）`; };
 const days=(a,b)=>Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000)+1;
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let range='week', ME=null, busy=false, mode='';
+let range='week', ME=null, busy=false, mode='', ROWS={};
 const yen=n=>'¥'+Math.round(+n||0).toLocaleString('ja-JP');
 const SLABEL={'送付済':['承諾待ち','wait'],'承諾':['承諾済み','ok'],'完了':['完了',''],'請求済':['請求済み','']};
 /* 発注の一覧（送付済み以降）。承諾待ちを上に。押すと発注書（承諾ボタンのあるページ）を開く */
@@ -114,7 +167,8 @@ async function loadOrders(){
 }
 function setMode(m){ mode=m;
   document.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
-  document.getElementById('ordersView').hidden=m!=='orders'; document.getElementById('schedView').hidden=m!=='sched'; }
+  document.getElementById('ordersView').hidden=m!=='orders'; document.getElementById('schedView').hidden=m!=='sched';
+  document.getElementById('billView').hidden=m!=='bill'; if(m==='bill'&&ME)loadBill(); }
 function span(){
   const t=new Date(); t.setHours(0,0,0,0);
   if(range==='month'){ const a=new Date(t.getFullYear(),t.getMonth(),1), b=new Date(t.getFullYear(),t.getMonth()+1,0); return [fmt(a),fmt(b)]; }
@@ -153,10 +207,123 @@ async function load(){
       ${p.key_info?`<div class="key"><b>鍵</b>${esc(p.key_info)}</div>`:''}
       ${p.memo?`<div class="memo">${esc(p.memo)}</div>`:''}
       <div class="row">${q?`<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${q}">${p.addr?'地図':'地図（物件名で検索）'}</a>`:''}
-        ${tent?'<span class="meta">まだ確定していない予定です</span>':`<button class="done" type="button" data-done="${done?'0':'1'}">${done?'完了済み':'完了にする'}</button>`}</div></div>`;
+        ${tent?'<span class="meta">まだ確定していない予定です</span>':repBox(p)}</div></div>`;
   });
   list.innerHTML=html;
+  ROWS={}; rows.forEach(p=>{ ROWS[p.proc_id]=p; });
 }
+/* 工程カードの下：完了報告の状態とボタン */
+function repBox(p){
+  const r=p.rep;
+  if(!r) return `<button class="done" type="button" data-rep="1">完了報告をする</button>`;
+  const ex=r.extra?`　追加 ${yen(r.extra)}`:'';
+  if(r.st==='承認') return `<div class="rst ok">完了報告：承認済み${ex}${r.billed?'・請求書に載りました':''}</div>`;
+  if(r.st==='差し戻し') return `<div class="rst ng">差し戻されました：${esc(r.reply||'')}</div><button class="done" type="button" data-rep="1">報告を出し直す</button>`;
+  return `<div class="rst wait">完了報告済み（会社の確認待ち）${ex}</div><button class="sub" type="button" data-rep="1">報告を直す</button><button class="sub" type="button" data-cancel="1">報告を取り消す</button>`;
+}
+/* ---- 完了報告 ---- */
+let RP=null;   /* {pid, keep:[既に保存した写真の場所], files:[これから送る写真]} */
+const today=()=>fmt(new Date());
+async function signed(paths){ if(!paths.length)return {}; const {data}=await sb.storage.from('reports').createSignedUrls(paths,3600); const m={}; (data||[]).forEach(x=>{ if(x.signedUrl)m[x.path]=x.signedUrl; }); return m; }
+async function openReport(pid){
+  const p=ROWS[pid]; if(!p)return; const r=p.rep||{};
+  RP={pid,keep:(r.photos||[]).slice(),files:[]};
+  document.getElementById('rProp').textContent=`${p.prop}　${p.kind||''}`;
+  const e=String(p.end_date||p.start_date||'').slice(0,10);
+  document.getElementById('rDone').value=String(r.done_date||'').slice(0,10)||(e&&e<today()?e:today());
+  document.getElementById('rNote').value=r.note||'';
+  document.getElementById('rBase').value=p.amt?yen(p.amt)+'（税抜）':'（会社にご確認ください）';
+  document.getElementById('rExtra').value=r.extra||'';
+  document.getElementById('rExtraNote').value=r.extra_note||'';
+  document.getElementById('rFiles').value='';
+  document.getElementById('rm').hidden=false;
+  await drawThumbs();
+}
+async function drawThumbs(){
+  const urls=await signed(RP.keep);
+  const k=RP.keep.map((x,i)=>`<div class="t"><img src="${esc(urls[x]||'')}" alt=""><button type="button" data-delkeep="${i}">×</button></div>`);
+  const f=RP.files.map((x,i)=>`<div class="t"><img src="${URL.createObjectURL(x)}" alt=""><button type="button" data-delfile="${i}">×</button></div>`);
+  document.getElementById('rThumbs').innerHTML=k.join('')+f.join('');
+}
+/* 写真は長い辺 1600px の JPEG に縮めてから送る（通信量と保存領域を節約） */
+async function shrink(file){
+  try{ const img=await createImageBitmap(file); const sc=Math.min(1,1600/Math.max(img.width,img.height));
+    const c=document.createElement('canvas'); c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    return await new Promise(res=>c.toBlob(b=>res(b||file),'image/jpeg',0.8)); }catch(e){ return file; }
+}
+async function sendReport(){
+  const btn=document.getElementById('rSend');
+  const extra=Math.max(0,Math.round(+document.getElementById('rExtra').value||0)), exNote=document.getElementById('rExtraNote').value.trim();
+  if(extra&&!exNote){ alert('追加金額があるときは、追加の理由を入れてください'); return; }
+  const done=document.getElementById('rDone').value; if(!done){ alert('完了日を入れてください'); return; }
+  btn.disabled=true;
+  try{
+    const paths=RP.keep.slice();
+    for(let i=0;i<RP.files.length;i++){
+      btn.textContent=`写真を送っています（${i+1}/${RP.files.length}）`;
+      const blob=await shrink(RP.files[i]), path=`${token}/${RP.pid}/${Date.now()}-${i}.jpg`;
+      const {error}=await sb.storage.from('reports').upload(path,blob,{contentType:'image/jpeg',upsert:false});
+      if(error)throw new Error('写真を送れませんでした：'+error.message);
+      paths.push(path);
+    }
+    btn.textContent='報告を送っています…';
+    const {data,error}=await sb.rpc('submit_report',{p_token:token,p_proc:RP.pid,p_done:done,p_note:document.getElementById('rNote').value,
+      p_extra:extra,p_extra_note:exNote,p_photos:paths});
+    if(error)throw new Error(error.message);
+    if(data!==true)throw new Error('受け付けられませんでした（承認済みの報告は直せません）。会社に確認してください。');
+    document.getElementById('rm').hidden=true; load();
+  }catch(e){ alert(String(e.message||e)+'\n電波の良いところでもう一度送ってください。'); }
+  btn.disabled=false; btn.textContent='報告を送る';
+}
+/* ---- 請求 ---- */
+const closeMonth=(d,c)=>{ d=String(d).slice(0,10); const y=+d.slice(0,4), m=+d.slice(5,7), day=+d.slice(8,10);
+  if(!c||c>=28||day<=c)return d.slice(0,7); const n=new Date(y,m,1); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; };
+function closePeriod(mon,c){ const y=+mon.slice(0,4), m=+mon.slice(5,7);
+  if(!c||c>=28) return [fmt(new Date(y,m-1,1)),fmt(new Date(y,m,0))];
+  return [fmt(new Date(y,m-2,c+1)),fmt(new Date(y,m-1,c))]; }
+const mlab=mon=>`${+mon.slice(0,4)}年${+mon.slice(5,7)}月`;
+let BILL=null;
+async function loadBill(){
+  const el=document.getElementById('blist');
+  const {data,error}=await sb.rpc('my_billing',{p_token:token});
+  if(error||!data){ el.innerHTML='<div class="err">読み込めませんでした。電波の良いところで「更新」を押してください。</div>'; return; }
+  BILL=data; const V=data.vendor, items=data.items||[], invs=data.invoices||[];
+  const g={}; items.forEach(it=>{ const k=closeMonth(it.done_date,V.close); (g[k]=g[k]||[]).push(it); });
+  const months=Object.keys(g).sort().reverse();
+  const SL={'承認':'承認済み','報告済':'会社の確認待ち','差し戻し':'差し戻し'};
+  let html='';
+  months.forEach(mon=>{ const [a,b]=closePeriod(mon,V.close), its=g[mon], ok=its.filter(x=>x.st==='承認');
+    const sub=ok.reduce((s,x)=>s+(+x.base||0)+(+x.extra||0),0), tax=V.taxable?Math.round(sub*0.1):0;
+    html+=`<div class="bm"><h4>${mlab(mon)}締め <small style="font-weight:400;color:var(--sub)">（${md(a)}〜${md(b)}）</small></h4>
+      ${its.map(x=>`<div class="it"><div class="p">${esc(x.prop)}<small>${esc(x.kind||'')}　完了 ${md(x.done_date)}　${SL[x.st]||esc(x.st)}${x.extra?`　追加 ${yen(x.extra)}（${esc(x.extra_note||'')}）`:''}</small></div>
+        <div class="a">${yen((+x.base||0)+(+x.extra||0))}</div></div>`).join('')}
+      <div class="tot">承認済み ${ok.length}件　小計 ${yen(sub)}${V.taxable?`　消費税 ${yen(tax)}`:''}<br>請求できる金額 <b>${yen(sub+tax)}</b> ${V.taxable?'（税込）':'（消費税なし）'}</div>
+      ${ok.length?`<div class="act"><button type="button" data-issue="${mon}">この月の請求書を発行する</button></div>`:''}</div>`; });
+  if(!months.length)html+='<div class="empty">請求できる完了報告はまだありません</div>';
+  if(invs.length){ html+=`<div class="sec">発行した請求書・届いた支払明細書</div>`+invs.map((v,i)=>`<div class="bm"><div class="it" style="border:0"><div class="p"><b>${esc(v.kind)}</b>　${mlab(v.month||'')}分<small>${md(v.period_from)}〜${md(v.period_to)}　${esc(v.st==='発行'&&v.kind==='支払明細書'?'確認してください':v.st)}</small></div>
+      <div class="a">${yen(v.total)}</div></div><div class="act"><button type="button" data-doc="${i}" style="background:var(--card);color:var(--acc);border:1px solid var(--acc)">${v.kind==='支払明細書'&&v.st==='発行'?'支払明細書を見て確認する':'見る・印刷する'}</button></div></div>`).join(''); }
+  el.innerHTML=html;
+}
+/* 請求書（業者が発行）／支払明細書（会社が発行）の書面 */
+function invoiceDoc(v,V){
+  const stmt=v.kind==='支払明細書', items=v.items||[], AW='アンドワークス株式会社', vname=V.full||V.name||v.who;
+  return `<h2>${stmt?'支払明細書':'請求書'}</h2>
+    <div class="two"><div><b style="font-size:16px">${esc(stmt?vname+' 様':AW+' 御中')}</b><br>${mlab(v.month||'')}分（${md(v.period_from)}〜${md(v.period_to)}）</div>
+      <div style="text-align:right">発行日 ${md(String(v.issued_at||'').slice(0,10))}<br><b>${esc(stmt?AW:vname)}</b>${!stmt&&v.taxable&&v.inv?`<br>登録番号 ${esc(v.inv)}`:''}${stmt&&v.taxable&&v.inv?`<br>（貴社登録番号 ${esc(v.inv)}）`:''}</div></div>
+    <table><thead><tr><th>完了日</th><th>現場・内容</th><th class="r">金額（税抜）</th></tr></thead><tbody>
+      ${items.map(x=>`<tr><td>${md(x.done_date)}</td><td>${esc(x.prop)}　${esc(x.kind||'')}${x.extra?`<br><small>うち追加 ${yen(x.extra)}：${esc(x.extra_note||'')}</small>`:''}</td><td class="r">${yen((+x.base||0)+(+x.extra||0))}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="dsum">${v.taxable?`<div><span>小計（10%対象・税抜）</span><span>${yen(v.subtotal)}</span></div><div><span>消費税（10%）</span><span>${yen(v.tax)}</span></div>`:''}
+      <div class="g"><span>合計${v.taxable?'（税込）':''}</span><span>${yen(v.total)}</span></div></div>
+    ${v.taxable?'':'<div class="dnote">消費税は含みません（免税事業者）。</div>'}
+    ${stmt?'<div class="dnote">内容に誤りがある場合は、7日以内にご連絡ください。ご連絡がない場合は、内容をご確認いただいたものとして取り扱います。</div>':''}`;
+}
+let DOCI=null;
+function openDoc(i){ const v=(BILL.invoices||[])[i]; if(!v)return; DOCI=v;
+  document.getElementById('docBody').innerHTML=invoiceDoc(v,BILL.vendor);
+  document.getElementById('docOk').hidden=!(v.kind==='支払明細書'&&v.st==='発行');
+  document.getElementById('docm').hidden=false; }
 async function start(){
   if(!token){ setMode('sched'); load(); return; }
   const {data,error}=await sb.rpc('my_vendor',{p_token:token});
@@ -168,20 +335,33 @@ async function start(){
 }
 document.addEventListener('click',async e=>{
   const mb=e.target.closest('[data-m]'); if(mb){ setMode(mb.dataset.m); return; }
-  if(e.target.id==='reload'){ loadOrders(); load(); return; }
+  if(e.target.id==='reload'){ loadOrders(); load(); if(mode==='bill')loadBill(); return; }
+  /* 完了報告 */
+  const rb=e.target.closest('[data-rep]'); if(rb){ openReport(rb.closest('.job').dataset.id); return; }
+  if(e.target.id==='rClose'){ document.getElementById('rm').hidden=true; return; }
+  if(e.target.id==='rSend'){ sendReport(); return; }
+  const dk=e.target.closest('[data-delkeep]'); if(dk){ RP.keep.splice(+dk.dataset.delkeep,1); drawThumbs(); return; }
+  const df=e.target.closest('[data-delfile]'); if(df){ RP.files.splice(+df.dataset.delfile,1); drawThumbs(); return; }
+  const cb=e.target.closest('[data-cancel]'); if(cb&&!busy){ const job=cb.closest('.job');
+    if(!confirm('「'+(job.querySelector('.prop').textContent||'この工程')+'」の完了報告を取り消しますか？'))return;
+    busy=true; const {data,error}=await sb.rpc('cancel_report',{p_token:token,p_proc:job.dataset.id}); busy=false;
+    if(error||data!==true)alert('取り消せませんでした。会社に確認してください。'); load(); return; }
+  /* 請求 */
+  const ib=e.target.closest('[data-issue]'); if(ib&&!busy){ const mon=ib.dataset.issue;
+    if(!confirm(mlab(mon)+'締めの請求書を発行しますか？\n承認済みの完了報告がまとまります。発行後は取り消せません（誤りは会社にご連絡ください）。'))return;
+    busy=true; ib.disabled=true; const {error}=await sb.rpc('issue_invoice',{p_token:token,p_month:mon}); busy=false;
+    if(error)alert('発行できませんでした：'+(/empty/.test(error.message)?'この月に請求できる完了報告がありません':error.message));
+    await loadBill(); if(!error)openDoc(0); return; }
+  const db2=e.target.closest('[data-doc]'); if(db2){ openDoc(+db2.dataset.doc); return; }
+  if(e.target.id==='docClose'){ document.getElementById('docm').hidden=true; return; }
+  if(e.target.id==='docPrint'){ window.print(); return; }
+  if(e.target.id==='docOk'&&DOCI&&!busy){ busy=true; const {data,error}=await sb.rpc('confirm_statement',{p_token:token,p_id:DOCI.id}); busy=false;
+    if(error||data!==true)alert('記録できませんでした。会社に確認してください。'); document.getElementById('docm').hidden=true; loadBill(); return; }
   const t=e.target.closest('[data-r]'); if(t){ range=t.dataset.r; document.querySelectorAll('[data-r]').forEach(b=>b.classList.toggle('on',b===t)); load(); return; }
-  const d=e.target.closest('button.done'); if(d&&!busy){
-    const job=d.closest('.job'), id=job.dataset.id, toDone=d.dataset.done==='1';
-    if(!toDone&&!confirm('「'+(job.querySelector('.prop').textContent||'この工程')+'」の完了を取り消しますか？'))return;   /* 押し間違いで完了が消えないように */
-    busy=true; d.disabled=true;
-    const {data,error}=await sb.rpc('proc_done',{p_token:token,p_proc:id,p_done:toDone});
-    busy=false;
-    if(error)alert('更新できませんでした。電波の良いところでもう一度押してください。\n'+error.message);
-    else if(data!==true)alert('更新できませんでした。会社に確認してください。');     /* 工程が付け替えられた・リンクが無効になった など */
-    load(); }
 });
+document.addEventListener('change',e=>{ if(e.target.id==='rFiles'&&RP){ RP.files.push(...Array.from(e.target.files||[])); e.target.value=''; drawThumbs(); } });
 /* 画面に戻ってきたら最新にする（朝に開きっぱなしのまま、予定が変わっていることがある） */
-document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&!busy&&ME){ loadOrders(); load(); } });
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&!busy&&ME&&document.getElementById('rm').hidden){ loadOrders(); load(); if(mode==='bill')loadBill(); } });
 start();
 </script>
 </body>

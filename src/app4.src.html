@@ -330,6 +330,12 @@ const TABLES={
   clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src'],
           map:{full:'full_name',close:'close_day'}, dates:[], bools:[]},
   prices:{cols:['id','org','name','alias','kind','unit','price','who','client','memo'], map:{}, dates:[], bools:[]},
+  /* 完了報告（業者ページから出る）。スタッフは承認・差し戻しだけ書く */
+  reports:{cols:['id','org','proc_id','case_id','who','done_date','note','base','extra','extra_note','photos','st','reply','approved_at','invoice_id'],
+          map:{proc:'proc_id',case:'case_id',done:'done_date',extraNote:'extra_note',approvedAt:'approved_at',invoiceId:'invoice_id'}, dates:['done_date'], bools:[], ts:['approved_at']},
+  /* 業者の請求書（業者ページで発行）／支払明細書（台帳で発行） */
+  invoices:{cols:['id','org','who','kind','month','period_from','period_to','items','subtotal','tax','total','taxable','inv','st','issued_at','confirmed_at','paid_date'],
+          map:{from:'period_from',to:'period_to',issuedAt:'issued_at',confirmedAt:'confirmed_at',paidDate:'paid_date'}, dates:['period_from','period_to','paid_date'], bools:['taxable'], ts:['issued_at','confirmed_at']},
 };
 const REV={}; Object.keys(TABLES).forEach(t=>{ REV[t]={}; Object.entries(TABLES[t].map).forEach(([j,c])=>{REV[t][c]=j;}); });
 /* 行（DBの列）→ JS のレコード */
@@ -351,8 +357,9 @@ function recToRow(t,rec){
     if(c==='org'){ row.org=rec.org||ORG; return; }
     if(v===undefined) return;
     if(T.dates.indexOf(c)>=0) v=(v&&/^\d{4}-\d{2}-\d{2}/.test(String(v)))?String(v).slice(0,10):null;
+    else if((T.ts||[]).indexOf(c)>=0) v=v?String(v):null;   /* 日時。空は null */
     else if(T.bools.indexOf(c)>=0) v=!!v;
-    else if(['sales','add_amt','amt','sell','price','close_day','site'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
+    else if(['sales','add_amt','amt','sell','price','close_day','site','base','extra','subtotal','tax','total'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
     else if(c==='qty') v=(v===''||v==null)?0:(+v||0);
     else if(v===null) v='';
     row[c]=v; });
@@ -365,7 +372,7 @@ const vendorLink=v=>v&&v.token?siteBase()+'me.html?t='+v.token:'';
 const orderLink=o=>o&&o.token?siteBase()+'order.html?t='+o.token:'';
 function copyText(t,msg){ navigator.clipboard.writeText(t).then(()=>toast(msg||'コピーした')).catch(()=>prompt('コピーできなかった。手で選んでコピー：',t)); }
 let recLast={};   /* 'table:id' → sig。変わった行を見つけるため */
-const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1};
+const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1,reports:1,invoices:1};
 function rememberAll(){ recLast={}; Object.keys(COLS).forEach(t=>(DB[t]||[]).forEach(r=>{ if(r.id)recLast[t+':'+r.id]=sig(r); })); kvSaved=kvFlat(); }
 /* 入金・支払済・休み・計上基準・見送り：最後に保存した値（キーごと）。
    全件をまとめて書くと、古い画面の人が他の人の入力を古い値で上書きしてしまうので、変わったキーだけ書く */
@@ -387,12 +394,14 @@ async function fetchAll(t,select){
   return out;
 }
 async function dbLoad(){
-  const [cases,procs,lines,orders,vendors,clients,prices,recv,paid,off,settings]=await Promise.all([
+  const [cases,procs,lines,orders,vendors,clients,prices,recv,paid,off,settings,reports,invoices]=await Promise.all([
     fetchAll('cases'),fetchAll('procs'),fetchAll('lines'),fetchAll('orders'),fetchAll('vendors'),fetchAll('clients'),fetchAll('prices'),
-    fetchAll('receipts'),fetchAll('payments'),fetchAll('days_off'),fetchAll('settings')]);
+    fetchAll('receipts'),fetchAll('payments'),fetchAll('days_off'),fetchAll('settings'),
+    fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[])]);   /* 表がまだ無い DB でも台帳は開けるように */
   DB={cases:cases.map(r=>rowToRec('cases',r)),procs:procs.map(r=>rowToRec('procs',r)),lines:lines.map(r=>rowToRec('lines',r)),
       orders:orders.map(r=>rowToRec('orders',r)),vendors:vendors.map(r=>rowToRec('vendors',r)),clients:clients.map(r=>rowToRec('clients',r)),
       prices:prices.map(r=>rowToRec('prices',r)),
+      reports:reports.map(r=>rowToRec('reports',r)),invoices:invoices.map(r=>rowToRec('invoices',r)),
       recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
   recv.forEach(r=>{ if(+r.amount)DB.recv[r.client+'|'+r.month]=r.amount; });      /* 0 は「消した」の意味 */
   paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
@@ -416,7 +425,7 @@ function migrate(){
     if(c.st==='新規案件')c.st='受付'; });   /* v4 の状態一覧に「新規案件」は無い */
 }
 function reset(){ toast('v4 では「元データに戻す」は無い（データベースが正）'); }
-function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
+function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],reports:[],invoices:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
 
 /* ---- 保存：変わった行だけ ---- */
 function save(){ dbSaveSoon(); }
@@ -919,6 +928,8 @@ function issues(){
     if(new Set(ps.map(p=>p.case)).size<2)return;
     out.push({k:'1日2現場',c:ps[0].case,t:`${who} ${md(d)}`,d:ps.map(p=>(B[p.case]||{}).prop).join(' ／ ')});
   });
+  (DB.reports||[]).filter(r=>r.st==='報告済').forEach(r=>{ const p=DB.procs.find(x=>x.id===r.proc)||{};
+    out.push({k:'完了報告の確認待ち',c:r.case,t:`${(B[r.case]||{}).prop||''}`,d:`${r.who} の${p.kind||'工程'}（完了 ${md(r.done)}）。支払タブで承認か差し戻し`}); });
   return out;
 }
 
@@ -2549,7 +2560,117 @@ function vBill(){
 }
 
 /* ================= 支払 ================= */
+/* ---- 完了報告・業者の請求（業者ページと対になる） ---- */
+let payMon=addM(THIS_M,-1);   /* 支払明細書を作る締めの月。既定は前月 */
+const closeMonthOf=(d,c)=>{ d=String(d||'').slice(0,10); if(!d)return ''; const y=+d.slice(0,4), m=+d.slice(5,7), day=+d.slice(8,10);
+  if(!c||c>=28||day<=c)return d.slice(0,7); return addM(d.slice(0,7),1); };
+function closePeriodOf(mon,c){ const y=+mon.slice(0,4), m=+mon.slice(5,7), f=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  if(!c||c>=28)return [f(new Date(y,m-1,1)),f(new Date(y,m,0))]; return [f(new Date(y,m-2,c+1)),f(new Date(y,m-1,c))]; }
+function vPayReports(){
+  const B=byId(), pend=(DB.reports||[]).filter(r=>r.st==='報告済').sort((a,b)=>String(a.done).localeCompare(String(b.done)));
+  return `<div class="bar"><h2>完了報告</h2><span class="note" style="margin:0">業者ページから届いた報告。承認すると追加金額が工程の発注金額（原価）に足され、業者が請求できるようになる</span></div>
+    ${pend.length?`<div class="tw" style="margin-bottom:16px"><table><thead><tr><th>完了日</th><th>現場</th><th>区分</th><th>業者</th><th class="r">発注金額</th><th class="r">追加</th><th>コメント</th><th>写真</th><th></th></tr></thead><tbody>
+      ${pend.map(r=>{const p=DB.procs.find(x=>x.id===r.proc)||{}, ph=(r.photos||[]).length;
+        return `<tr><td>${md(r.done)}</td><td>${esc((B[r.case]||{}).prop||'')}</td><td>${esc(p.kind||'')}</td><td>${esc(r.who)}</td>
+          <td class="r">${yen(r.base)}</td><td class="r">${r.extra?`${yen(r.extra)}<small class="tx">${esc(r.extraNote||'')}</small>`:'—'}</td>
+          <td style="max-width:240px;white-space:pre-wrap;font-size:12px">${esc(r.note||'')}</td>
+          <td>${ph?`<button class="btn small" data-rphotos="${esc(r.id)}">${ph}枚</button>`:'—'}</td>
+          <td style="white-space:nowrap"><button class="btn small primary" data-rok="${esc(r.id)}">承認</button> <button class="btn small danger" data-rng="${esc(r.id)}">差し戻し</button></td></tr>`;}).join('')}
+    </tbody></table></div>`:'<p class="note" style="margin:0 0 16px">確認待ちの完了報告はありません。</p>'}`;
+}
+function vPayInvoices(){
+  const invs=(DB.invoices||[]).slice().sort((a,b)=>String(b.month).localeCompare(String(a.month))||String(b.issuedAt).localeCompare(String(a.issuedAt)));
+  /* 選んだ締めの月に、承認済みでまだ請求書・支払明細書に載っていない完了報告がある業者 */
+  const due={}; (DB.reports||[]).filter(r=>r.st==='承認'&&!r.invoiceId).forEach(r=>{ const v=vendorOf(r.who)||{};
+    if(closeMonthOf(r.done,+v.close||31)!==payMon)return; (due[r.who]=due[r.who]||[]).push(r); });
+  const ST={'発行':'発行','確認済':'業者が確認済み','支払済':'支払済'};
+  return `<div class="bar"><h2>請求書・支払明細書</h2>
+      <span class="note" style="margin:0">業者が業者ページで発行した請求書と、ここで作った支払明細書</span></div>
+    ${invs.length?`<div class="tw" style="margin-bottom:12px"><table><thead><tr><th>締め</th><th>業者</th><th>種類</th><th>期間</th><th class="r">合計</th><th>状態</th><th></th></tr></thead><tbody>
+      ${invs.map(v=>`<tr><td>${esc(v.month)}</td><td>${esc(v.who)}</td><td>${esc(v.kind)}</td><td>${md(v.from)}〜${md(v.to)}</td>
+        <td class="r">${yen(v.total)}${v.taxable?'':'<small class="tx">消費税なし</small>'}</td><td>${esc(ST[v.st]||v.st)}${v.paidDate?' '+md(v.paidDate):''}</td>
+        <td style="white-space:nowrap"><button class="btn small" data-invdoc="${esc(v.id)}">見る</button>
+          ${v.st!=='支払済'?`<button class="btn small" data-invpaid="${esc(v.id)}">支払済にする</button>`:''}</td></tr>`).join('')}
+    </tbody></table></div>`:'<p class="note" style="margin:0 0 8px">まだありません。</p>'}
+    <div class="bar" style="margin:6px 0 8px"><b style="font-size:13px">支払明細書を作る</b>
+      <select id="payMon">${optsL(MS_LIST().slice().reverse(),payMon,Object.fromEntries(MS_LIST().map(m=>[m,mlabel(m)+'締め'])))}</select>
+      <span class="note" style="margin:0">業者が請求書を出さない場合に、会社から出す。業者は業者ページで内容を確認する</span></div>
+    ${Object.keys(due).length?`<div class="tw" style="margin-bottom:18px"><table><thead><tr><th>業者</th><th class="r">件数</th><th class="r">金額（税抜）</th><th></th></tr></thead><tbody>
+      ${Object.entries(due).map(([who,rs])=>`<tr><td>${esc(who)}</td><td class="r">${rs.length}</td><td class="r">${yen(rs.reduce((a,r)=>a+(+r.base||0)+(+r.extra||0),0))}</td>
+        <td><button class="btn small primary" data-mkstmt="${esc(who)}">支払明細書を作る</button></td></tr>`).join('')}
+    </tbody></table></div>`:`<p class="note" style="margin:0 0 18px">${mlabel(payMon)}締めで、まだ請求書・支払明細書に載っていない承認済みの完了報告はありません。</p>`}`;
+}
+/* 請求書・支払明細書の書面（業者ページの書面と同じ形） */
+function invoiceDoc(v){
+  const V=vendorOf(v.who)||{}, stmt=v.kind==='支払明細書', items=v.items||[], AW='アンドワークス株式会社', vname=V.full||v.who;
+  const mm=String(v.month||''), mlab=mm?`${+mm.slice(0,4)}年${+mm.slice(5,7)}月`:'';
+  return `<h2 style="text-align:center;letter-spacing:.4em">${stmt?'支払明細書':'請求書'}</h2>
+    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><b style="font-size:16px">${esc(stmt?vname+' 様':AW+' 御中')}</b><br>${mlab}分（${md(v.from)}〜${md(v.to)}）</div>
+      <div style="text-align:right">発行日 ${md(String(v.issuedAt||'').slice(0,10))}<br><b>${esc(stmt?AW:vname)}</b>${!stmt&&v.taxable&&v.inv?`<br>登録番号 ${esc(v.inv)}`:''}${stmt&&v.taxable&&v.inv?`<br>（貴社登録番号 ${esc(v.inv)}）`:''}</div></div>
+    <table style="width:100%;border-collapse:collapse;margin-top:10px"><thead><tr><th style="text-align:left">完了日</th><th style="text-align:left">現場・内容</th><th style="text-align:right">金額（税抜）</th></tr></thead><tbody>
+      ${items.map(x=>`<tr><td style="border-top:1px solid #ccc;padding:4px">${md(x.done_date)}</td><td style="border-top:1px solid #ccc;padding:4px">${esc(x.prop)}　${esc(x.kind||'')}${x.extra?`<br><small>うち追加 ${yen(x.extra)}：${esc(x.extra_note||'')}</small>`:''}</td><td style="border-top:1px solid #ccc;padding:4px;text-align:right">${yen((+x.base||0)+(+x.extra||0))}</td></tr>`).join('')}
+    </tbody></table>
+    <div style="margin:8px 0 0 auto;width:280px">${v.taxable?`<div style="display:flex;justify-content:space-between"><span>小計（10%対象・税抜）</span><span>${yen(v.subtotal)}</span></div><div style="display:flex;justify-content:space-between"><span>消費税（10%）</span><span>${yen(v.tax)}</span></div>`:''}
+      <div style="display:flex;justify-content:space-between;font-weight:700;border-top:2px solid #000;margin-top:4px;padding-top:4px"><span>合計${v.taxable?'（税込）':''}</span><span>${yen(v.total)}</span></div></div>
+    ${v.taxable?'':'<p style="font-size:12px">消費税は含みません（免税事業者）。</p>'}
+    ${stmt?'<p style="font-size:12px">内容に誤りがある場合は、7日以内にご連絡ください。ご連絡がない場合は、内容をご確認いただいたものとして取り扱います。</p>':''}`;
+}
+function showInvoice(id){
+  const v=(DB.invoices||[]).find(x=>x.id===id); if(!v)return;
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg" style="max-width:760px;width:94vw;max-height:90vh;overflow:auto"><div id="invBody">${invoiceDoc(v)}</div>
+    <div class="askbtn" style="margin-top:12px"><button class="btn small" id="invPrint">印刷・PDF</button><button class="btn small" id="askNo">閉じる</button></div></div>`;
+  document.body.appendChild(el);
+  el.querySelector('#askNo').onclick=()=>el.remove();
+  el.querySelector('#invPrint').onclick=()=>{ const w=window.open('','_blank'); if(!w)return;
+    w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>${esc(v.kind+'_'+v.who+'_'+v.month)}</title><style>body{font-family:sans-serif;font-size:13px;margin:24px}</style></head><body>${invoiceDoc(v)}</body></html>`);
+    w.document.close(); w.focus(); w.print(); };
+}
+async function showPhotos(id){
+  const r=(DB.reports||[]).find(x=>x.id===id); if(!r||!sb)return;
+  const paths=r.photos||[]; const {data}=await sb.storage.from('reports').createSignedUrls(paths,3600);
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg" style="max-width:900px;width:94vw;max-height:90vh;overflow:auto"><h4>完了報告の写真（${esc(r.who)}）</h4>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">${(data||[]).map(x=>x.signedUrl?`<a href="${esc(x.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(x.signedUrl)}" style="width:200px;height:200px;object-fit:cover;border-radius:8px"></a>`:'').join('')}</div>
+    <div class="askbtn" style="margin-top:12px"><button class="btn small" id="askNo">閉じる</button></div></div>`;
+  document.body.appendChild(el); el.querySelector('#askNo').onclick=()=>el.remove();
+}
+function approveReport(id){
+  const r=(DB.reports||[]).find(x=>x.id===id); if(!r||r.st!=='報告済')return;
+  const p=DB.procs.find(x=>x.id===r.proc);
+  snap(); r.st='承認'; r.approvedAt=new Date().toISOString(); r.reply='';
+  if(p){ if(+r.extra)p.amt=(+p.amt||0)+(+r.extra||0); p.prog='完了'; }
+  save(); render(); toast(`${r.who} の完了報告を承認した${+r.extra?`（追加 ${yen(r.extra)} を発注金額に足した）`:''}`, undo);
+}
+function rejectReport(id){
+  const r=(DB.reports||[]).find(x=>x.id===id); if(!r||r.st!=='報告済')return;
+  const why=prompt('差し戻す理由（業者ページに表示されます）'); if(why===null)return;
+  const p=DB.procs.find(x=>x.id===r.proc);
+  snap(); r.st='差し戻し'; r.reply=why.trim()||'内容を確認してください'; if(p)p.prog='';
+  save(); render(); toast(`${r.who} の完了報告を差し戻した`, undo);
+}
+function makeStatement(who){
+  const v=vendorOf(who)||{}, close=+v.close||31;
+  const rs=(DB.reports||[]).filter(r=>r.who===who&&r.st==='承認'&&!r.invoiceId&&closeMonthOf(r.done,close)===payMon).sort((a,b)=>String(a.done).localeCompare(String(b.done)));
+  if(!rs.length)return;
+  const B=byId(), [f,t]=closePeriodOf(payMon,close), taxable=vendorTaxable(who);
+  const items=rs.map(r=>{const p=DB.procs.find(x=>x.id===r.proc)||{}; return {report_id:r.id,proc_id:r.proc,prop:(B[r.case]||{}).prop||'',kind:p.kind||'',done_date:r.done,base:+r.base||0,extra:+r.extra||0,extra_note:r.extraNote||''};});
+  const sub=items.reduce((a,x)=>a+x.base+x.extra,0), tax=taxable?Math.round(sub*0.1):0;
+  if(!confirm(`${who} さんの ${mlabel(payMon)}締めの支払明細書を作りますか？\n${rs.length}件　合計 ${yen(sub+tax)}${taxable?'（税込）':'（消費税なし）'}\n業者ページに届き、業者が内容を確認します。`))return;
+  snap(); const id='I'+Math.random().toString(36).slice(2,12);
+  DB.invoices=DB.invoices||[];
+  DB.invoices.push({id,who,kind:'支払明細書',month:payMon,from:f,to:t,items,subtotal:sub,tax,total:sub+tax,taxable,inv:v.inv||'',st:'発行',issuedAt:new Date().toISOString(),confirmedAt:'',paidDate:''});
+  rs.forEach(r=>{ r.invoiceId=id; });
+  save(); render(); toast(`${who} さんの支払明細書を作った`, undo);
+}
+function markInvoicePaid(id){
+  const v=(DB.invoices||[]).find(x=>x.id===id); if(!v)return;
+  snap(); v.st='支払済'; v.paidDate=fmtD(new Date()); save(); render(); toast(`${v.who} の${v.kind}を支払済にした`, undo);
+}
 function vPay(){
+  return vPayReports()+vPayInvoices()+vPay0();
+}
+function vPay0(){
   const rows={}, tot={};
   DB.procs.forEach(p=>{if(!p.who)return; const m=p.month?('2026-'+String(p.month.replace('月','')).padStart(2,'0')):ym(p.date);
     if(!m)return; rows[p.who]=rows[p.who]||{}; rows[p.who][m]=(rows[p.who][m]||0)+(+p.amt||0);
@@ -3056,6 +3177,12 @@ document.addEventListener('click',e=>{
   const osh=e.target.closest('[data-osheet]'); if(osh){orderSheet(osh.dataset.osheet);return;}
   const vl=e.target.closest('[data-vlink]'); if(vl){ const v=vendorOf(vl.dataset.vlink); copyText(vendorLink(v),`${v.name} さんの業者ページのリンクをコピーした`); return; }
   const vr=e.target.closest('[data-vreset]'); if(vr){ resetVendorLink(vr.dataset.vreset); return; }
+  const rph=e.target.closest('[data-rphotos]'); if(rph){showPhotos(rph.dataset.rphotos);return;}
+  const rok=e.target.closest('[data-rok]'); if(rok){approveReport(rok.dataset.rok);return;}
+  const rng=e.target.closest('[data-rng]'); if(rng){rejectReport(rng.dataset.rng);return;}
+  const ivd=e.target.closest('[data-invdoc]'); if(ivd){showInvoice(ivd.dataset.invdoc);return;}
+  const ivp=e.target.closest('[data-invpaid]'); if(ivp){markInvoicePaid(ivp.dataset.invpaid);return;}
+  const mks=e.target.closest('[data-mkstmt]'); if(mks){makeStatement(mks.dataset.mkstmt);return;}
   if(e.target.closest('.omemo')){oMemoOpen=!oMemoOpen; render(); return;}
   const onx=e.target.closest('[data-onext]'); if(onx){nextOrderSt(onx.dataset.onext,onx.dataset.ost);return;}
   const odl=e.target.closest('[data-odel]'); if(odl){delOrder(odl.dataset.odel);return;}
@@ -3246,6 +3373,7 @@ document.addEventListener('change',e=>{
     const LBL={price:'原価単価',sell:'販売単価',qty:'数量',unit:'単位',kind:'工程区分',who:'発注先'};
     if(LBL[f])toast(`${l.name||'明細'}　${LBL[f]} ${was||0} → ${l[f]||0}　（販売 ${yen(lineSell(l))} ／ 原価 ${yen(lineAmt(l))}）`);
     return;}
+  if(el.id==='payMon'){payMon=el.value;render();return;}
   if(el.id==='mTab'){mTab=el.value;mQ='';render();return;}
   if(el.classList.contains('mv')){
     const tr=el.closest('[data-v]'); const v=vendorOf(tr.dataset.v); if(!v)return;
