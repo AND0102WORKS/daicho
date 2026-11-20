@@ -337,7 +337,7 @@ function rowToRec(t,row){
   const T=TABLES[t], r={};
   Object.keys(row).forEach(c=>{ if(c==='updated_at'||c==='created_at')return;   /* token は読むだけ（職人・業者のリンク用。書き戻さない） */
     let v=row[c]; const j=REV[t][c]||c;
-    if(v===null||v===undefined) v=(T.bools.indexOf(c)>=0)?false:'';
+    if(v===null||v===undefined) v=(T.bools.indexOf(c)>=0)?(c==='taxable'):'';   /* 課税区分が空なら課税として扱う */
     if(T.dates.indexOf(c)>=0&&v){ if(v instanceof Date) v=`${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`; else v=String(v).slice(0,10); }
     if(t==='lines'&&c==='cut') v=v?1:0;
     r[j]=v; });
@@ -1533,6 +1533,15 @@ function payTerm(v){
   return `毎月${c}締め・翌月${s}払い`;
 }
 /* 業者に送る文面（メール・LINE 共通） */
+/* 業者ページのリンクを作り直す（古いリンクは使えなくなる） */
+async function resetVendorLink(nm){
+  const v=vendorOf(nm); if(!v)return;
+  if(!confirm(`${nm} さんの業者ページのリンクを作り直しますか？
+今のリンクはすぐ使えなくなります。新しいリンクを送り直してください。`))return;
+  const {data,error}=await sb.rpc('reset_vendor_token',{p_name:nm});
+  if(error||!data){ toast('作り直せなかった：'+((error&&error.message)||'')); return; }
+  v.token=data; render(); copyText(vendorLink(v),`${nm} さんの新しいリンクをコピーした。送り直してください`);
+}
 function orderMessage(o,c,v){
   const amt=orderLines(o.id).reduce((a,l)=>a+lineAmt(l),0);
   const subject=`【発注書】${o.no} ${c.prop||''}`;
@@ -1540,7 +1549,7 @@ function orderMessage(o,c,v){
     '下記の工事を発注いたします。リンク先で内容をご確認のうえ、「承諾」を押してください。','',
     `発注No：${o.no}`,`現場：${c.prop||''}`,`工期：${o.start?spanLabel({date:o.start,end:o.end}):'未定'}`,
     orderTaxable(o)?`金額：${yen(inc(amt))}（税込）`:`金額：${yen(amt)}（消費税なし）`, ...(o.due?[`回答期限：${o.due}`]:[]),'',
-    `発注書：${orderLink(o)}`,'','アンドワークス株式会社'].join('\n');
+    `発注書：${orderLink(o)}`, ...(v.token?['',`これまでの発注の一覧（承諾待ち・工程）：${vendorLink(v)}`]:[]),'','アンドワークス株式会社'].join('\n');
   return {subject,body};
 }
 function orderSheet(oid){
@@ -1573,9 +1582,9 @@ function orderSheet(oid){
       ${o.token?`<button class="btn small primary" id="oMail" title="${v.email?esc(v.email)+' 宛てのメールを、文面とリンクが入った状態で開く':'発注先マスタにメールが入っていない。宛先は開いたメールで入れる'}">メールで送る${v.email?'':'（宛先なし）'}</button>
         <button class="btn small primary" id="oLine" title="LINE を、文面とリンクが入った状態で開く。送り先の業者を選んで送る">LINEで送る</button>
         <button class="btn small" id="oLink">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
-      ${o.st==='下書き'?`<button class="btn small" id="oSent" title="業者に送ったら押す。状態が「送付済」になり、案件が「発注 済」になる">送付済にする</button>`:''}
+      ${o.st==='下書き'?`<button class="btn small" id="oSent" title="業者に送ったら押す。状態が「送付済」になり、案件が「発注 済」になる。業者ページの発注の一覧にも出る">送付済にする</button>`:''}
       <span class="grow"></span><button class="btn small" id="askNo">閉じる</button></div>
-    <p class="note" style="margin:6px 0 0">「メールで送る」「LINEで送る」を押すと、文面と発注書のリンクが入った状態で開くので、送信を押す。送ったら「送付済にする」。業者はログイン無しで発注書を見て「承諾」を押せる。承諾すると状態が「承諾」になり日時が残る。</p></div>`;
+    <p class="note" style="margin:6px 0 0">「メールで送る」「LINEで送る」を押すと、文面と発注書のリンクが入った状態で開くので、送信を押す。送ったら「送付済にする」。業者はログイン無しで発注書を見て「承諾」を押せる。承諾すると状態が「承諾」になり日時が残る。送付済にした発注は、業者ページ（マスタの発注先の「リンク」）の一覧にも自動で出る。</p></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
   const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderLink(o),'業者用のリンクをコピーした');
@@ -2423,7 +2432,7 @@ function vMaster0(){
       <div class="tw"><table><thead><tr>
         <th>入力名</th><th>正式名称</th><th title="発注書の「メールで送る」の宛先">メール（発注書の送り先）</th><th title="免税事業者（インボイス未登録）への発注は、消費税を足さない税抜金額になる">課税</th><th>区分</th><th>既定の工程区分</th>
         <th>登録番号（インボイス）</th><th class="r">締日</th><th class="r">サイト</th>
-        <th class="r">使用</th><th class="r">旧区分</th><th>スマホ用</th><th></th></tr></thead>
+        <th class="r">使用</th><th class="r">旧区分</th><th title="業者・職人が自分への発注と工程を見るページ（ログイン無し）">業者ページ</th><th></th></tr></thead>
       <tbody>${list.map(v=>{const used=usedBy(v.name), old=oldKindOf(v.name);
         return `<tr data-v="${esc(v.name)}">
         <td><input type="text" class="mv" data-f="name" value="${esc(v.name)}" style="width:148px;height:28px;font-size:12.5px">
@@ -2439,7 +2448,7 @@ function vMaster0(){
         <td class="r"><input type="number" class="mv" data-f="site" value="${v.site||30}" min="0" max="120" style="width:56px;height:28px;font-size:12px"></td>
         <td class="r">${used||'—'}</td>
         <td class="r">${old?`<b style="color:var(--warn)">${old}</b>`:'—'}</td>
-        <td>${v.token?`<button class="btn small" data-vlink="${esc(v.name)}" title="職人のスマホで自分の工程を見るリンク">リンク</button>`:''}</td>
+        <td style="white-space:nowrap">${v.token?`<button class="btn small" data-vlink="${esc(v.name)}" title="業者・職人が自分への発注と工程を見るページのリンクをコピー。最初に1回送れば、新しい発注は自動でそのページに出る">リンク</button> <button class="btn small" data-vreset="${esc(v.name)}" title="リンクが漏れたときに作り直す。古いリンクはすぐ使えなくなる">作り直す</button>`:''}</td>
         <td>${old?`<button class="btn small" data-conv="${esc(v.name)}">旧${old}件を直す</button> `:''}${
             offK(v)?`<button class="btn small" data-convall="${esc(v.name)}">全${used}件を${esc(v.defKind)}に</button>`:''}${
             used?'':`<button class="btn small danger" data-delv="${esc(v.name)}">削除</button>`}</td></tr>`;}).join('')}
@@ -3045,7 +3054,8 @@ document.addEventListener('click',e=>{
       oSel={}; save(); render(); toast(`${n}行消した`, undo); purgeShared('lines',ids);};
     return;}
   const osh=e.target.closest('[data-osheet]'); if(osh){orderSheet(osh.dataset.osheet);return;}
-  const vl=e.target.closest('[data-vlink]'); if(vl){ const v=vendorOf(vl.dataset.vlink); copyText(vendorLink(v),`${v.name} さんのスマホ用リンクをコピーした`); return; }
+  const vl=e.target.closest('[data-vlink]'); if(vl){ const v=vendorOf(vl.dataset.vlink); copyText(vendorLink(v),`${v.name} さんの業者ページのリンクをコピーした`); return; }
+  const vr=e.target.closest('[data-vreset]'); if(vr){ resetVendorLink(vr.dataset.vreset); return; }
   if(e.target.closest('.omemo')){oMemoOpen=!oMemoOpen; render(); return;}
   const onx=e.target.closest('[data-onext]'); if(onx){nextOrderSt(onx.dataset.onext,onx.dataset.ost);return;}
   const odl=e.target.closest('[data-odel]'); if(odl){delOrder(odl.dataset.odel);return;}

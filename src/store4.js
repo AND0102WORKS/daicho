@@ -40,7 +40,7 @@ function rowToRec(t,row){
   const T=TABLES[t], r={};
   Object.keys(row).forEach(c=>{ if(c==='updated_at'||c==='created_at')return;   /* token は読むだけ（職人・業者のリンク用。書き戻さない） */
     let v=row[c]; const j=REV[t][c]||c;
-    if(v===null||v===undefined) v=(T.bools.indexOf(c)>=0)?false:'';
+    if(v===null||v===undefined) v=(T.bools.indexOf(c)>=0)?(c==='taxable'):'';   /* 課税区分が空なら課税として扱う */
     if(T.dates.indexOf(c)>=0&&v){ if(v instanceof Date) v=`${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`; else v=String(v).slice(0,10); }
     if(t==='lines'&&c==='cut') v=v?1:0;
     r[j]=v; });

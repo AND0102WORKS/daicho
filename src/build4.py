@@ -130,6 +130,14 @@ src2=src2[:i]+EXTRA+"\n"+src2[i:]
 n_os=src2.count('''    <div class="askbtn" style="margin-top:14px"><button class="btn small" id="askNo">閉じる</button></div></div>`;''')
 assert n_os==1, '発注書の差し替え先が見つからない（app3 の orderSheet が変わった？）'
 src2=src2.replace("function orderSheet(oid){",'''/* 業者に送る文面（メール・LINE 共通） */
+/* 業者ページのリンクを作り直す（古いリンクは使えなくなる） */
+async function resetVendorLink(nm){
+  const v=vendorOf(nm); if(!v)return;
+  if(!confirm(`${nm} さんの業者ページのリンクを作り直しますか？\n今のリンクはすぐ使えなくなります。新しいリンクを送り直してください。`))return;
+  const {data,error}=await sb.rpc('reset_vendor_token',{p_name:nm});
+  if(error||!data){ toast('作り直せなかった：'+((error&&error.message)||'')); return; }
+  v.token=data; render(); copyText(vendorLink(v),`${nm} さんの新しいリンクをコピーした。送り直してください`);
+}
 function orderMessage(o,c,v){
   const amt=orderLines(o.id).reduce((a,l)=>a+lineAmt(l),0);
   const subject=`【発注書】${o.no} ${c.prop||''}`;
@@ -137,7 +145,7 @@ function orderMessage(o,c,v){
     '下記の工事を発注いたします。リンク先で内容をご確認のうえ、「承諾」を押してください。','',
     `発注No：${o.no}`,`現場：${c.prop||''}`,`工期：${o.start?spanLabel({date:o.start,end:o.end}):'未定'}`,
     orderTaxable(o)?`金額：${yen(inc(amt))}（税込）`:`金額：${yen(amt)}（消費税なし）`, ...(o.due?[`回答期限：${o.due}`]:[]),'',
-    `発注書：${orderLink(o)}`,'','アンドワークス株式会社'].join('\\n');
+    `発注書：${orderLink(o)}`, ...(v.token?['',`これまでの発注の一覧（承諾待ち・工程）：${vendorLink(v)}`]:[]),'','アンドワークス株式会社'].join('\\n');
   return {subject,body};
 }
 function orderSheet(oid){''',1)
@@ -148,9 +156,9 @@ src2=src2.replace('''    <div class="askbtn" style="margin-top:14px"><button cla
       ${o.token?`<button class="btn small primary" id="oMail" title="${v.email?esc(v.email)+' 宛てのメールを、文面とリンクが入った状態で開く':'発注先マスタにメールが入っていない。宛先は開いたメールで入れる'}">メールで送る${v.email?'':'（宛先なし）'}</button>
         <button class="btn small primary" id="oLine" title="LINE を、文面とリンクが入った状態で開く。送り先の業者を選んで送る">LINEで送る</button>
         <button class="btn small" id="oLink">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
-      ${o.st==='下書き'?`<button class="btn small" id="oSent" title="業者に送ったら押す。状態が「送付済」になり、案件が「発注 済」になる">送付済にする</button>`:''}
+      ${o.st==='下書き'?`<button class="btn small" id="oSent" title="業者に送ったら押す。状態が「送付済」になり、案件が「発注 済」になる。業者ページの発注の一覧にも出る">送付済にする</button>`:''}
       <span class="grow"></span><button class="btn small" id="askNo">閉じる</button></div>
-    <p class="note" style="margin:6px 0 0">「メールで送る」「LINEで送る」を押すと、文面と発注書のリンクが入った状態で開くので、送信を押す。送ったら「送付済にする」。業者はログイン無しで発注書を見て「承諾」を押せる。承諾すると状態が「承諾」になり日時が残る。</p></div>`;
+    <p class="note" style="margin:6px 0 0">「メールで送る」「LINEで送る」を押すと、文面と発注書のリンクが入った状態で開くので、送信を押す。送ったら「送付済にする」。業者はログイン無しで発注書を見て「承諾」を押せる。承諾すると状態が「承諾」になり日時が残る。送付済にした発注は、業者ページ（マスタの発注先の「リンク」）の一覧にも自動で出る。</p></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
   const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderLink(o),'業者用のリンクをコピーした');
@@ -162,13 +170,14 @@ src2=src2.replace('''    <div class="askbtn" style="margin-top:14px"><button cla
     window.open('https://line.me/R/share?text='+encodeURIComponent(m.body),'_blank','noopener'); after(); };
   const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ el.remove(); nextOrderSt(o.id); };   /* 案件の発注表の「送る」と同じ処理（案件の 発注＝済・状態も進める） */
 }''')
-src2=src2.replace('''        <th class="r">使用</th><th class="r">旧区分</th><th></th></tr></thead>''','''        <th class="r">使用</th><th class="r">旧区分</th><th>スマホ用</th><th></th></tr></thead>''')
+src2=src2.replace('''        <th class="r">使用</th><th class="r">旧区分</th><th></th></tr></thead>''','''        <th class="r">使用</th><th class="r">旧区分</th><th title="業者・職人が自分への発注と工程を見るページ（ログイン無し）">業者ページ</th><th></th></tr></thead>''')
 src2=src2.replace('''        <td class="r">${old?`<b style="color:var(--warn)">${old}</b>`:'—'}</td>
         <td>${old?`<button class="btn small" data-conv="${esc(v.name)}">旧${old}件を直す</button> `:''}${''','''        <td class="r">${old?`<b style="color:var(--warn)">${old}</b>`:'—'}</td>
-        <td>${v.token?`<button class="btn small" data-vlink="${esc(v.name)}" title="職人のスマホで自分の工程を見るリンク">リンク</button>`:''}</td>
+        <td style="white-space:nowrap">${v.token?`<button class="btn small" data-vlink="${esc(v.name)}" title="業者・職人が自分への発注と工程を見るページのリンクをコピー。最初に1回送れば、新しい発注は自動でそのページに出る">リンク</button> <button class="btn small" data-vreset="${esc(v.name)}" title="リンクが漏れたときに作り直す。古いリンクはすぐ使えなくなる">作り直す</button>`:''}</td>
         <td>${old?`<button class="btn small" data-conv="${esc(v.name)}">旧${old}件を直す</button> `:''}${''')
 src2=src2.replace('''  const osh=e.target.closest('[data-osheet]'); if(osh){orderSheet(osh.dataset.osheet);return;}''','''  const osh=e.target.closest('[data-osheet]'); if(osh){orderSheet(osh.dataset.osheet);return;}
-  const vl=e.target.closest('[data-vlink]'); if(vl){ const v=vendorOf(vl.dataset.vlink); copyText(vendorLink(v),`${v.name} さんのスマホ用リンクをコピーした`); return; }''')
+  const vl=e.target.closest('[data-vlink]'); if(vl){ const v=vendorOf(vl.dataset.vlink); copyText(vendorLink(v),`${v.name} さんの業者ページのリンクをコピーした`); return; }
+  const vr=e.target.closest('[data-vreset]'); if(vr){ resetVendorLink(vr.dataset.vreset); return; }''')
 src2=src2.replace("M.kensa||'藤森正則'","M.kensa||'検査担当'").replace("// 藤森の検査予定（この月）","// 検査担当の検査予定（この月）")
 assert '藤森' not in src2 and '長沼' not in src2, '個人名がコードに残っている'
 assert '統合台帳' not in src2, '旧名称（統合台帳）が画面に残っている'

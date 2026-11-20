@@ -96,6 +96,8 @@ table.plist tr.mine td{font-weight:700}
 .legend i.m{background:var(--ink)}
 .legend i.p{background:none;border-right:2px solid var(--warn);width:8px}
 .print-only{display:none}
+.back[hidden]{display:none}
+.back{display:block;max-width:760px;margin:10px auto 0;padding:8px 4px;color:#0F5E63;font-size:15px;font-weight:700;text-decoration:none}
 @media (max-width:560px){
   .sheet{padding:18px 14px 16px;margin:0 0 40px;border-radius:0;border-width:0 0 1px}
   .act{margin:20px -14px -16px;padding:12px 14px}
@@ -115,6 +117,7 @@ table.plist tr.mine td{font-weight:700}
    明細が多いときは見出し行を繰り返して改ページする */
 @page{size:A4 landscape;margin:11mm 12mm}
 @media print{
+  .back{display:none!important}
   .party{margin-top:4mm}
   .band{grid-template-columns:86mm 1fr;gap:6mm;margin-top:4mm}
   .kv{font-size:9.5pt}
@@ -156,11 +159,15 @@ table.plist tr.mine td{font-weight:700}
 </style>
 </head>
 <body>
+<a class="back no-print" id="back" hidden>← 発注の一覧へ</a>
 <div class="sheet" id="sheet">読み込み中…</div>
 <script>
 const SB_URL='https://stcvyehefqnrxibanlxg.supabase.co', SB_KEY='sb_publishable_ZZelNGtUNXLpXs7j4Nd_zw_XFYwI3fx';
 const sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});   /* 同じブラウザの台帳のログインに触らない */
 const token=new URLSearchParams(location.search).get('t')||'';
+/* 業者ページ（発注の一覧）から開いたときは、戻るリンクを出す */
+const vtok=new URLSearchParams(location.search).get('v')||'';
+if(vtok){ const b=document.getElementById('back'); b.href='me.html?t='+encodeURIComponent(vtok); b.hidden=false; }
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const yen=v=>'¥'+Math.round(v||0).toLocaleString('ja-JP');
 const WD=['日','月','火','水','木','金','土'];

@@ -345,6 +345,27 @@ language sql security definer as $$
   from vendors v where v.token=p_token and v.active and v.name=p.who and p.id=p_proc returning true $$;   -- 無効にした発注先のリンクでは変えられない
 create or replace function my_vendor(p_token text) returns table(name text, type text)
 language sql security definer stable as $$ select name, type from vendors where token=p_token and active $$;
+-- 業者ページ（me.html）の「発注」一覧：その発注先への発注（送付済み以降。下書きは出さない）。金額は明細の合計（税抜）
+create or replace function my_orders(p_token text)
+returns table(order_no text, order_token text, prop text, client text, kind text, start_date date, end_date date, due date,
+              st text, accepted_at timestamptz, amount numeric, taxable boolean, sent timestamptz)
+language sql security definer stable as $$
+  select o.no, o.token, c.prop, c.client, o.kind, o.start_date, o.end_date, o.due, o.st, o.accepted_at,
+    coalesce((select sum(round(coalesce(l.qty,0)*coalesce(l.price,0))) from lines l where l.order_id=o.id),0),
+    coalesce(o.taxable,true), o.sent
+  from vendors v join orders o on o.who=v.name join cases c on c.id=o.case_id
+  where v.token=p_token and v.active and o.st in ('送付済','承諾','完了','請求済')
+  order by case o.st when '送付済' then 0 when '承諾' then 1 else 2 end, o.start_date nulls last, o.no $$;
+-- 業者ページのリンクを作り直す（リンクが漏れたとき）。台帳にログインしたスタッフだけ。古いリンクはすぐ使えなくなる
+create or replace function reset_vendor_token(p_name text) returns text
+language plpgsql security definer as $$
+declare t text;
+begin
+  if my_role() not in ('hq','staff') then raise exception 'not allowed'; end if;
+  t := substr(replace(gen_random_uuid()::text,'-',''),1,24);
+  update vendors set token=t where name=p_name;
+  return t;
+end $$;
 grant execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) to anon, authenticated;
 
 -- ---------- Realtime（他の人の変更を画面に流す） ----------
@@ -356,7 +377,7 @@ exception when others then null; end $$;
 
 -- ---------- 仕上げ：security definer 関数の search_path 固定、anon に不要な実行権を外す ----------
 do $$ declare f text; begin
-  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)'] loop
+  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)'] loop
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function next_no(text,text) from anon;
@@ -376,6 +397,10 @@ revoke execute on function next_no(text,text) from public, anon;
 grant execute on function next_no(text,text) to authenticated;
 revoke execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) from public;
 grant execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) to anon, authenticated;
+revoke execute on function my_orders(text) from public;
+grant execute on function my_orders(text) to anon, authenticated;
+revoke execute on function reset_vendor_token(text) from public, anon;
+grant execute on function reset_vendor_token(text) to authenticated;
 drop policy if exists none_counters on counters; create policy none_counters on counters for select using (my_role()='hq');
 
 -- ---------- ログイン前の役割プリセット（初回ログイン時に handle_new_user が参照） ----------
