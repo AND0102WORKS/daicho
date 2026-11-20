@@ -465,6 +465,25 @@ create or replace function case_photos(p_case text) returns table(id text, proc_
 language sql security definer stable as $$
   select f.id, f.proc_id, f.who, f.cat, f.phase, f.path, f.created_at from photos f
   where f.case_id=p_case and my_role() in ('hq','staff','viewer') and (my_role()='hq' or f.org=my_org()) order by f.cat, f.phase, f.created_at $$;
+-- 台帳（スタッフ）がパソコンから写真を入れる。場所は保存領域の staff/ の下。工程が無くても案件に入れられる
+create or replace function staff_add_photos(p_case text, p_cat text, p_phase text, p_paths jsonb) returns int
+language plpgsql security definer as $$
+declare c cases; n int; who text;
+begin
+  if my_role() not in ('hq','staff') then return 0; end if;
+  select * into c from cases where id=p_case; if not found then return 0; end if;
+  if my_role()<>'hq' and c.org<>my_org() then return 0; end if;
+  select coalesce(nullif(name,''),email,'スタッフ') into who from profiles where id=auth.uid();
+  insert into photos(org,case_id,proc_id,who,cat,phase,path)
+  select c.org, c.id, '', coalesce(who,'スタッフ'), coalesce(nullif(p_cat,''),'その他'), coalesce(p_phase,''), x
+  from jsonb_array_elements_text(coalesce(p_paths,'[]'::jsonb)) x where x like 'staff/%'
+  on conflict (path) do nothing;
+  get diagnostics n = row_count; return n;
+end $$;
+-- 台帳（スタッフ）が写真を外す。外した写真の場所を返す（本体は画面から保存領域で消す）
+create or replace function staff_del_photo(p_id text) returns text
+language sql security definer as $$
+  delete from photos f where f.id=p_id and my_role() in ('hq','staff') and (my_role()='hq' or f.org=my_org()) returning f.path $$;
 -- ---------- 業者ページ：完了報告・請求 ----------
 -- 業者ページのリンク（vendors.token）が有効か。写真の保存領域のきまり（anon が自分のフォルダにだけ置ける）で使う
 create or replace function vendor_token_ok(p_token text) returns boolean
@@ -562,6 +581,12 @@ do $$ begin
     if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_vendor_delete') then
       execute $p$create policy reports_vendor_delete on storage.objects for delete to anon
         using (bucket_id='reports' and public.vendor_token_ok((storage.foldername(name))[1]))$p$; end if;
+    if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_staff_insert') then
+      execute $p$create policy reports_staff_insert on storage.objects for insert to authenticated
+        with check (bucket_id='reports' and (storage.foldername(name))[1]='staff' and public.my_role() in ('hq','staff'))$p$; end if;
+    if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_staff_delete') then
+      execute $p$create policy reports_staff_delete on storage.objects for delete to authenticated
+        using (bucket_id='reports' and public.my_role() in ('hq','staff'))$p$; end if;
     if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_staff_select') then
       execute $p$create policy reports_staff_select on storage.objects for select to authenticated
         using (bucket_id='reports' and public.my_role() in ('hq','staff','viewer'))$p$; end if;
@@ -583,7 +608,7 @@ exception when others then null; end $$;
 
 -- ---------- 仕上げ：security definer 関数の search_path 固定、anon に不要な実行権を外す ----------
 do $$ declare f text; begin
-  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','close_period(text,int)','add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
+  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','close_period(text,int)','add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','staff_add_photos(text,text,text,jsonb)','staff_del_photo(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function next_no(text,text) from anon;
@@ -608,6 +633,8 @@ grant execute on function my_orders(text) to anon, authenticated;
 revoke execute on function add_photos(text,text,text,text,jsonb), my_photos(text,text), del_my_photo(text,text), case_photos(text) from public;
 grant execute on function add_photos(text,text,text,text,jsonb), my_photos(text,text), del_my_photo(text,text) to anon, authenticated;
 grant execute on function case_photos(text) to authenticated;
+revoke execute on function staff_add_photos(text,text,text,jsonb), staff_del_photo(text) from public, anon;
+grant execute on function staff_add_photos(text,text,text,jsonb), staff_del_photo(text) to authenticated;
 revoke execute on function my_jobs(text,date,date) from public;
 grant execute on function my_jobs(text,date,date) to anon, authenticated;
 revoke execute on function vendor_token_ok(text), submit_report(text,text,date,text,int,text,jsonb), cancel_report(text,text), my_billing(text), issue_invoice(text,text), confirm_statement(text,text) from public;

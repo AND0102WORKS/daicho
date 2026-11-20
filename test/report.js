@@ -111,6 +111,28 @@ const ok=(name,cond,extra)=>{ console.log((cond?'OK  ':'NG  ')+name+(extra!==und
   await f.click('[data-m="sched"]'); await f.waitForTimeout(800);
   await f.click('.job[data-id="P7"] [data-photo]'); await f.waitForTimeout(800);
   ok('水道設備の工程なら区分は水道設備（施工前後あり）',await f.$eval('[data-pcat].on',x=>x.dataset.pcat)==='水道設備'&&await f.$eval('#pPhase',x=>!x.hidden));
+  // 6) 台帳の案件ページ：物件名から開く → 工程と進み具合・発注・写真・請求。パソコンから写真を入れる。見積書。写真を外す
+  await q("insert into lines(id,case_id,no,name,spec,qty,unit,sell,price) values ('LX1','C1302',1,'クロス貼替','洋室',10,'㎡',1200,900) on conflict (id) do nothing");
+  await L.goto('http://localhost:8787/'); await L.waitForTimeout(1500);
+  await L.evaluate(()=>{tab='ledger';render();}); await L.waitForTimeout(300);
+  await L.click('a.cplink[data-cpage="C1302"]'); await L.waitForTimeout(1500);
+  const cp=await L.textContent('#main');
+  ok('案件ページが開く（工程と進み具合・見積明細発注・写真・請求支払）',['工程と進み具合','見積・明細・発注','パソコンから入れる','請求・支払'].every(x=>cp.includes(x)));
+  ok('案件ページに業者ごとの完了報告の状態',cp.includes('承認済み'));
+  await L.selectOption('#cpCat','現地調査'); await L.waitForTimeout(300);
+  await L.setInputFiles('#cpFiles',[img('s1'),img('s2')]); await L.waitForTimeout(2500);
+  const sp=await q("select cat,who,path from photos where path like 'staff/%'");
+  ok('パソコンから写真を入れた（現地調査2枚・スタッフ名）',sp.length===2&&sp.every(x=>x.cat==='現地調査'&&x.who==='hq'),sp);
+  await L.waitForTimeout(800); await L.evaluate(()=>render()); await L.waitForTimeout(300);
+  ok('案件ページの写真に現地調査2枚',(await L.textContent('#main')).includes('現地調査 2枚'));
+  await L.screenshot({path:'case-page.png',fullPage:true});
+  await L.click('[data-estimate]'); await L.waitForTimeout(500);
+  const est=await L.textContent('.ask');
+  ok('見積書（販売単価から。12,000＋消費税＝13,200）',est.includes('見積書')&&est.includes('13,200'));
+  await L.click('.ask #askNo');
+  await L.click('[data-phcat="C1302|現地調査"]'); await L.waitForTimeout(800);
+  await L.click('#phg [data-phdel]'); await L.waitForTimeout(1500);
+  ok('スタッフが写真を外せる',(await q("select count(*)::int n from photos where path like 'staff/%'"))[0].n===1);
   ok('ページのエラーなし',!errs.length,errs);
   await b.close(); srv.kill(); await c.end();
 })();

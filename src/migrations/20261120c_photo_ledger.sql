@@ -52,17 +52,44 @@ create or replace function case_photos(p_case text) returns table(id text, proc_
 language sql security definer stable as $$
   select f.id, f.proc_id, f.who, f.cat, f.phase, f.path, f.created_at from photos f
   where f.case_id=p_case and my_role() in ('hq','staff','viewer') and (my_role()='hq' or f.org=my_org()) order by f.cat, f.phase, f.created_at $$;
+-- 台帳（スタッフ）がパソコンから写真を入れる。場所は保存領域の staff/ の下。工程が無くても案件に入れられる
+create or replace function staff_add_photos(p_case text, p_cat text, p_phase text, p_paths jsonb) returns int
+language plpgsql security definer as $$
+declare c cases; n int; who text;
+begin
+  if my_role() not in ('hq','staff') then return 0; end if;
+  select * into c from cases where id=p_case; if not found then return 0; end if;
+  if my_role()<>'hq' and c.org<>my_org() then return 0; end if;
+  select coalesce(nullif(name,''),email,'スタッフ') into who from profiles where id=auth.uid();
+  insert into photos(org,case_id,proc_id,who,cat,phase,path)
+  select c.org, c.id, '', coalesce(who,'スタッフ'), coalesce(nullif(p_cat,''),'その他'), coalesce(p_phase,''), x
+  from jsonb_array_elements_text(coalesce(p_paths,'[]'::jsonb)) x where x like 'staff/%'
+  on conflict (path) do nothing;
+  get diagnostics n = row_count; return n;
+end $$;
+-- 台帳（スタッフ）が写真を外す。外した写真の場所を返す（本体は画面から保存領域で消す）
+create or replace function staff_del_photo(p_id text) returns text
+language sql security definer as $$
+  delete from photos f where f.id=p_id and my_role() in ('hq','staff') and (my_role()='hq' or f.org=my_org()) returning f.path $$;
 do $$ begin
-  if exists (select 1 from pg_namespace where nspname='storage')
-     and not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_vendor_delete') then
-    execute $p$create policy reports_vendor_delete on storage.objects for delete to anon
-      using (bucket_id='reports' and public.vendor_token_ok((storage.foldername(name))[1]))$p$;
+  if exists (select 1 from pg_namespace where nspname='storage') then
+    if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_vendor_delete') then
+      execute $p$create policy reports_vendor_delete on storage.objects for delete to anon
+        using (bucket_id='reports' and public.vendor_token_ok((storage.foldername(name))[1]))$p$; end if;
+    if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_staff_insert') then
+      execute $p$create policy reports_staff_insert on storage.objects for insert to authenticated
+        with check (bucket_id='reports' and (storage.foldername(name))[1]='staff' and public.my_role() in ('hq','staff'))$p$; end if;
+    if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_staff_delete') then
+      execute $p$create policy reports_staff_delete on storage.objects for delete to authenticated
+        using (bucket_id='reports' and public.my_role() in ('hq','staff'))$p$; end if;
   end if;
 end $$;
 do $$ declare f text; begin
-  foreach f in array array['add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)'] loop
+  foreach f in array array['add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','staff_add_photos(text,text,text,jsonb)','staff_del_photo(text)'] loop
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function add_photos(text,text,text,text,jsonb), my_photos(text,text), del_my_photo(text,text), case_photos(text) from public;
 grant execute on function add_photos(text,text,text,text,jsonb), my_photos(text,text), del_my_photo(text,text) to anon, authenticated;
 grant execute on function case_photos(text) to authenticated;
+revoke execute on function staff_add_photos(text,text,text,jsonb), staff_del_photo(text) from public, anon;
+grant execute on function staff_add_photos(text,text,text,jsonb), staff_del_photo(text) to authenticated;
