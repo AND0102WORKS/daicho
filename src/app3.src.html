@@ -279,9 +279,9 @@ table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#F
 tr.avgap td{height:16px;padding:0;background:var(--ground);border-left:0;border-right:0}
 tr.avsec th,tr.avsec td{background:#3E4A46;color:#fff;font-size:12px;text-align:left;padding:7px 10px;height:auto;font-weight:400;border-color:#3E4A46}
 tr.avsec th{font-weight:900;font-size:13.5px;color:#fff}
-.avks{display:inline-flex;flex-wrap:wrap;gap:6px;margin-right:14px;vertical-align:middle}
-label.avk{display:inline-flex;align-items:center;gap:4px;padding:3px 10px 3px 6px;border-radius:14px;border:1px solid #8A9792;color:#DDE3E1;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
-label.avk.on{background:#fff;color:var(--ink);border-color:#fff}label.avk input{margin:0;accent-color:var(--acc)}
+.seg{display:inline-flex;border:1px solid #8A9792;border-radius:8px;overflow:hidden;margin-right:14px;vertical-align:middle}
+.seg button{all:unset;cursor:pointer;padding:5px 14px;font-size:13px;font-weight:700;color:#DDE3E1;border-left:1px solid #8A9792;white-space:nowrap}
+.seg button:first-child{border-left:0}.seg button:hover{background:#56635E}.seg button.on{background:#fff;color:var(--ink)}
 .avhelp{font-size:11.5px;color:#C9D1CE;white-space:nowrap}
 table.bd tbody tr.avsec th.nm,table.bd tbody tr.avsec td{background:#3E4A46;color:#fff}
 table.bd tbody tr.avrow th.nm{background:#E6EBEA;border-left:4px solid #3E4A46}
@@ -847,6 +847,7 @@ function vpkClose(){
 function vpkOpen(sel){
   vpkClose();
   const cur=sel.value, row=sel.closest('[data-p]'), ksel=row&&row.querySelector('select[data-pf="kind"]');
+  if(ksel&&sel.dataset.pf==='who')avFollow(ksel.value);
   /* 再描画で select が作り直されても選んだ値を入れられるよう、場所を覚えておく */
   const loc=sel.id?'#'+sel.id:(row&&sel.dataset.pf?`[data-p="${row.dataset.p}"] select[data-pf="${sel.dataset.pf}"]`:'');
   const kindOf=v=>PKINDS.indexOf(v.defKind||'')>=0?v.defKind:'その他';
@@ -860,7 +861,7 @@ function vpkOpen(sel){
     el.querySelector('.vpk-k').innerHTML=[''].concat(kinds).map(k=>
       `<button type="button" class="vpk-c${k===kind?' on':''}" data-k="${esc(k)}">${esc(k||'すべて')}</button>`).join('');
     const nq=vpkNorm(q), hit=DB.vendors.filter(v=>!nq||vpkNorm(v.name+' '+(v.full||'')).indexOf(nq)>=0);
-    const inK=hit.filter(v=>!kind||kindOf(v)===kind), others=kind?hit.filter(v=>kindOf(v)!==kind):[];
+    const inK=hit.filter(v=>!kind||kindOf(v)===kind||(isInsp(kind)&&canInspect(v))), others=kind?hit.filter(v=>inK.indexOf(v)<0):[];
     let h=nq?'':`<button type="button" class="vpk-i${cur?'':' cur'}" data-v=""><span>（未定）</span></button>`;
     h+=kind?group(kind,inK):kinds.map(k=>group(k,inK.filter(v=>kindOf(v)===k))).join('');
     /* 検索中は、選んでいる区分の外で見つかった発注先も下に出す（区分違いで見落とさないように） */
@@ -891,8 +892,11 @@ function vpkOpen(sel){
   });
   document.body.appendChild(el); draw();
   /* 位置：select の下。下に入らなければ上、右にはみ出すなら左へ寄せる */
+  /* 工程を組む画面の業者欄：上の予定表を隠さないよう、いつも下に開く（足りなければ画面を少し送る） */
+  const keepUp=!!(row&&sel.dataset.pf==='who'&&document.querySelector('tr.avgap'));
+  if(keepUp){ const r0=sel.getBoundingClientRect(), need=340-(window.innerHeight-r0.bottom); if(need>0) window.scrollBy(0,need); }
   const r=sel.getBoundingClientRect(), w=Math.min(Math.max(r.width,340),window.innerWidth-16), below=window.innerHeight-r.bottom-12, above=r.top-12;
-  const up=below<260&&above>below, mh=Math.max(180,Math.min(440,up?above:below));
+  const up=!keepUp&&below<260&&above>below, mh=Math.max(180,Math.min(440,up?above:below));
   el.style.width=w+'px'; el.style.maxHeight=mh+'px';
   el.style.left=Math.max(8,Math.min(r.left,window.innerWidth-w-8))+'px';
   if(up) el.style.bottom=(window.innerHeight-r.top+4)+'px'; else el.style.top=(r.bottom+4)+'px';
@@ -1861,9 +1865,9 @@ function flagLine(c,m){
 /* 工程を組む：予定表（見るだけ）。専属の職人と検査担当の、日ごとの予定の数。白＝空き。
    工程を入れるのは今までどおり工程の行・日付・業者の欄で（ここは押しても何も変わらない） */
 const KABBR={'清掃':'清','AW検査':'検','検査':'検','内装':'内','リペア補修':'リ','水道設備':'水','電気設備':'電','現地調査':'調','自社施工':'自','鍵交換':'鍵'};
-/* 帯の中の区分を押すと、その区分の業者だけ出す。区分は発注先マスタの「既定の工程区分」から自動で並ぶ。
-   最初はこの案件の工程にある区分が選ばれた状態 */
-let avSel=null;
+/* 帯の中の区分のボタンで、その区分の業者だけ出す（1つ選ぶ。「全部」もある）。区分は発注先マスタの「既定の工程区分」から自動で並ぶ。
+   最初は、この案件で業者が決まっていない工程の区分。下の工程の行の業者欄を押すと、その行の区分に自動で切り替わる */
+let avOne=null, avLast=null;
 const AV_SKIP=['現地調査','自社施工'];
 function avKinds(){
   const act=DB.vendors.filter(v=>v.active!==false);
@@ -1873,9 +1877,19 @@ function avKinds(){
   return ks;
 }
 const avMatch=(v,k)=>isInsp(k)?canInspect(v):vendorKinds(v).indexOf(k)>=0;
+/* 予定表だけ描き直す（業者欄の選択画面を開いたままにするため、画面全体は描き直さない） */
+function avRedraw(){
+  const g=document.querySelector('tr.avgap'); if(!g||!avLast)return;
+  const tb=g.parentNode; let x=g; while(x){ const n=x.nextElementSibling; x.remove(); x=n; }
+  tb.insertAdjacentHTML('beforeend',availRows(...avLast));
+}
+function avFollow(kind){ const k=isInsp(kind)?'AW検査':kind; if(k&&avKinds().indexOf(k)>=0&&k!==avOne){ avOne=k; avRedraw(); } }
 function availRows(c,ps,m,D,y,mo){
   const all=avKinds(); if(!all.length)return '';
-  const sel=(avSel||[...new Set(ps.map(p=>isInsp(p.kind)?'AW検査':p.kind))]).filter(k=>all.indexOf(k)>=0);
+  avLast=[c,ps,m,D,y,mo];
+  const chip=k=>isInsp(k)?'AW検査':k, ok=k=>k==='全部'||all.indexOf(k)>=0;
+  const one=(avOne&&ok(avOne))?avOne:(ps.filter(p=>!p.who).map(p=>chip(p.kind)).find(ok)||ps.map(p=>chip(p.kind)).find(ok)||all[0]);
+  const sel=one==='全部'?all:[one];
   const people=DB.vendors.filter(v=>v.active!==false&&sel.some(k=>avMatch(v,k))).map(v=>v.name);
   const B=byId();
   const cell=(who,d)=>{ const ds=iso(y,mo,d), js=DB.procs.filter(p=>p.who===who&&p.date&&onDay(p,ds));
@@ -1886,9 +1900,9 @@ function availRows(c,ps,m,D,y,mo){
     return `<td class="av busy${mine?' mine':''}" title="${esc(js.map(p=>`${(B[p.case]||{}).prop||''}（${p.kind}）`).join('\n'))}">${Object.entries(n).map(([k,v])=>`<b>${esc(k)}${v}</b>`).join(' ')}</td>`; };
   const days=Array.from({length:D},(_,i)=>i+1);
   return `<tr class="avgap"><td colspan="${D+1}"></td></tr><tr class="avsec"><th class="nm">職人の予定表</th><td colspan="${D}">
-    <span class="avks">${all.map(k=>`<label class="avk${sel.indexOf(k)>=0?' on':''}"><input type="checkbox" data-avk="${esc(k)}"${sel.indexOf(k)>=0?' checked':''}>${esc(k)}</label>`).join('')}</span>
-    <span class="avhelp">見るだけ。白＝空き　数字＝予定の数（清＝清掃、検＝検査…）　休＝休み　太枠＝この案件</span></td></tr>`+
-    (people.length?'':`<tr class="avrow"><th class="nm"></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">上の区分にチェックを入れると、その業者の予定が出ます</td></tr>`)+
+    <span class="seg">${[...all,'全部'].map(k=>`<button type="button" class="${k===one?'on':''}" data-avk="${esc(k)}">${esc(k)}</button>`).join('')}</span>
+    <span class="avhelp">下の業者欄を押すと自動で切り替わる。見るだけ。白＝空き　数字＝予定の数（清＝清掃、検＝検査…）　休＝休み　太枠＝この案件</span></td></tr>`+
+    (people.length?'':`<tr class="avrow"><th class="nm"></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">この区分の業者は発注先マスタにいません</td></tr>`)+
     people.map(n=>`<tr class="avrow"><th class="nm">${esc(n)}<small>${esc([vendorOf(n).defKind,canInspect(vendorOf(n))&&!isInsp(vendorOf(n).defKind)?'検査も':''].filter(Boolean).join('・'))}</small></th>${days.map(d=>cell(n,d)).join('')}</tr>`).join('');
 }
 function procPanel(c){
@@ -3410,7 +3424,7 @@ document.addEventListener('drop',e=>{ if(tab!=='case'||!isFileDrag(e))return; e.
 document.addEventListener('click',e=>{
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
   const cpl=e.target.closest('[data-cpage]'); if(cpl){ openCasePage(cpl.dataset.cpage); return; }
-  const avk=e.target.closest('[data-avk]'); if(avk){ avSel=[...document.querySelectorAll('[data-avk]')].filter(x=>x.checked).map(x=>x.dataset.avk); render(); return; }
+  const avk=e.target.closest('[data-avk]'); if(avk){ avOne=avk.dataset.avk; avRedraw(); return; }
   if(e.target.id==='cpBack'){ tab=cpBack||'ledger'; render(); return; }
   const est=e.target.closest('[data-estimate]'); if(est){ showEstimate(est.dataset.estimate); return; }
   /* ---- 発注 ---- */
