@@ -276,8 +276,12 @@ table.bd th.fd-b,table.bd td.fd-b{box-shadow:inset 3px 0 0 #2F6DB5;background:#E
 table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#FBF3D6}
 .flagline{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;font-size:12.5px}
 .pbar{margin:10px 0 6px}
-tr.avsec th,tr.avsec td{background:#F3EFE7;font-size:11.5px;color:var(--sub);text-align:left;padding:5px 8px;height:auto;font-weight:400}
-tr.avsec th{font-weight:700;color:var(--ink)}
+tr.avgap td{height:16px;padding:0;background:var(--ground);border-left:0;border-right:0}
+tr.avsec th,tr.avsec td{background:#3E4A46;color:#fff;font-size:12px;text-align:left;padding:7px 10px;height:auto;font-weight:400;border-color:#3E4A46}
+tr.avsec th{font-weight:900;font-size:13.5px;color:#fff}
+table.bd tbody tr.avsec th.nm{background:#3E4A46;color:#fff}
+table.bd tbody tr.avrow th.nm{background:#E6EBEA;border-left:4px solid #3E4A46}
+table.bd tbody tr.avgap th,table.bd tbody tr.avgap td{background:var(--ground);border:0}
 td.av{height:34px;text-align:center;vertical-align:middle;font-size:11px;padding:1px}
 td.av.free{background:#fff}
 td.av.busy{background:#F4E3CF;font-size:11px}td.av.busy b{font-weight:700;white-space:nowrap}
@@ -1859,7 +1863,7 @@ function availRows(c,ps,m,D,y,mo){
     const mine=js.some(p=>p.case===c.id);
     return `<td class="av busy${mine?' mine':''}" title="${esc(js.map(p=>`${(B[p.case]||{}).prop||''}（${p.kind}）`).join('\n'))}">${Object.entries(n).map(([k,v])=>`<b>${esc(k)}${v}</b>`).join(' ')}</td>`; };
   const days=Array.from({length:D},(_,i)=>i+1);
-  return `<tr class="avsec"><th class="nm">予定表</th><td colspan="${D}">見るだけ。白＝空き　数字＝その日の予定の数（清＝清掃、検＝検査、内＝内装…）　休＝休み　太枠＝この案件。マスに乗せると現場名が出る</td></tr>`+
+  return `<tr class="avgap"><td colspan="${D+1}"></td></tr><tr class="avsec"><th class="nm">職人の予定表</th><td colspan="${D}">ここから下は見るだけ（全部の現場の予定）。白＝空き　数字＝その日の予定の数（清＝清掃、検＝検査、内＝内装…）　休＝休み　太枠＝この案件。マスに乗せると現場名が出る</td></tr>`+
     people.map(n=>`<tr class="avrow"><th class="nm">${esc(n)}<small>${esc([vendorOf(n).defKind,canInspect(vendorOf(n))&&!isInsp(vendorOf(n).defKind)?'検査も':''].filter(Boolean).join('・'))}</small></th>${days.map(d=>cell(n,d)).join('')}</tr>`).join('');
 }
 function procPanel(c){
