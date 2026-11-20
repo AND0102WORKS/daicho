@@ -284,7 +284,11 @@ table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#F
 tr.avgap td{height:16px;padding:0;background:var(--ground);border-left:0;border-right:0}
 tr.avsec th,tr.avsec td{background:#3E4A46;color:#fff;font-size:12px;text-align:left;padding:7px 10px;height:auto;font-weight:400;border-color:#3E4A46}
 tr.avsec th{font-weight:900;font-size:13.5px;color:#fff}
-table.bd tbody tr.avsec th.nm{background:#3E4A46;color:#fff}
+.avks{display:inline-flex;flex-wrap:wrap;gap:6px;margin-right:14px;vertical-align:middle}
+label.avk{display:inline-flex;align-items:center;gap:4px;padding:3px 10px 3px 6px;border-radius:14px;border:1px solid #8A9792;color:#DDE3E1;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+label.avk.on{background:#fff;color:var(--ink);border-color:#fff}label.avk input{margin:0;accent-color:var(--acc)}
+.avhelp{font-size:11.5px;color:#C9D1CE;white-space:nowrap}
+table.bd tbody tr.avsec th.nm,table.bd tbody tr.avsec td{background:#3E4A46;color:#fff}
 table.bd tbody tr.avrow th.nm{background:#E6EBEA;border-left:4px solid #3E4A46}
 table.bd tbody tr.avgap th,table.bd tbody tr.avgap td{background:var(--ground);border:0}
 td.av{height:34px;text-align:center;vertical-align:middle;font-size:11px;padding:1px}
@@ -1859,9 +1863,22 @@ function flagLine(c,m){
 /* 工程を組む：予定表（見るだけ）。専属の職人と検査担当の、日ごとの予定の数。白＝空き。
    工程を入れるのは今までどおり工程の行・日付・業者の欄で（ここは押しても何も変わらない） */
 const KABBR={'清掃':'清','AW検査':'検','検査':'検','内装':'内','リペア補修':'リ','水道設備':'水','電気設備':'電','現地調査':'調','自社施工':'自','鍵交換':'鍵'};
+/* 帯の中の区分を押すと、その区分の業者だけ出す。区分は発注先マスタの「既定の工程区分」から自動で並ぶ。
+   最初はこの案件の工程にある区分が選ばれた状態 */
+let avSel=null;
+const AV_SKIP=['現地調査','自社施工'];
+function avKinds(){
+  const act=DB.vendors.filter(v=>v.active!==false);
+  const ks=[...new Set(act.map(v=>v.defKind).filter(k=>k&&!isInsp(k)&&AV_SKIP.indexOf(k)<0))];
+  ks.sort((a,b)=>(PKINDS.indexOf(a)+1||99)-(PKINDS.indexOf(b)+1||99));
+  if(act.some(canInspect))ks.push('AW検査');
+  return ks;
+}
+const avMatch=(v,k)=>isInsp(k)?canInspect(v):vendorKinds(v).indexOf(k)>=0;
 function availRows(c,ps,m,D,y,mo){
-  const people=[...new Set([...SEN,...DB.vendors.filter(v=>v.active!==false&&canInspect(v)).map(v=>v.name)])].filter(n=>vendorOf(n));
-  if(!people.length)return '';
+  const all=avKinds(); if(!all.length)return '';
+  const sel=(avSel||[...new Set(ps.map(p=>isInsp(p.kind)?'AW検査':p.kind))]).filter(k=>all.indexOf(k)>=0);
+  const people=DB.vendors.filter(v=>v.active!==false&&sel.some(k=>avMatch(v,k))).map(v=>v.name);
   const B=byId();
   const cell=(who,d)=>{ const ds=iso(y,mo,d), js=DB.procs.filter(p=>p.who===who&&p.date&&onDay(p,ds));
     if(isOff(who,ds))return `<td class="av off" title="休み">休</td>`;
@@ -1870,7 +1887,10 @@ function availRows(c,ps,m,D,y,mo){
     const mine=js.some(p=>p.case===c.id);
     return `<td class="av busy${mine?' mine':''}" title="${esc(js.map(p=>`${(B[p.case]||{}).prop||''}（${p.kind}）`).join('\n'))}">${Object.entries(n).map(([k,v])=>`<b>${esc(k)}${v}</b>`).join(' ')}</td>`; };
   const days=Array.from({length:D},(_,i)=>i+1);
-  return `<tr class="avgap"><td colspan="${D+1}"></td></tr><tr class="avsec"><th class="nm">職人の予定表</th><td colspan="${D}">ここから下は見るだけ（全部の現場の予定）。白＝空き　数字＝その日の予定の数（清＝清掃、検＝検査、内＝内装…）　休＝休み　太枠＝この案件。マスに乗せると現場名が出る</td></tr>`+
+  return `<tr class="avgap"><td colspan="${D+1}"></td></tr><tr class="avsec"><th class="nm">職人の予定表</th><td colspan="${D}">
+    <span class="avks">${all.map(k=>`<label class="avk${sel.indexOf(k)>=0?' on':''}"><input type="checkbox" data-avk="${esc(k)}"${sel.indexOf(k)>=0?' checked':''}>${esc(k)}</label>`).join('')}</span>
+    <span class="avhelp">見るだけ。白＝空き　数字＝予定の数（清＝清掃、検＝検査…）　休＝休み　太枠＝この案件</span></td></tr>`+
+    (people.length?'':`<tr class="avrow"><th class="nm"></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">上の区分にチェックを入れると、その業者の予定が出ます</td></tr>`)+
     people.map(n=>`<tr class="avrow"><th class="nm">${esc(n)}<small>${esc([vendorOf(n).defKind,canInspect(vendorOf(n))&&!isInsp(vendorOf(n).defKind)?'検査も':''].filter(Boolean).join('・'))}</small></th>${days.map(d=>cell(n,d)).join('')}</tr>`).join('');
 }
 function procPanel(c){
@@ -3392,6 +3412,7 @@ document.addEventListener('drop',e=>{ if(tab!=='case'||!isFileDrag(e))return; e.
 document.addEventListener('click',e=>{
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
   const cpl=e.target.closest('[data-cpage]'); if(cpl){ openCasePage(cpl.dataset.cpage); return; }
+  const avk=e.target.closest('[data-avk]'); if(avk){ avSel=[...document.querySelectorAll('[data-avk]')].filter(x=>x.checked).map(x=>x.dataset.avk); render(); return; }
   if(e.target.id==='cpBack'){ tab=cpBack||'ledger'; render(); return; }
   const est=e.target.closest('[data-estimate]'); if(est){ showEstimate(est.dataset.estimate); return; }
   /* ---- 発注 ---- */
