@@ -299,7 +299,7 @@ td.av[data-ask]{cursor:pointer}td.av.free[data-ask]:hover{background:var(--ok-bg
 td.av.free[data-ask]:hover::after{content:'＋打診';font-size:11px;font-weight:700;color:var(--ok)}
 td.av.busy[data-ask]:hover{filter:brightness(.96)}
 td.av .avj.q{color:#8A5A00}td.av .avj.q i{background:#F2C14E;color:#1E2A32;border-radius:3px;padding:0 2px}
-.askst{display:inline-block;font-size:10.5px;font-weight:700;padding:0 6px;border-radius:8px;margin-left:4px;vertical-align:1px}
+.askst{display:inline-block;font-size:10.5px;font-weight:700;padding:0 6px;border-radius:8px;margin-left:4px;vertical-align:1px;border:0;cursor:pointer;font-family:inherit}.askst:hover{filter:brightness(.93)}
 .askst.wait{background:#FBEFD0;color:#8A5A00}.askst.ok{background:var(--ok-bg);color:var(--ok)}.askst.ng{background:var(--warn-bg);color:var(--warn)}
 .seg{display:inline-flex;border:1px solid #8A9792;border-radius:8px;overflow:hidden;margin-right:14px;vertical-align:middle}
 .seg button{all:unset;cursor:pointer;padding:5px 14px;font-size:13px;font-weight:700;color:#DDE3E1;border-left:1px solid #8A9792;white-space:nowrap}
@@ -1913,7 +1913,9 @@ function askSheet(cid,who,ds){
   const tgt=DB.procs.find(p=>same(p)&&!p.who)||null;
   /* 先に工程へ入れる（業者・開始日）。打診を送るかはこのあと選ぶ */
   snap('ask:'+cid);
+  const made=!tgt;
   let p=tgt; if(!p){ DB.pseq++; p={id:'Q'+DB.pseq+DEV,case:cid,kind:want,who:'',date:'',amt:0,month:'',prog:''}; DB.procs.push(p); }
+  const prev={who:p.who,date:p.date,end:p.end,month:p.month,ask:p.ask,askAt:p.askAt};
   p.who=who; p.date=ds; p.end=''; p.month=''; p.ask=''; p.askAt=null; recalcPlan(c);
   save(); render();
   const el=document.createElement('div'); el.className='ask';
@@ -1926,10 +1928,11 @@ function askSheet(cid,who,ds){
       <button class="btn small primary" data-askgo="mail">メールで送る${v.email?'':'（宛先なし）'}</button>
       <button class="btn small" data-askgo="copy">文面をコピー</button>`:`<span class="note">この業者は業者ページのリンクがまだありません（発注先マスタ）</span>`}
       <button class="btn small" data-askgo="only" title="電話などで聞くとき。打診中の印だけ付ける">打診中の印だけ</button>
-      <span class="grow"></span><button class="btn small" data-askgo="no">送らない</button></div></div>`;
+      <span class="grow"></span><button class="btn small" data-askgo="undo" title="押し間違えたとき。工程を押す前に戻す">やめる（工程に入れない）</button><button class="btn small" data-askgo="no">送らない</button></div></div>`;
   document.body.appendChild(el);
   el.onclick=e=>{ const b=e.target.closest('[data-askgo]'); if(!b)return; const g=b.dataset.askgo; el.remove();
     if(g==='no'){ toast(`${p.kind}：${who} さん ${md(ds)} を工程に入れた`); return; }
+    if(g==='undo'){ if(made)DB.procs=DB.procs.filter(x=>x!==p); else Object.assign(p,prev); recalcPlan(c); save(); render(); toast('元に戻した'); return; }
     p.ask='打診中'; p.askAt=new Date().toISOString();
     save(); render();
     const m=askMessage(c,p,v);
@@ -1938,8 +1941,15 @@ function askSheet(cid,who,ds){
     else if(g==='copy')copyText(m.body,'打診の文面をコピーした');
     toast(`${who} さんに ${md(ds)} ${p.kind} を打診中にした`); };
 }
-const askBadge=p=>p.ask==='打診中'?'<span class="askst wait">打診中</span>':p.ask==='受諾'?'<span class="askst ok">受諾</span>':
-  String(p.ask||'').startsWith('辞退')?`<span class="askst ng">${esc(p.ask.slice(3)||'')}さん辞退</span>`:'';
+/* 打診の印。押すと取り消す（打診中なら業者ページからも消える。工程の業者・日付はそのまま） */
+const askBadge=p=>{ const b=(cls,t,tip)=>`<button type="button" class="askst ${cls}" data-askclr="${p.id}" title="${tip}">${t} ×</button>`;
+  return p.ask==='打診中'?b('wait','打診中','押すと打診を取り消す（業者ページからも消える）'):p.ask==='受諾'?b('ok','受諾','押すと印を外す'):
+    String(p.ask||'').startsWith('辞退')?b('ng',esc(p.ask.slice(3)||'')+'さん辞退','押すと印を外す'):''; };
+function clearAsk(pid){
+  const p=DB.procs.find(x=>x.id===pid); if(!p||!p.ask)return;
+  if(p.ask==='打診中'&&!confirm(`${p.who} さんへの打診（${p.kind} ${p.date?md(p.date):''}）を取り消します。\n業者ページからも消えます。工程の業者と日付はそのまま残ります。`))return;
+  snap('askclr:'+pid); p.ask=''; p.askAt=null; save(); render(); toast('打診の印を外した');
+}
 /* 予定表だけ描き直す（業者欄の選択画面を開いたままにするため、画面全体は描き直さない） */
 function avRedraw(){
   const tb=document.querySelector('.avwrap tbody'), hd=document.querySelector('.avhead'); if(!tb||!hd||!avLast)return;
@@ -3531,6 +3541,7 @@ document.addEventListener('drop',e=>{ if(tab!=='case'||!isFileDrag(e))return; e.
 document.addEventListener('click',e=>{
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
   const cpl=e.target.closest('[data-cpage]'); if(cpl){ openCasePage(cpl.dataset.cpage); return; }
+  const acl=e.target.closest('[data-askclr]'); if(acl){ e.stopPropagation(); clearAsk(acl.dataset.askclr); return; }
   const avo=e.target.closest('[data-avoff]'); if(avo){ const [n,mm]=avo.dataset.avoff.split('|'); askOff(n,mm); return; }
   const ask=e.target.closest('[data-ask]'); if(ask&&pCase){ const i=ask.dataset.ask.lastIndexOf('|'); askSheet(pCase,ask.dataset.ask.slice(0,i),ask.dataset.ask.slice(i+1)); return; }
   const avk=e.target.closest('[data-avk]'); if(avk){ avOne=avk.dataset.avk; avRedraw(); return; }
