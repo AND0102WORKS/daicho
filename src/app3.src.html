@@ -276,7 +276,12 @@ table.bd th.fd-b,table.bd td.fd-b{box-shadow:inset 3px 0 0 #2F6DB5;background:#E
 table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#FBF3D6}
 .flagline{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;font-size:12.5px}
 .pbar{margin:10px 0 6px}
-tr.avgap td{height:16px;padding:0;background:var(--ground);border-left:0;border-right:0}
+.avwrap{max-height:222px;overflow:auto;margin:-4px 0 10px;border-top:0}
+.avwrap tr.avsec th,.avwrap tr.avsec td{position:sticky;top:0;z-index:4}.avwrap tr.avsec th.nm{z-index:6}
+.avwrap tr.avrow td,.avwrap tr.avrow th{height:52px}
+td.av .avj{font-size:10px;line-height:1.25;text-align:left;white-space:normal;word-break:break-all;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-bottom:2px}
+td.av .avj i{font-style:normal;font-weight:900;margin-right:2px;color:#7A4B1C}td.av .avj.me{font-weight:700}
+td.av .avmore{font-size:10px;color:var(--sub);text-align:left}
 tr.avsec th,tr.avsec td{background:#3E4A46;color:#fff;font-size:12px;text-align:left;padding:7px 10px;height:auto;font-weight:400;border-color:#3E4A46}
 tr.avsec th{font-weight:900;font-size:13.5px;color:#fff}
 .seg{display:inline-flex;border:1px solid #8A9792;border-radius:8px;overflow:hidden;margin-right:14px;vertical-align:middle}
@@ -285,10 +290,10 @@ tr.avsec th{font-weight:900;font-size:13.5px;color:#fff}
 .avhelp{font-size:11.5px;color:#C9D1CE;white-space:nowrap}
 table.bd tbody tr.avsec th.nm,table.bd tbody tr.avsec td{background:#3E4A46;color:#fff}
 table.bd tbody tr.avrow th.nm{background:#E6EBEA;border-left:4px solid #3E4A46}
-table.bd tbody tr.avgap th,table.bd tbody tr.avgap td{background:var(--ground);border:0}
+
 td.av{height:34px;text-align:center;vertical-align:middle;font-size:11px;padding:1px}
 td.av.free{background:#fff}
-td.av.busy{background:#F4E3CF;font-size:11px}td.av.busy b{font-weight:700;white-space:nowrap}
+td.av.busy{background:#F4E3CF;font-size:11px;vertical-align:top;padding:3px 3px}
 td.av.mine{outline:2px solid var(--acc);outline-offset:-2px}
 td.av.off{background:repeating-linear-gradient(135deg,#F1EFEA,#F1EFEA 5px,#E8E5DE 5px,#E8E5DE 10px);color:var(--sub)}
 td.av .chip{height:auto;margin:1px 0;cursor:pointer}
@@ -893,7 +898,7 @@ function vpkOpen(sel){
   document.body.appendChild(el); draw();
   /* 位置：select の下。下に入らなければ上、右にはみ出すなら左へ寄せる */
   /* 工程を組む画面の業者欄：上の予定表を隠さないよう、いつも下に開く（足りなければ画面を少し送る） */
-  const keepUp=!!(row&&sel.dataset.pf==='who'&&document.querySelector('tr.avgap'));
+  const keepUp=!!(row&&sel.dataset.pf==='who'&&document.querySelector('.avwrap'));
   if(keepUp){ const r0=sel.getBoundingClientRect(), need=340-(window.innerHeight-r0.bottom); if(need>0) window.scrollBy(0,need); }
   const r=sel.getBoundingClientRect(), w=Math.min(Math.max(r.width,340),window.innerWidth-16), below=window.innerHeight-r.bottom-12, above=r.top-12;
   const up=!keepUp&&below<260&&above>below, mh=Math.max(180,Math.min(440,up?above:below));
@@ -1879,10 +1884,17 @@ function avKinds(){
 const avMatch=(v,k)=>isInsp(k)?canInspect(v):vendorKinds(v).indexOf(k)>=0;
 /* 予定表だけ描き直す（業者欄の選択画面を開いたままにするため、画面全体は描き直さない） */
 function avRedraw(){
-  const g=document.querySelector('tr.avgap'); if(!g||!avLast)return;
-  const tb=g.parentNode; let x=g; while(x){ const n=x.nextElementSibling; x.remove(); x=n; }
-  tb.insertAdjacentHTML('beforeend',availRows(...avLast));
+  const tb=document.querySelector('.avwrap tbody'); if(!tb||!avLast)return;
+  tb.innerHTML=availRows(...avLast); tb.closest('.avwrap').scrollTop=0;
 }
+function availBlock(c,ps,m,D,y,mo){
+  const rows=availRows(c,ps,m,D,y,mo); if(!rows)return '';
+  return `<div class="boardwrap avwrap"><table class="bd" style="width:${112+86*D}px"><colgroup><col style="width:112px">${'<col style="width:var(--col)">'.repeat(D)}</colgroup><tbody>${rows}</tbody></table></div>`;
+}
+/* 予定表と上の工程の表は、横スクロールを合わせる */
+document.addEventListener('scroll',e=>{ const t=e.target; if(!t.classList)return;
+  const o=t.classList.contains('pcw')?document.querySelector('.avwrap'):t.classList.contains('avwrap')?document.querySelector('.pcw'):null;
+  if(o&&Math.abs(o.scrollLeft-t.scrollLeft)>1)o.scrollLeft=t.scrollLeft; },true);
 function avFollow(kind){ const k=isInsp(kind)?'AW検査':kind; if(k&&avKinds().indexOf(k)>=0&&k!==avOne){ avOne=k; avRedraw(); } }
 function availRows(c,ps,m,D,y,mo){
   const all=avKinds(); if(!all.length)return '';
@@ -1895,13 +1907,13 @@ function availRows(c,ps,m,D,y,mo){
   const cell=(who,d)=>{ const ds=iso(y,mo,d), js=DB.procs.filter(p=>p.who===who&&p.date&&onDay(p,ds));
     if(isOff(who,ds))return `<td class="av off" title="休み">休</td>`;
     if(!js.length)return `<td class="av free" title="${esc(who)} ${md(ds)}：空き"></td>`;
-    const n={}; js.forEach(p=>{ const k=KABBR[p.kind]||p.kind.slice(0,1); n[k]=(n[k]||0)+1; });
     const mine=js.some(p=>p.case===c.id);
-    return `<td class="av busy${mine?' mine':''}" title="${esc(js.map(p=>`${(B[p.case]||{}).prop||''}（${p.kind}）`).join('\n'))}">${Object.entries(n).map(([k,v])=>`<b>${esc(k)}${v}</b>`).join(' ')}</td>`; };
+    const one=p=>`<div class="avj${p.case===c.id?' me':''}"><i>${esc(KABBR[p.kind]||p.kind.slice(0,1))}</i>${esc((B[p.case]||{}).prop||'')}</div>`;
+    return `<td class="av busy${mine?' mine':''}" title="${esc(js.map(p=>`${(B[p.case]||{}).prop||''}（${p.kind}）`).join('\n'))}">${js.slice(0,2).map(one).join('')}${js.length>2?`<div class="avmore">ほか${js.length-2}件</div>`:''}</td>`; };
   const days=Array.from({length:D},(_,i)=>i+1);
-  return `<tr class="avgap"><td colspan="${D+1}"></td></tr><tr class="avsec"><th class="nm">職人の予定表</th><td colspan="${D}">
+  return `<tr class="avsec"><th class="nm">職人の予定表</th><td colspan="${D}">
     <span class="seg">${[...all,'全部'].map(k=>`<button type="button" class="${k===one?'on':''}" data-avk="${esc(k)}">${esc(k)}</button>`).join('')}</span>
-    <span class="avhelp">下の業者欄を押すと自動で切り替わる。見るだけ。白＝空き　数字＝予定の数（清＝清掃、検＝検査…）　休＝休み　太枠＝この案件</span></td></tr>`+
+    <span class="avhelp">下の業者欄を押すと自動で切り替わる。白＝空き　マス＝その日の現場（清＝清掃、検＝検査…）　休＝休み　太枠＝この案件</span></td></tr>`+
     (people.length?'':`<tr class="avrow"><th class="nm"></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">この区分の業者は発注先マスタにいません</td></tr>`)+
     people.map(n=>`<tr class="avrow"><th class="nm">${esc(n)}<small>${esc([vendorOf(n).defKind,canInspect(vendorOf(n))&&!isInsp(vendorOf(n).defKind)?'検査も':''].filter(Boolean).join('・'))}</small></th>${days.map(d=>cell(n,d)).join('')}</tr>`).join('');
 }
@@ -1981,7 +1993,7 @@ function procPanel(c){
       ${[...new Set(ps.map(p=>p.kind))].map(k=>`<span><i style="background:${kcol(k)}"></i>${esc(k)}</span>`).join('')}</div>`:''}</div>
     <div class="boardwrap pcw" style="max-height:none;margin-bottom:10px">
       <table class="bd" data-days="${D}" style="width:${112+86*D}px"><thead>${head}</thead><tbody>${body||
-        `<tr><th class="nm"><small>工程なし</small></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">工程がまだ1つも無い。下の「＋ 工程を足す」から、工事・清掃・鍵交換・検査を足していく。旗の日を目安に組む。</td></tr>`}${availRows(c,ps,m,D,y,mo)}</tbody></table></div>
+        `<tr><th class="nm"><small>工程なし</small></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">工程がまだ1つも無い。下の「＋ 工程を足す」から、工事・清掃・鍵交換・検査を足していく。旗の日を目安に組む。</td></tr>`}</tbody></table></div>${availBlock(c,ps,m,D,y,mo)}
     <div class="card">
       <label class="fl" title="日付は期間で入れる。1日だけなら終了日は空欄。上の表では「開始日をクリック→終了日をクリック」でも引ける（同じ日を2回押すとその日だけ）。金額は案件台帳で入れる">工程（誰に・いつからいつまで）<span class="help" style="margin-left:6px;width:18px;height:18px;font-size:11px">？</span></label>
       ${ps.map(p=>`<div class="prow np" data-p="${p.id}">
@@ -3145,7 +3157,7 @@ function fitLnw(){
 function fitProc(){
   const w=document.querySelector('#main .boardwrap.pcw'), t=w&&w.querySelector('table.bd'); if(!t)return;
   const D=+t.dataset.days||31, col=Math.max(52,Math.min(86,Math.floor((w.clientWidth-114)/D)));
-  t.style.setProperty('--col',col+'px'); t.style.width=(112+col*D)+'px';
+  [t,document.querySelector('#main .avwrap table.bd')].forEach(x=>{ if(x){ x.style.setProperty('--col',col+'px'); x.style.width=(112+col*D)+'px'; } });
 }
 window.addEventListener('resize',()=>{ if(tab==='order')fitLnw(); if(tab==='proc')fitProc(); });
 function render(){
