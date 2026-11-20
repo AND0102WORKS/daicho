@@ -183,7 +183,7 @@ async function load(){
     if(!data||!data.length){ list.innerHTML='<div class="err">リンクが無効です。会社に確認してください。</div>'; return; }
     ME=data[0]; document.getElementById('who').textContent=ME.name+' さん'; }
   const [a,b]=span();
-  const {data,error}=await sb.rpc('my_schedule',{p_token:token,p_from:a,p_to:b});
+  const {data,error}=await sb.rpc('my_jobs',{p_token:token,p_from:a,p_to:b});
   if(error){ list.innerHTML='<div class="err">読み込めませんでした：'+esc(error.message)+'</div>'; return; }
   const rows=(data||[]).map(p=>{ const s=String(p.start_date||'').slice(0,10); const e=String(p.end_date||'').slice(0,10)||s; return Object.assign({},p,{s,e:e<s?s:e}); })
     .sort((x,y)=>x.s<y.s?-1:x.s>y.s?1:String(x.prop).localeCompare(String(y.prop)));

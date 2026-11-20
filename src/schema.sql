@@ -350,23 +350,27 @@ create trigger on_auth_user_created after insert on auth.users for each row exec
 -- 職人：自分の工程（vendors.token で引く）。業者：発注1件（orders.token で引く）。anon から RPC だけ許す。
 -- 鍵情報（key_info）も返す（職人が現場に入るのに要る）。戻り値の形を変えるので drop してから作る。
 drop function if exists my_schedule(text,date,date);
--- 発注金額（amt・税抜）と、その工程の完了報告（rep）も返す。業者ページの「完了報告」で使う
 create or replace function my_schedule(p_token text, p_from date, p_to date)
-returns table(proc_id text, case_id text, prop text, addr text, kind text, start_date date, end_date date, prog text, memo text, client text, key_info text,
-              amt int, rep jsonb)
+returns table(proc_id text, case_id text, prop text, addr text, kind text, start_date date, end_date date, prog text, memo text, client text, key_info text)
 language sql security definer stable as $$
   select p.id, c.id, c.prop, c.addr, p.kind, p.start_date, p.end_date, p.prog, p.memo, c.client,
     -- 鍵情報は作業日の前後だけ（開始の3日前〜終了の翌日。日本時間）。それ以外は案内だけ返す（URL が漏れたときの被害を小さく）
     case when coalesce(c.key_info,'')='' then ''
          when (now() at time zone 'Asia/Tokyo')::date between p.start_date-3 and coalesce(p.end_date,p.start_date)+1 then c.key_info
-         else '（作業日の3日前から表示されます）' end,
-    coalesce(p.amt,0),
-    (select jsonb_build_object('st',r.st,'reply',r.reply,'done_date',r.done_date,'note',r.note,'extra',r.extra,'extra_note',r.extra_note,
-        'photos',r.photos,'billed',r.invoice_id<>'') from reports r where r.proc_id=p.id)
+         else '（作業日の3日前から表示されます）' end
   from procs p join cases c on c.id=p.case_id join vendors v on v.name=p.who
   where v.token=p_token and v.active
     and p.start_date<=p_to and coalesce(p.end_date,p.start_date)>=p_from   -- 期間に少しでも掛かる工程（前の週から続く工程も出す）
   order by p.start_date, c.prop $$;
+-- 業者ページの工程（今はこちらを使う）：my_schedule に、発注金額（amt・税抜）と完了報告（rep）を足したもの
+create or replace function my_jobs(p_token text, p_from date, p_to date)
+returns table(proc_id text, case_id text, prop text, addr text, kind text, start_date date, end_date date, prog text, memo text, client text, key_info text,
+              amt int, rep jsonb)
+language sql security definer stable as $$
+  select s.*, coalesce(p.amt,0),
+    (select jsonb_build_object('st',r.st,'reply',r.reply,'done_date',r.done_date,'note',r.note,'extra',r.extra,'extra_note',r.extra_note,
+        'photos',r.photos,'billed',r.invoice_id<>'') from reports r where r.proc_id=s.proc_id)
+  from my_schedule(p_token,p_from,p_to) s join procs p on p.id=s.proc_id $$;
 -- 発注書 2ページ目の工程表用に、同じ案件の全工程（procs）と完了予定日（plan）も返す。鍵情報（key_info）も返す。
 -- 他社の名前・金額は出さない（区分・日付・工事内容だけ）。mine＝この発注の工程。戻り値の形を変えるので drop してから作る。
 -- 発注先が免税事業者なら消費税を足さない（taxable）も返す。
@@ -496,15 +500,15 @@ language sql security definer as $$
 do $$ begin
   if exists (select 1 from pg_namespace where nspname='storage') then
     insert into storage.buckets(id,name,public) values ('reports','reports',false) on conflict (id) do nothing;
-    execute 'drop policy if exists reports_vendor_insert on storage.objects';
-    execute $p$create policy reports_vendor_insert on storage.objects for insert to anon, authenticated
-      with check (bucket_id='reports' and public.vendor_token_ok((storage.foldername(name))[1]))$p$;
-    execute 'drop policy if exists reports_vendor_select on storage.objects';
-    execute $p$create policy reports_vendor_select on storage.objects for select to anon
-      using (bucket_id='reports' and public.vendor_token_ok((storage.foldername(name))[1]))$p$;
-    execute 'drop policy if exists reports_staff_select on storage.objects';
-    execute $p$create policy reports_staff_select on storage.objects for select to authenticated
-      using (bucket_id='reports' and public.my_role() in ('hq','staff','viewer'))$p$;
+    if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_vendor_insert') then
+      execute $p$create policy reports_vendor_insert on storage.objects for insert to anon, authenticated
+        with check (bucket_id='reports' and public.vendor_token_ok((storage.foldername(name))[1]))$p$; end if;
+    if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_vendor_select') then
+      execute $p$create policy reports_vendor_select on storage.objects for select to anon
+        using (bucket_id='reports' and public.vendor_token_ok((storage.foldername(name))[1]))$p$; end if;
+    if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_staff_select') then
+      execute $p$create policy reports_staff_select on storage.objects for select to authenticated
+        using (bucket_id='reports' and public.my_role() in ('hq','staff','viewer'))$p$; end if;
   end if;
 end $$;
 grant execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) to anon, authenticated;
@@ -523,7 +527,7 @@ exception when others then null; end $$;
 
 -- ---------- 仕上げ：security definer 関数の search_path 固定、anon に不要な実行権を外す ----------
 do $$ declare f text; begin
-  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
+  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function next_no(text,text) from anon;
@@ -545,6 +549,8 @@ revoke execute on function my_schedule(text,date,date), order_view(text), order_
 grant execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) to anon, authenticated;
 revoke execute on function my_orders(text) from public;
 grant execute on function my_orders(text) to anon, authenticated;
+revoke execute on function my_jobs(text,date,date) from public;
+grant execute on function my_jobs(text,date,date) to anon, authenticated;
 revoke execute on function vendor_token_ok(text), submit_report(text,text,date,text,int,text,jsonb), cancel_report(text,text), my_billing(text), issue_invoice(text,text), confirm_statement(text,text) from public;
 grant execute on function vendor_token_ok(text), submit_report(text,text,date,text,int,text,jsonb), cancel_report(text,text), my_billing(text), issue_invoice(text,text), confirm_statement(text,text) to anon, authenticated;
 revoke execute on function reset_vendor_token(text) from public, anon;
