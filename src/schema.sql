@@ -292,6 +292,18 @@ create table if not exists invoices (           -- 業者の請求書（業者�
   updated_at timestamptz default now()
 );
 
+create table if not exists photos (             -- 写真台帳：案件ごと・区分ごと（現地調査／清掃／クロス貼替／リペア／その他／完了検査）。1枚1行
+  id text primary key default ('F'||substr(replace(gen_random_uuid()::text,'-',''),1,12)),
+  org text not null default 'hq' references orgs(id),
+  case_id text not null references cases(id) on delete cascade,
+  proc_id text default '',        -- どの工程から入れたか
+  who text default '',            -- 入れた人（発注先名。社員も発注先として登録して業者ページから入れる）
+  cat text not null default 'その他',
+  phase text default '',          -- 前／後／''（清掃・クロス貼替・リペアは施工前後を分ける）
+  path text not null unique,      -- 保存領域 reports の中の場所
+  created_at timestamptz default now()
+);
+create index if not exists photos_case on photos(case_id);
 create or replace function touch_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end $$;
 do $$ declare t text; begin
@@ -324,7 +336,7 @@ create or replace function my_org() returns text language sql stable security de
   select coalesce((select org from profiles where id = auth.uid()), '') $$;
 -- 読める：本部管理者は全部、それ以外は自 org。書ける：本部管理者と staff（自 org）。
 do $$ declare t text; begin
-  foreach t in array array['clients','vendors','prices','cases','procs','lines','orders','receipts','payments','days_off','settings','inbox','reports','invoices'] loop
+  foreach t in array array['clients','vendors','prices','cases','procs','lines','orders','receipts','payments','days_off','settings','inbox','reports','invoices','photos'] loop
     execute format('alter table %1$s enable row level security;', t);
     execute format('drop policy if exists sel_%1$s on %1$s; create policy sel_%1$s on %1$s for select using (my_role()=''hq'' or org=my_org());', t);
     execute format('drop policy if exists ins_%1$s on %1$s; create policy ins_%1$s on %1$s for insert with check (my_role()=''hq'' or (my_role()=''staff'' and org=my_org()));', t);
@@ -423,6 +435,36 @@ begin
   update vendors set token=t where name=p_name;
   return t;
 end $$;
+-- ---------- 写真台帳 ----------
+-- 業者ページから写真を登録（写真の本体は先に保存領域へ送ってある）。自分の工程の案件にだけ。場所は自分のリンクのフォルダだけ
+create or replace function add_photos(p_token text, p_proc text, p_cat text, p_phase text, p_paths jsonb) returns int
+language plpgsql security definer as $$
+declare v vendors; p procs; n int;
+begin
+  select * into v from vendors where token=p_token and active; if not found then return 0; end if;
+  select * into p from procs where id=p_proc and who=v.name; if not found then return 0; end if;
+  insert into photos(org,case_id,proc_id,who,cat,phase,path)
+  select p.org, p.case_id, p.id, v.name, coalesce(nullif(p_cat,''),'その他'), coalesce(p_phase,''), x
+  from jsonb_array_elements_text(coalesce(p_paths,'[]'::jsonb)) x where x like p_token||'/%'
+  on conflict (path) do nothing;
+  get diagnostics n = row_count; return n;
+end $$;
+-- 業者ページ：その工程の案件で、自分が入れた写真
+create or replace function my_photos(p_token text, p_proc text) returns table(id text, cat text, phase text, path text, created_at timestamptz)
+language sql security definer stable as $$
+  select f.id, f.cat, f.phase, f.path, f.created_at from vendors v join procs p on p.who=v.name and p.id=p_proc
+    join photos f on f.case_id=p.case_id and f.who=v.name
+  where v.token=p_token and v.active order by f.created_at $$;
+-- 業者ページ：自分が入れた写真を外す（その工程の完了報告が承認される前だけ）。本体は画面から保存領域で消す
+create or replace function del_my_photo(p_token text, p_id text) returns boolean
+language sql security definer as $$
+  delete from photos f using vendors v where v.token=p_token and v.active and f.who=v.name and f.id=p_id
+    and not exists (select 1 from reports r where r.proc_id=f.proc_id and r.st='承認') returning true $$;
+-- 台帳：案件の写真（スタッフだけ）
+create or replace function case_photos(p_case text) returns table(id text, proc_id text, who text, cat text, phase text, path text, created_at timestamptz)
+language sql security definer stable as $$
+  select f.id, f.proc_id, f.who, f.cat, f.phase, f.path, f.created_at from photos f
+  where f.case_id=p_case and my_role() in ('hq','staff','viewer') and (my_role()='hq' or f.org=my_org()) order by f.cat, f.phase, f.created_at $$;
 -- ---------- 業者ページ：完了報告・請求 ----------
 -- 業者ページのリンク（vendors.token）が有効か。写真の保存領域のきまり（anon が自分のフォルダにだけ置ける）で使う
 create or replace function vendor_token_ok(p_token text) returns boolean
@@ -517,6 +559,9 @@ do $$ begin
     if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_vendor_select') then
       execute $p$create policy reports_vendor_select on storage.objects for select to anon
         using (bucket_id='reports' and public.vendor_token_ok((storage.foldername(name))[1]))$p$; end if;
+    if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_vendor_delete') then
+      execute $p$create policy reports_vendor_delete on storage.objects for delete to anon
+        using (bucket_id='reports' and public.vendor_token_ok((storage.foldername(name))[1]))$p$; end if;
     if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='reports_staff_select') then
       execute $p$create policy reports_staff_select on storage.objects for select to authenticated
         using (bucket_id='reports' and public.my_role() in ('hq','staff','viewer'))$p$; end if;
@@ -538,7 +583,7 @@ exception when others then null; end $$;
 
 -- ---------- 仕上げ：security definer 関数の search_path 固定、anon に不要な実行権を外す ----------
 do $$ declare f text; begin
-  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','close_period(text,int)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
+  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','close_period(text,int)','add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function next_no(text,text) from anon;
@@ -560,6 +605,9 @@ revoke execute on function my_schedule(text,date,date), order_view(text), order_
 grant execute on function my_schedule(text,date,date), order_view(text), order_accept(text,text), proc_done(text,text,boolean), my_vendor(text) to anon, authenticated;
 revoke execute on function my_orders(text) from public;
 grant execute on function my_orders(text) to anon, authenticated;
+revoke execute on function add_photos(text,text,text,text,jsonb), my_photos(text,text), del_my_photo(text,text), case_photos(text) from public;
+grant execute on function add_photos(text,text,text,text,jsonb), my_photos(text,text), del_my_photo(text,text) to anon, authenticated;
+grant execute on function case_photos(text) to authenticated;
 revoke execute on function my_jobs(text,date,date) from public;
 grant execute on function my_jobs(text,date,date) to anon, authenticated;
 revoke execute on function vendor_token_ok(text), submit_report(text,text,date,text,int,text,jsonb), cancel_report(text,text), my_billing(text), issue_invoice(text,text), confirm_statement(text,text) from public;

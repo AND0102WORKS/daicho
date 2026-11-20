@@ -76,6 +76,12 @@ button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);backg
 .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .thumbs .t{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;background:#EEE}
 .thumbs img{width:100%;height:100%;object-fit:cover}
+.pseg{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.pseg button{padding:8px 12px;border-radius:18px;border:1px solid var(--line);background:var(--card);font-size:14px;color:var(--ink)}
+.pseg button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.msheet label.pick{display:block;margin-top:14px;padding:14px;border:2px dashed var(--acc);border-radius:10px;text-align:center;color:var(--acc);font-weight:700}
+.msheet label.pick input{margin:8px auto 0;border:0;padding:0;font-size:13px}
+.rphoto{margin-top:12px;font-size:13px;color:var(--sub);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .thumbs .tst{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);color:#fff;font-size:11px;text-align:center;padding:2px 0}
 .thumbs .tst.ok{background:var(--ok);left:auto;right:auto;width:22px;border-radius:0 8px 0 0}
 .thumbs .tst.ng{background:var(--warn)}
@@ -124,12 +130,20 @@ button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);backg
   <h3>完了報告</h3><div class="meta" id="rProp"></div>
   <label>完了日<input type="date" id="rDone"></label>
   <label>コメント（任意）<textarea id="rNote" rows="3" placeholder="作業の内容、気づいたことなど"></textarea></label>
-  <label>写真（任意・12枚まで。選ぶとすぐ送り始めます）<input type="file" id="rFiles" accept="image/*" multiple></label>
-  <div class="thumbs" id="rThumbs"></div>
+  <div class="rphoto" id="rPhotoNote"></div>
   <label>発注金額<input type="text" id="rBase" disabled></label>
   <label>追加金額（税抜・ある場合だけ）<input type="number" id="rExtra" min="0" step="100" inputmode="numeric" placeholder="0"></label>
   <label>追加の理由（追加金額があるときは必ず）<input type="text" id="rExtraNote" placeholder="例：下地補修が追加で必要だった"></label>
   <div class="btns"><button type="button" id="rClose">やめる</button><button type="button" class="primary" id="rSend">報告を送る</button></div>
+</div></div>
+<div class="modal" id="pm" hidden><div class="msheet">
+  <h3>写真</h3><div class="meta" id="pProp"></div>
+  <label>区分</label><div class="pseg" id="pCats"></div>
+  <div id="pPhase"><label>施工前・施工後</label><div class="pseg"><button type="button" data-pph="前">施工前</button><button type="button" data-pph="後">施工後</button></div></div>
+  <label class="pick">写真を選ぶ（何枚でも。選ぶとすぐ送り始めます）<input type="file" id="pFiles" accept="image/*" multiple></label>
+  <div class="hint" id="pUp" style="margin:6px 0 0"></div>
+  <div id="pMine"></div>
+  <div class="btns"><button type="button" id="pClose">閉じる</button></div>
 </div></div>
 <div class="modal" id="docm" hidden><div class="msheet"><div id="docBody" class="doc"></div>
   <div class="btns noprint"><button type="button" id="docClose">閉じる</button><button type="button" id="docOk" class="primary" hidden>内容を確認しました</button><button type="button" id="docPrint">印刷・PDF</button></div></div></div>
@@ -210,7 +224,7 @@ async function load(){
       ${p.key_info?`<div class="key"><b>鍵</b>${esc(p.key_info)}</div>`:''}
       ${p.memo?`<div class="memo">${esc(p.memo)}</div>`:''}
       <div class="row">${q?`<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${q}">${p.addr?'地図':'地図（物件名で検索）'}</a>`:''}
-        ${tent?'<span class="meta">まだ確定していない予定です</span>':repBox(p)}</div></div>`;
+        ${tent?'<span class="meta">まだ確定していない予定です</span>':`<button class="sub" type="button" data-photo="1">写真</button>`+repBox(p)}</div></div>`;
   });
   list.innerHTML=html;
   ROWS={}; rows.forEach(p=>{ ROWS[p.proc_id]=p; });
@@ -225,8 +239,11 @@ function repBox(p){
   return `<div class="rst wait">完了報告済み（会社の確認待ち）${ex}</div><button class="sub" type="button" data-rep="1">報告を直す</button><button class="sub" type="button" data-cancel="1">報告を取り消す</button>`;
 }
 /* ---- 完了報告 ---- */
-let RP=null;   /* {pid, keep:[既に保存した写真の場所], ups:[{url, path, st:'up'|'ok'|'ng', p}]} */
-const MAXPH=12;   /* 1回の報告に付けられる写真の枚数 */
+let RP=null;   /* {pid, keep:[以前の形で報告に付けた写真の場所]} */
+/* ---- 写真（案件の写真台帳。工程ごとに入れる） ---- */
+const PCATS=['現地調査','清掃','クロス貼替','リペア','その他','完了検査'], PHASED=['清掃','クロス貼替','リペア'];
+const CAT_OF={'現地調査':'現地調査','清掃':'清掃','内装':'クロス貼替','リペア補修':'リペア','AW検査':'完了検査'};
+let PS=null;   /* 写真シート：{pid, cat, phase, ups:[{url,st,path,cat,phase,p,done}], mine:[登録済み]} */
 const today=()=>fmt(new Date());
 async function signed(paths){ if(!paths.length)return {}; const {data}=await sb.storage.from('reports').createSignedUrls(paths,3600); const m={}; (data||[]).forEach(x=>{ if(x.signedUrl)m[x.path]=x.signedUrl; }); return m; }
 async function openReport(pid){
@@ -239,16 +256,32 @@ async function openReport(pid){
   document.getElementById('rBase').value=p.amt?yen(p.amt)+'（税抜）':'（会社にご確認ください）';
   document.getElementById('rExtra').value=r.extra||'';
   document.getElementById('rExtraNote').value=r.extra_note||'';
-  document.getElementById('rFiles').value='';
+  document.getElementById('rPhotoNote').innerHTML=`写真は工程の「写真」から入れてください（区分・施工前後を選べます）。<button type="button" class="sub" data-photo="1" data-pid="${esc(pid)}">写真を入れる</button>`;
   document.getElementById('rm').hidden=false;
-  await drawThumbs();
 }
-async function drawThumbs(){
-  const urls=await signed(RP.keep);
-  const k=RP.keep.map((x,i)=>`<div class="t"><img src="${esc(urls[x]||'')}" alt=""><button type="button" data-delkeep="${i}">×</button></div>`);
-  const f=RP.ups.map((u,i)=>`<div class="t"><img src="${u.url}" alt="" style="${u.st==='ok'?'':'opacity:.45'}">${
-    u.st==='up'?'<span class="tst">送信中</span>':u.st==='ng'?`<span class="tst ng" data-retry="${i}">失敗・押して再送</span>`:'<span class="tst ok">✓</span>'}<button type="button" data-delfile="${i}">×</button></div>`);
-  document.getElementById('rThumbs').innerHTML=k.join('')+f.join('');
+async function openPhotos(pid){
+  const p=ROWS[pid]; if(!p)return;
+  PS={pid,cat:CAT_OF[p.kind]||'その他',phase:'前',ups:[],mine:[]};
+  document.getElementById('pProp').textContent=`${p.prop}　${p.kind||''}`;
+  document.getElementById('pm').hidden=false;
+  drawPS(); await loadMine();
+}
+async function loadMine(){
+  const {data}=await sb.rpc('my_photos',{p_token:token,p_proc:PS.pid});
+  PS.mine=data||[]; PS.urls=await signed(PS.mine.map(x=>x.path)); drawPS();
+}
+function drawPS(){
+  if(!PS)return;
+  document.getElementById('pCats').innerHTML=PCATS.map(k=>`<button type="button" data-pcat="${k}" class="${k===PS.cat?'on':''}">${k}</button>`).join('');
+  document.getElementById('pPhase').hidden=PHASED.indexOf(PS.cat)<0;
+  document.querySelectorAll('[data-pph]').forEach(b=>b.classList.toggle('on',b.dataset.pph===PS.phase));
+  const up=PS.ups.filter(u=>u.st==='up').length, ng=PS.ups.filter(u=>u.st==='ng').length;
+  document.getElementById('pUp').innerHTML=up?`送信中 ${up}枚…（このまま次の写真を選べます）`:ng?`<span style="color:var(--warn)">送れなかった写真が ${ng}枚。押すと送り直します</span>`:'';
+  const pend=PS.ups.filter(u=>u.st!=='ok').map((u,i)=>`<div class="t"><img src="${u.url}" alt="" style="opacity:.45"><span class="tst${u.st==='ng'?' ng':''}" ${u.st==='ng'?`data-retry="${PS.ups.indexOf(u)}"`:''}>${u.st==='ng'?'失敗・押して再送':'送信中'}</span></div>`).join('');
+  const g={}; PS.mine.forEach(x=>{ const k=x.cat+(x.phase?'（施工'+x.phase+'）':''); (g[k]=g[k]||[]).push(x); });
+  document.getElementById('pMine').innerHTML=(pend?`<div class="sec">送信中</div><div class="thumbs">${pend}</div>`:'')+
+    (Object.keys(g).length?Object.entries(g).map(([k,xs])=>`<div class="sec">${esc(k)}　${xs.length}枚</div><div class="thumbs">${xs.map(x=>`<div class="t"><img src="${esc((PS.urls||{})[x.path]||'')}" alt="" loading="lazy"><button type="button" data-delph="${esc(x.id)}" data-path="${esc(x.path)}">×</button></div>`).join('')}</div>`).join('')
+      :'<div class="empty" style="padding:14px 0">この現場の写真はまだありません</div>');
 }
 /* 写真は長い辺 1280px・画質 70% の JPEG に縮めてから送る（1枚 150KB 前後。通信量と保存領域を節約） */
 async function shrink(file){
@@ -262,11 +295,14 @@ let upRunning=0; const upQueue=[];
 function upNext(){ while(upRunning<3&&upQueue.length){ const u=upQueue.shift(); upRunning++; upOne(u).finally(()=>{ upRunning--; upNext(); }); } }
 function upStart(u){ u.st='up'; u.p=new Promise(res=>{ u.done=res; }); upQueue.push(u); upNext(); }
 async function upOne(u){
-  try{ const blob=u.blob||(u.blob=await shrink(u.file)), path=`${token}/${RP.pid}/${Date.now()}-${Math.random().toString(36).slice(2,6)}.jpg`;
-    const {error}=await sb.storage.from('reports').upload(path,blob,{contentType:'image/jpeg',upsert:false});
-    if(error)throw error; u.path=path; u.st='ok'; }
+  try{ const blob=u.blob||(u.blob=await shrink(u.file));
+    if(!u.path){ const path=`${token}/${u.pid}/${Date.now()}-${Math.random().toString(36).slice(2,6)}.jpg`;
+      const {error}=await sb.storage.from('reports').upload(path,blob,{contentType:'image/jpeg',upsert:false}); if(error)throw error; u.path=path; }
+    const {data,error}=await sb.rpc('add_photos',{p_token:token,p_proc:u.pid,p_cat:u.cat,p_phase:u.phase,p_paths:[u.path]});
+    if(error||!data)throw (error||new Error('登録できなかった'));
+    u.st='ok'; }
   catch(e){ u.st='ng'; }
-  u.done(); if(RP&&RP.ups.indexOf(u)>=0)drawThumbs();
+  u.done(); if(PS&&PS.ups.indexOf(u)>=0){ drawPS(); if(!PS.ups.some(x=>x.st==='up'))loadMine(); }
 }
 async function sendReport(){
   const btn=document.getElementById('rSend');
@@ -275,9 +311,7 @@ async function sendReport(){
   const done=document.getElementById('rDone').value; if(!done){ alert('完了日を入れてください'); return; }
   btn.disabled=true;
   try{
-    if(RP.ups.some(u=>u.st==='up')){ btn.textContent='写真の送信を待っています…'; await Promise.all(RP.ups.map(u=>u.p)); }
-    if(RP.ups.some(u=>u.st==='ng'))throw new Error('送れなかった写真があります。写真の「失敗・押して再送」を押すか、×で外してください。');
-    const paths=RP.keep.concat(RP.ups.map(u=>u.path));
+    const paths=RP.keep.slice();   /* 以前の形で完了報告に付けた写真（今は写真台帳に入れる） */
     btn.textContent='報告を送っています…';
     const {data,error}=await sb.rpc('submit_report',{p_token:token,p_proc:RP.pid,p_done:done,p_note:document.getElementById('rNote').value,
       p_extra:extra,p_extra_note:exNote,p_photos:paths});
@@ -351,9 +385,18 @@ document.addEventListener('click',async e=>{
   const rb=e.target.closest('[data-rep]'); if(rb){ openReport(rb.closest('.job').dataset.id); return; }
   if(e.target.id==='rClose'){ document.getElementById('rm').hidden=true; return; }
   if(e.target.id==='rSend'){ sendReport(); return; }
-  const dk=e.target.closest('[data-delkeep]'); if(dk){ RP.keep.splice(+dk.dataset.delkeep,1); drawThumbs(); return; }
-  const df=e.target.closest('[data-delfile]'); if(df){ RP.ups.splice(+df.dataset.delfile,1); drawThumbs(); return; }
-  const rt=e.target.closest('[data-retry]'); if(rt){ upStart(RP.ups[+rt.dataset.retry]); drawThumbs(); return; }
+  /* 写真 */
+  const pb=e.target.closest('[data-photo]'); if(pb){ const pid=pb.dataset.pid||pb.closest('.job').dataset.id; document.getElementById('rm').hidden=true; openPhotos(pid); return; }
+  const pc=e.target.closest('[data-pcat]'); if(pc&&PS){ PS.cat=pc.dataset.pcat; drawPS(); return; }
+  const pp=e.target.closest('[data-pph]'); if(pp&&PS){ PS.phase=pp.dataset.pph; drawPS(); return; }
+  const rt=e.target.closest('[data-retry]'); if(rt&&PS){ upStart(PS.ups[+rt.dataset.retry]); drawPS(); return; }
+  if(e.target.id==='pUp'&&PS){ PS.ups.filter(u=>u.st==='ng').forEach(upStart); drawPS(); return; }
+  const dp=e.target.closest('[data-delph]'); if(dp&&PS&&!busy){ if(!confirm('この写真を外しますか？'))return; busy=true;
+    const {data}=await sb.rpc('del_my_photo',{p_token:token,p_id:dp.dataset.delph}); busy=false;
+    if(data===true)await sb.storage.from('reports').remove([dp.dataset.path]); else alert('外せませんでした（完了報告が承認済みの写真は外せません）');
+    loadMine(); return; }
+  if(e.target.id==='pClose'){ if(PS&&PS.ups.some(u=>u.st==='up')&&!confirm('まだ送信中の写真があります。閉じると送信が止まることがあります。閉じますか？'))return;
+    document.getElementById('pm').hidden=true; PS=null; return; }
   const cb=e.target.closest('[data-cancel]'); if(cb&&!busy){ const job=cb.closest('.job');
     if(!confirm('「'+(job.querySelector('.prop').textContent||'この工程')+'」の完了報告を取り消しますか？'))return;
     busy=true; const {data,error}=await sb.rpc('cancel_report',{p_token:token,p_proc:job.dataset.id}); busy=false;
@@ -371,11 +414,10 @@ document.addEventListener('click',async e=>{
     if(error||data!==true)alert('記録できませんでした。会社に確認してください。'); document.getElementById('docm').hidden=true; loadBill(); return; }
   const t=e.target.closest('[data-r]'); if(t){ range=t.dataset.r; document.querySelectorAll('[data-r]').forEach(b=>b.classList.toggle('on',b===t)); load(); return; }
 });
-document.addEventListener('change',e=>{ if(e.target.id==='rFiles'&&RP){
-  let fs=Array.from(e.target.files||[]); e.target.value='';
-  const room=MAXPH-RP.keep.length-RP.ups.length;
-  if(fs.length>room){ alert(`写真は1回の報告に${MAXPH}枚までです。${room>0?`あと${room}枚だけ付けます。`:''}`); fs=fs.slice(0,Math.max(0,room)); }
-  fs.forEach(f=>{ const u={file:f,url:URL.createObjectURL(f)}; RP.ups.push(u); upStart(u); }); drawThumbs(); } });
+document.addEventListener('change',e=>{ if(e.target.id==='pFiles'&&PS){
+  const fs=Array.from(e.target.files||[]); e.target.value='';
+  const ph=PHASED.indexOf(PS.cat)>=0?PS.phase:'';
+  fs.forEach(f=>{ const u={file:f,url:URL.createObjectURL(f),pid:PS.pid,cat:PS.cat,phase:ph}; PS.ups.push(u); upStart(u); }); drawPS(); } });
 /* 画面に戻ってきたら最新にする（朝に開きっぱなしのまま、予定が変わっていることがある） */
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&!busy&&ME&&document.getElementById('rm').hidden){ loadOrders(); load(); if(mode==='bill')loadBill(); } });
 start();

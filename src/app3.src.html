@@ -695,7 +695,7 @@ const lastDayOf=ps=>ps.map(endOf).filter(Boolean).sort().pop()||'';
 const addDays=(ds,n)=>{const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return fmtD(d);};
 const spanInMonth=(p,m)=>!!p.date&&p.date.slice(0,7)<=m&&endOf(p).slice(0,7)>=m;
 /* 同じ業者が同じ日に別の現場（期間の重なり） */
-const clash=(pid,who,days)=>DB.procs.some(x=>x.id!==pid&&x.who===who&&!isInsp(x.kind)&&x.date&&days.some(d=>onDay(x,d)));
+const clash=(pid,who,days)=>DB.procs.some(x=>x.id!==pid&&x.who===who&&!isStaffJob(x.kind)&&x.date&&days.some(d=>onDay(x,d)));
 const CLIENTS=()=>DB.clients.map(c=>c.name);
 const VENDORS=()=>DB.vendors.map(v=>v.name);
 const clientOf=nm=>DB.clients.find(c=>c.name===nm);
@@ -728,9 +728,9 @@ const SEN=M.senzoku;
 const STATUS=M.status;
 const stCls=s=>s==='完工'||s==='報告済'?'done':(s==='新規案件'||s==='受付'||s==='現調済'||s==='見積提出'?'new':'wip');
 const KINDS=['清掃のみ','工事一式','鍵交換','入居中修繕','その他'];
-const PKINDS=['内装','水道設備','電気設備','清掃','リペア補修','AW検査','鍵交換'];
+const PKINDS=['現地調査','内装','水道設備','電気設備','清掃','リペア補修','AW検査','鍵交換'];
 const KCOL={'内装':'#EADFC8','水道設備':'#CCE2EC','電気設備':'#F7E3A8','清掃':'#D7E9D3',
-            'リペア補修':'#E9DAEE','AW検査':'#F6D6D0','鍵交換':'#DCDCD2'};
+            'リペア補修':'#E9DAEE','AW検査':'#F6D6D0','鍵交換':'#DCDCD2','現地調査':'#D9E4F2'};
 const kcol=k=>KCOL[k]||'var(--c-other)';
 /* 旧データは「工事」「検査」のまま。選択肢に残して、直すのは手作業で */
 const kindOpts=k=>opts(PKINDS,k)+(k&&PKINDS.indexOf(k)<0?`<option selected>${esc(k)}</option>`:'');
@@ -757,6 +757,8 @@ function needKinds(c){
 }
 const isSeko=k=>SEKO.indexOf(k)>=0;
 const isInsp=k=>k==='AW検査'||k==='検査';                        // 清掃より後
+/* 社内の人が行く工程（現地調査・AW検査）：発注しない・1日に何件あってもよい */
+const isStaffJob=k=>isInsp(k)||k==='現地調査';
 
 /* ---- 締日サイクル ---- */
 const eom=(y,m)=>new Date(y,m,0).getDate();
@@ -912,7 +914,7 @@ function issues(){
     ps.forEach(p=>{
       if(p.who&&!isVendor(p.who)) out.push({k:'発注先マスタ外',c:c.id,t:`${c.prop}`,d:`「${p.who}」は発注先マスタに無い。支払一覧・支払通知書に出ない`});
       if(p.who&&!p.date) out.push({k:'予定日なし',c:c.id,t:`${c.prop}`,d:`${p.who} の${p.kind}に予定日が入っていない`});
-      if(p.who&&!p.amt&&!isInsp(p.kind)) out.push({k:'金額なし',c:c.id,t:`${c.prop}`,d:`${p.who} の${p.kind}に発注金額が入っていない`});
+      if(p.who&&!p.amt&&!isStaffJob(p.kind)) out.push({k:'金額なし',c:c.id,t:`${c.prop}`,d:`${p.who} の${p.kind}に発注金額が入っていない`});
     });
     const k=ps.filter(p=>isSeko(p.kind)&&p.date), s=ps.filter(p=>p.kind==='清掃'&&p.date);
     const v=ps.filter(p=>isInsp(p.kind)&&p.date);
@@ -939,7 +941,7 @@ function issues(){
   });
   // 同一職人が同日2現場
   const slot={};
-  DB.procs.forEach(p=>{ if(!p.who||!p.date||SEN.indexOf(p.who)<0||isInsp(p.kind))return;
+  DB.procs.forEach(p=>{ if(!p.who||!p.date||SEN.indexOf(p.who)<0||isStaffJob(p.kind))return;
     spanDays(p).forEach(d=>{const k=p.who+'|'+d; (slot[k]=slot[k]||[]).push(p);}); });
   Object.entries(slot).forEach(([k,ps])=>{ if(ps.length<2)return;
     const [who,d]=k.split('|');
@@ -1454,7 +1456,7 @@ function askOrder(cid,who0){
   const kinds=[...new Set(sel.map(l=>l.kind))];
   const base=c.plan||c.done||'';
   /* 「工程を組む」で決めた工程（まだ発注に紐づいていないもの）。区分が合うものを最初から選んでおく */
-  const freeP=procsOf(cid).filter(p=>!p.order&&!isInsp(p.kind));
+  const freeP=procsOf(cid).filter(p=>!p.order&&!isStaffJob(p.kind));
   const whos=[...new Set(sel.map(l=>l.who).filter(Boolean))];
   const who1=who0||(whos.length===1?whos[0]:'');
   const k1=kinds.filter(Boolean)[0]||'';
@@ -1754,6 +1756,8 @@ function drawer(){
         <button class="x" data-del="${p.id}" title="削除">×</button></div>`).join('')}
       <button class="btn small" id="addProc">＋ 工程を足す</button>
     </div>
+    <div class="pl"><label class="fl">写真</label>${casePhotoSummary(c.id)}
+    </div>
     <div class="pl">
       <div class="tot"><span>売上（税抜）</span><b>${dual(s)}</b></div>
       <div class="tot"><span>原価（税抜）</span><b>${dual(cost,costIncOf(c.id))}</b></div>
@@ -1835,7 +1839,7 @@ function procPanel(c){
     const off=new Set(SEN.indexOf(p.who)>=0?offDays(p.who,m):[]);
     const tds=Array.from({length:D},(_,i)=>{
       const d=i+1, ds=iso(y,mo,d), on=onDay(p,ds), first=p.date===ds;
-      const busy=!on&&p.who&&!isInsp(p.kind)&&clash(p.id,p.who,[ds]);
+      const busy=!on&&p.who&&!isStaffJob(p.kind)&&clash(p.id,p.who,[ds]);
       const pend=pendStart&&pendStart.pid===p.id&&pendStart.day===ds;
       const cls=['pc',off.has(d)?'off':'',busy?'busy':'',pend?'pending':'',flagCls(c,ds)].filter(Boolean).join(' ');
       return `<td class="${cls}" data-pid="${p.id}" data-day="${ds}">${on?
@@ -1859,7 +1863,7 @@ function procPanel(c){
     else{
       const offHit=SEN.indexOf(p.who)>=0?spanDays(p).find(d=>isOff(p.who,d)):null;
       if(offHit)warn.push(`${p.who} は ${md(offHit)} が休み`);
-      if(!isInsp(p.kind)&&clash(p.id,p.who,spanDays(p)))
+      if(!isStaffJob(p.kind)&&clash(p.id,p.who,spanDays(p)))
         warn.push(`${p.who} は ${spanLabel(p)} に別の現場がある`);
     }
   });
@@ -1912,7 +1916,7 @@ function procPanel(c){
         <button class="x" data-del="${p.id}" title="削除">×</button></div>`).join('')}
       <div style="display:flex;gap:7px;margin-top:8px">
         <button class="btn small" id="addProc2">＋ 工程を足す</button>
-        ${(()=>{const un=ps.filter(p=>!p.order&&!isInsp(p.kind)), ready=un.filter(p=>p.who&&p.date);
+        ${(()=>{const un=ps.filter(p=>!p.order&&!isStaffJob(p.kind)), ready=un.filter(p=>p.who&&p.date);
           return `<button class="btn small ${ready.length?'primary':''}" data-ocopen="${c.id}"
             title="${ready.length?'業者と日程が決まった工程が'+ready.length+'件ある。発注の画面でその業者・期間が最初から入る':'工程に業者と日程を入れると、発注にそのまま引き継がれる'}">発注へ →${
             ready.length?`<span class="cnt">${ready.length}</span>`:''}</button>`;})()}
@@ -2567,6 +2571,57 @@ function vBill(){
 }
 
 /* ================= 支払 ================= */
+/* ---- 写真台帳（案件ごと。業者ページから入る。台帳では見る・まとめてダウンロード） ---- */
+const PCATS=['現地調査','清掃','クロス貼替','リペア','その他','完了検査'];
+let CASEPH={};   /* 案件 id → {at, rows}。写真は件数が多いので、開いた案件の分だけ読む */
+function loadCasePhotos(cid,force){
+  const h=CASEPH[cid]; if(!sb||(!force&&h&&(h.busy||Date.now()-h.at<60000)))return h&&h.rows;
+  CASEPH[cid]={at:Date.now(),busy:true,rows:h&&h.rows};
+  sb.rpc('case_photos',{p_case:cid}).then(({data,error})=>{ CASEPH[cid]={at:Date.now(),rows:error?null:(data||[])}; if(selCase===cid||document.getElementById('phg'))renderIdle(); });
+  return h&&h.rows;
+}
+function casePhotoSummary(cid){
+  const rows=loadCasePhotos(cid);
+  if(!rows)return '<p class="note" style="margin:0">読み込み中…</p>';
+  if(!rows.length)return '<p class="note" style="margin:0">まだありません。業者・社員が業者ページの工程から入れる</p>';
+  const n={}; rows.forEach(r=>{ n[r.cat]=(n[r.cat]||0)+1; });
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${PCATS.concat(Object.keys(n).filter(k=>PCATS.indexOf(k)<0)).filter(k=>n[k]).map(k=>
+    `<button class="btn small" data-phcat="${esc(cid)}|${esc(k)}">${esc(k)} ${n[k]}枚</button>`).join('')}</div>`;
+}
+let PHV=null;   /* 写真を見ている案件と区分 */
+async function showCasePhotos(cid,cat){
+  const rows=loadCasePhotos(cid)||[]; const c=DB.cases.find(x=>x.id===cid)||{};
+  const cats=PCATS.concat([...new Set(rows.map(r=>r.cat))].filter(k=>PCATS.indexOf(k)<0)).filter(k=>rows.some(r=>r.cat===k));
+  cat=cat||cats[0]; PHV={cid,cat};
+  const mine=rows.filter(r=>r.cat===cat), groups=['前','後',''].map(ph=>[ph,mine.filter(r=>(r.phase||'')===ph)]).filter(g=>g[1].length);
+  const {data}=mine.length?await sb.storage.from('reports').createSignedUrls(mine.map(r=>r.path),3600):{data:[]};
+  const U={}; (data||[]).forEach(x=>{ if(x.signedUrl)U[x.path]=x.signedUrl; });
+  let el=document.getElementById('phg'); if(!el){ el=document.createElement('div'); el.className='ask'; el.id='phg'; document.body.appendChild(el); }
+  el.innerHTML=`<div class="dlg" style="max-width:1100px;width:96vw;max-height:92vh;overflow:auto">
+    <div class="bar" style="margin:0 0 8px"><h4 style="margin:0">${esc(c.prop||'')}　写真</h4><span class="grow"></span>
+      <button class="btn small" data-phzip="">この区分をまとめてダウンロード（${mine.length}枚）</button><button class="btn small" id="phClose">閉じる</button></div>
+    <div class="seg" style="margin-bottom:10px">${cats.map(k=>`<button data-phtab="${esc(k)}" class="${k===cat?'on':''}">${esc(k)} ${rows.filter(r=>r.cat===k).length}</button>`).join('')}</div>
+    ${groups.map(([ph,rs])=>`<div class="bar" style="margin:8px 0 6px"><b>${ph?'施工'+ph:'写真'}（${rs.length}枚）</b>${ph?`<button class="btn small" data-phzip="${ph}">施工${ph}だけダウンロード</button>`:''}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${rs.map(r=>`<a href="${esc(U[r.path]||'')}" target="_blank" rel="noopener" title="${esc(r.who)} ${esc(String(r.created_at||'').slice(0,10))}"><img src="${esc(U[r.path]||'')}" loading="lazy" style="width:150px;height:150px;object-fit:cover;border-radius:6px;background:#eee"></a>`).join('')}</div>`).join('')}
+  </div>`;
+}
+/* まとめてダウンロード：zip にして保存（ANDPAD などに入れ直す用） */
+let JSZIP=null;
+function loadJsZip(){ return JSZIP||(JSZIP=new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'; sc.onload=()=>res(window.JSZip); sc.onerror=()=>{ JSZIP=null; rej(new Error('zip の部品を読めなかった')); }; document.head.appendChild(sc); })); }
+async function zipCasePhotos(phase){
+  if(!PHV)return; const {cid,cat}=PHV, c=DB.cases.find(x=>x.id===cid)||{};
+  const rows=(loadCasePhotos(cid)||[]).filter(r=>r.cat===cat&&(!phase||(r.phase||'')===phase)); if(!rows.length)return;
+  toast(`${rows.length}枚をまとめています…`);
+  try{
+    const Z=await loadJsZip(), zip=new Z();
+    const {data}=await sb.storage.from('reports').createSignedUrls(rows.map(r=>r.path),3600);
+    const U={}; (data||[]).forEach(x=>{ if(x.signedUrl)U[x.path]=x.signedUrl; });
+    const base=(c.prop||cid).replace(/[\\/:*?"<>|\s]+/g,'_')+'_'+cat+(phase?'_施工'+phase:'');
+    let i=0; for(const r of rows){ i++; const b=await fetch(U[r.path]).then(x=>x.blob()); zip.file(`${base}_${String(i).padStart(3,'0')}${r.phase&&!phase?'_'+r.phase:''}.jpg`,b); }
+    const blob=await zip.generateAsync({type:'blob'});
+    await DL.save({filename:base+'.zip',data:blob}); toast(`${rows.length}枚を ${base}.zip にした`);
+  }catch(e){ toast('まとめられなかった：'+String((e&&e.message)||e)); }
+}
 /* ---- 完了報告・業者の請求（業者ページと対になる） ---- */
 let payMon=addM(THIS_M,-1);   /* 支払明細書を作る締めの月。既定は前月 */
 const closeMonthOf=(d,c)=>{ d=String(d||'').slice(0,10); if(!d)return ''; const y=+d.slice(0,4), m=+d.slice(5,7), day=+d.slice(8,10);
@@ -2593,7 +2648,7 @@ function vPayReports(){
         return `<tr><td>${md(r.done)}</td><td>${esc((B[r.case]||{}).prop||'')}</td><td>${esc(p.kind||'')}</td><td>${esc(r.who)}</td>
           <td class="r">${yen(r.base)}</td><td class="r">${r.extra?`${yen(r.extra)}<small class="tx">${esc(r.extraNote||'')}</small>`:'—'}</td>
           <td style="max-width:240px;white-space:pre-wrap;font-size:12px">${esc(r.note||'')}</td>
-          <td>${ph?`<button class="btn small" data-rphotos="${esc(r.id)}">${ph}枚</button>`:'—'}</td>
+          <td><button class="btn small" data-rphotos="${esc(r.id)}">${ph?ph+'枚':'見る'}</button></td>
           <td style="white-space:nowrap"><button class="btn small primary" data-rok="${esc(r.id)}">承認</button> <button class="btn small danger" data-rng="${esc(r.id)}">差し戻し</button></td></tr>`;}).join('')}
     </tbody></table></div>`:'<p class="note" style="margin:0 0 16px">確認待ちの完了報告はありません。</p>'}`;
 }
@@ -2647,7 +2702,9 @@ function showInvoice(id){
 }
 async function showPhotos(id){
   const r=(DB.reports||[]).find(x=>x.id===id); if(!r||!sb)return;
-  const paths=r.photos||[]; const {data}=await sb.storage.from('reports').createSignedUrls(paths,3600);
+  const {data:rows}=await sb.rpc('case_photos',{p_case:r.case});
+  const paths=[...new Set((r.photos||[]).concat((rows||[]).filter(x=>x.proc_id===r.proc).map(x=>x.path)))];
+  const {data}=paths.length?await sb.storage.from('reports').createSignedUrls(paths,3600):{data:[]};
   const el=document.createElement('div'); el.className='ask';
   el.innerHTML=`<div class="dlg" style="max-width:900px;width:94vw;max-height:90vh;overflow:auto"><h4>完了報告の写真（${esc(r.who)}）</h4>
     <div style="display:flex;flex-wrap:wrap;gap:8px">${(data||[]).map(x=>x.signedUrl?`<a href="${esc(x.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(x.signedUrl)}" style="width:200px;height:200px;object-fit:cover;border-radius:8px"></a>`:'').join('')}</div>
@@ -3005,7 +3062,7 @@ function checkDrop(pid,who,ds){
   const w=[], len=spanLen(p), days=spanDays({date:ds,end:len>1?addDays(ds,len-1):''}), last=days[days.length-1]||ds;
   const h=days.find(d=>isOff(who,d));
   if(h)w.push(`${who} は ${md(h)} が休み`);
-  if(!isInsp(p.kind)&&clash(pid,who,days))w.push(`${days.length>1?md(ds)+'〜'+md(last):md(ds)} はすでに現場が入っている（1日2現場になる）`);
+  if(!isStaffJob(p.kind)&&clash(pid,who,days))w.push(`${days.length>1?md(ds)+'〜'+md(last):md(ds)} はすでに現場が入っている（1日2現場になる）`);
   const c=DB.cases.find(x=>x.id===p.case);
   if(c){const other=procsOf(c.id).filter(x=>x.id!==pid&&x.date);
     if(p.kind==='清掃'&&other.some(x=>isSeko(x.kind)&&endOf(x)>ds))w.push('工事より前に清掃が来る');
@@ -3044,7 +3101,7 @@ function dateWarn(pid,ds,de){
   const w=[]; const days=spanDays({date:ds,end:de||''}); const last=days[days.length-1]||ds;
   if(p.who&&SEN.indexOf(p.who)>=0){const h=days.find(d=>isOff(p.who,d));
     if(h)w.push(`${p.who} は ${md(h)} が休み`);}
-  if(p.who&&!isInsp(p.kind)&&clash(pid,p.who,days))
+  if(p.who&&!isStaffJob(p.kind)&&clash(pid,p.who,days))
     w.push(`${p.who} は ${days.length>1?md(ds)+'〜'+md(last):md(ds)} に別の現場がある`);
   const other=procsOf(p.case).filter(x=>x.id!==pid&&x.date);
   if(p.kind==='清掃'&&other.some(x=>isSeko(x.kind)&&endOf(x)>ds))w.push('工事より前に清掃が来る');
@@ -3194,6 +3251,10 @@ document.addEventListener('click',e=>{
     return;}
   const osh=e.target.closest('[data-osheet]'); if(osh){orderSheet(osh.dataset.osheet);return;}
   const rph=e.target.closest('[data-rphotos]'); if(rph){showPhotos(rph.dataset.rphotos);return;}
+  const phc=e.target.closest('[data-phcat]'); if(phc){ const [cid,k]=phc.dataset.phcat.split('|'); showCasePhotos(cid,k); return; }
+  const pht=e.target.closest('[data-phtab]'); if(pht&&PHV){ showCasePhotos(PHV.cid,pht.dataset.phtab); return; }
+  const phz=e.target.closest('[data-phzip]'); if(phz){ zipCasePhotos(phz.dataset.phzip); return; }
+  if(e.target.id==='phClose'){ const g=document.getElementById('phg'); if(g)g.remove(); PHV=null; return; }
   const rok=e.target.closest('[data-rok]'); if(rok){approveReport(rok.dataset.rok);return;}
   const rng=e.target.closest('[data-rng]'); if(rng){rejectReport(rng.dataset.rng);return;}
   const ivd=e.target.closest('[data-invdoc]'); if(ivd){showInvoice(ivd.dataset.invdoc);return;}

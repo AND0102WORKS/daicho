@@ -16,18 +16,29 @@ const ok=(name,cond,extra)=>{ console.log((cond?'OK  ':'NG  ')+name+(extra!==und
   const b=await chromium.launch({args:['--no-proxy-server']});
   const errs=[]; const page=async(o)=>{ const p=await b.newPage(o||{viewport:{width:390,height:800},deviceScaleFactor:2}); p.on('pageerror',e=>errs.push(e.message)); p.on('dialog',d=>{ if(d.type()==='alert')console.log('ALERT',d.message()); d.accept('写真が足りない'); }); return p; };
 
-  // 1) 業者ページで完了報告（写真1枚・追加 3,000円）
+  // 1) 業者ページ：写真（清掃・施工前1枚／施工後2枚）→ 完了報告（追加 3,000円）
   const v=await page(); await v.goto('http://localhost:8787/me.html?t='+VT); await v.waitForTimeout(1500);
   await v.click('[data-m="sched"]'); await v.waitForTimeout(300);
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
+  const img=n=>({name:n+'.png',mimeType:'image/png',buffer:png});
+  await v.click('.job [data-photo]'); await v.waitForTimeout(800);
+  ok('写真の区分は工程（清掃）から自動で選ばれる',await v.$eval('[data-pcat].on',x=>x.dataset.pcat)==='清掃');
+  await v.click('[data-pph="前"]'); await v.setInputFiles('#pFiles',[img('b1')]); await v.waitForTimeout(1500);
+  await v.click('[data-pph="後"]'); await v.setInputFiles('#pFiles',[img('a1'),img('a2')]); await v.waitForTimeout(2000);
+  const ph=await q("select cat,phase from photos where proc_id='P1' order by phase");
+  ok('写真が写真台帳に入った（清掃・前1／後2）',ph.length===3&&ph.filter(x=>x.phase==='後').length===2&&ph.every(x=>x.cat==='清掃'),ph);
+  ok('業者ページに自分の写真が出る',(await v.$$('#pMine .thumbs img')).length===3);
+  await v.screenshot({path:'photo-sheet.png'});
+  await v.click('#pMine [data-delph]'); await v.waitForTimeout(1200);
+  ok('自分の写真を外せる',(await q("select count(*)::int n from photos where proc_id='P1'"))[0].n===2);
+  await v.click('#pClose'); await v.waitForTimeout(300);
   await v.click('.job [data-rep]'); await v.waitForTimeout(400);
   await v.fill('#rNote','清掃完了。ベランダも清掃済み');
-  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
-  await v.setInputFiles('#rFiles',{name:'a.png',mimeType:'image/png',buffer:png}); await v.waitForTimeout(400);
   await v.fill('#rExtra','3000'); await v.fill('#rExtraNote','換気扇の追加清掃');
   await v.screenshot({path:'report-form.png'});
   await v.click('#rSend'); await v.waitForTimeout(2000);
   let r=(await q("select * from reports where proc_id='P1'"))[0];
-  ok('報告が保存された',r&&r.st==='報告済'&&r.extra===3000&&r.base===20000&&r.photos.length===1,r&&{st:r.st,extra:r.extra,photos:r.photos});
+  ok('報告が保存された',r&&r.st==='報告済'&&r.extra===3000&&r.base===20000,r&&{st:r.st,extra:r.extra});
   ok('工程が完了になった',(await q("select prog from procs where id='P1'"))[0].prog==='完了');
   ok('業者ページに「確認待ち」',(await v.textContent('.job .rst')).includes('確認待ち'));
 
@@ -38,7 +49,17 @@ const ok=(name,cond,extra)=>{ console.log((cond?'OK  ':'NG  ')+name+(extra!==und
   await L.click('[data-rphotos]'); await L.waitForTimeout(800);
   const imgOk=await L.$eval('.ask img',im=>im.complete&&im.naturalWidth>0).catch(()=>false);
   ok('写真が台帳で見られる',imgOk);
+  ok('報告の写真は写真台帳のその工程の分',(await L.$$('.ask img')).length===2);
   await L.click('.ask #askNo');
+  // 案件の写真台帳：右の入力欄の「写真」→ 区分ごとに見る
+  await L.evaluate(()=>{tab='ledger';selCase='C1302';render();}); await L.waitForTimeout(1500);
+  ok('案件に写真の区分と枚数が出る',(await L.textContent('#dw')).includes('清掃 2枚'));
+  await L.click('[data-phcat]'); await L.waitForTimeout(1000);
+  ok('写真台帳が開き、施工後でまとまる',(await L.textContent('#phg')).includes('施工後（2枚）')&&(await L.$$('#phg img')).length===2);
+  ok('まとめてダウンロードのボタン',(await L.$$('#phg [data-phzip]')).length>=2);
+  await L.screenshot({path:'photo-ledger.png'});
+  await L.click('#phClose');
+  await L.evaluate(()=>{tab='pay';render();}); await L.waitForTimeout(400);
   await L.click('[data-rok]'); await L.waitForTimeout(1500);
   r=(await q("select * from reports where proc_id='P1'"))[0];
   ok('承認された',r.st==='承認'&&!!r.approved_at);
@@ -74,6 +95,12 @@ const ok=(name,cond,extra)=>{ console.log((cond?'OK  ':'NG  ')+name+(extra!==und
   await f.click('#docOk'); await f.waitForTimeout(1200);
   ok('業者が確認済みにした',(await q("select st from invoices where who='FORCE-ONE'"))[0].st==='確認済');
 
+  // 社員（現地調査）：工程を「現地調査」で入れると、写真の区分も現地調査になる
+  await q("insert into procs(id,case_id,kind,who,start_date) values ('P8','C1302','現地調査','FORCE-ONE',current_date) on conflict (id) do nothing");
+  await f.goto('http://localhost:8787/me.html?t='+VT2); await f.waitForTimeout(1500);
+  await f.click('[data-m="sched"]'); await f.waitForTimeout(800);
+  await f.click('.job[data-id="P8"] [data-photo]'); await f.waitForTimeout(800);
+  ok('現地調査の工程なら区分は現地調査',await f.$eval('[data-pcat].on',x=>x.dataset.pcat)==='現地調査');
   ok('ページのエラーなし',!errs.length,errs);
   await b.close(); srv.kill(); await c.end();
 })();

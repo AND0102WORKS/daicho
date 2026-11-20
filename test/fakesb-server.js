@@ -28,7 +28,7 @@ async function handle(body){
   }
   throw new Error('unknown op '+op);
 }
-pg.connect().then(()=>{
+pg.connect().then(()=>pg.query("select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000aa',false)")).then(()=>{   // 本部ユーザーとして
   http.createServer((req,res)=>{
     if(req.method==='GET'&&req.url.startsWith('/storage/')){ const f=path.join(STORE,decodeURIComponent(req.url.slice(9).split('?')[0]));
       if(fs.existsSync(f)){ res.setHeader('Content-Type','image/jpeg'); res.end(fs.readFileSync(f)); } else { res.statusCode=404; res.end(); } return; }

@@ -15,6 +15,7 @@
       upload:async(p,file)=>{ const b=new Uint8Array(await file.arrayBuffer()); let s=''; b.forEach(x=>s+=String.fromCharCode(x));
         const r=await call({op:'upload',bucket,path:p,b64:btoa(s)}); return r.error?{data:null,error:r.error}:{data:{path:p},error:null}; },
       createSignedUrls:async(paths)=>({data:paths.map(p=>({path:p,signedUrl:'http://localhost:8787/storage/'+bucket+'/'+p})),error:null}),
+      remove:async(paths)=>({data:paths.map(p=>({name:p})),error:null}),
       createSignedUrl:async(p)=>({data:{signedUrl:'http://localhost:8787/storage/'+bucket+'/'+p},error:null}) }) },
     auth:{ getSession:async()=>({data:{session:window.__NOSESSION?null:{user:{id:'u1',email:'t@example.com'}}}}), onAuthStateChange:()=>{}, signInWithOtp:async()=>({error:null}), signOut:async()=>{} },
     channel:()=>{ const ch={on:(ev,opt,cb)=>{ listeners.push((t,type,row)=>{ if(t===opt.table)cb({eventType:type,new:row,old:row}); }); return ch; }, subscribe:(cb)=>{cb&&cb('SUBSCRIBED'); return ch;} }; return ch; },
