@@ -23,6 +23,10 @@ const ok=(name,cond,extra)=>{ console.log((cond?'OK  ':'NG  ')+name+(extra!==und
   const img=n=>({name:n+'.png',mimeType:'image/png',buffer:png});
   await v.click('.job [data-photo]'); await v.waitForTimeout(800);
   ok('写真の区分は工程（清掃）から自動で選ばれる',await v.$eval('[data-pcat].on',x=>x.dataset.pcat)==='清掃');
+  await v.click('[data-pcat="是正"]'); await v.waitForTimeout(200);
+  ok('是正は「是正前・是正後」',(await v.$eval('[data-pph="前"]',x=>x.textContent))==='是正前'&&(await v.$eval('[data-pph="後"]',x=>x.textContent))==='是正後');
+  ok('区分に水道設備・電気設備・是正',(await v.$$eval('[data-pcat]',a=>a.map(x=>x.dataset.pcat).join(','))).includes('水道設備,電気設備,その他,完了検査,是正'));
+  await v.click('[data-pcat="清掃"]'); await v.waitForTimeout(200);
   await v.click('[data-pph="前"]'); await v.setInputFiles('#pFiles',[img('b1')]); await v.waitForTimeout(1500);
   await v.click('[data-pph="後"]'); await v.setInputFiles('#pFiles',[img('a1'),img('a2')]); await v.waitForTimeout(2000);
   const ph=await q("select cat,phase from photos where proc_id='P1' order by phase");
@@ -101,6 +105,12 @@ const ok=(name,cond,extra)=>{ console.log((cond?'OK  ':'NG  ')+name+(extra!==und
   await f.click('[data-m="sched"]'); await f.waitForTimeout(800);
   await f.click('.job[data-id="P8"] [data-photo]'); await f.waitForTimeout(800);
   ok('現地調査の工程なら区分は現地調査',await f.$eval('[data-pcat].on',x=>x.dataset.pcat)==='現地調査');
+  await f.click('#pClose'); await f.waitForTimeout(300);
+  await q("insert into procs(id,case_id,kind,who,start_date) values ('P7','C1302','水道設備','FORCE-ONE',current_date) on conflict (id) do nothing");
+  await f.goto('http://localhost:8787/me.html?t='+VT2); await f.waitForTimeout(1500);
+  await f.click('[data-m="sched"]'); await f.waitForTimeout(800);
+  await f.click('.job[data-id="P7"] [data-photo]'); await f.waitForTimeout(800);
+  ok('水道設備の工程なら区分は水道設備（施工前後あり）',await f.$eval('[data-pcat].on',x=>x.dataset.pcat)==='水道設備'&&await f.$eval('#pPhase',x=>!x.hidden));
   ok('ページのエラーなし',!errs.length,errs);
   await b.close(); srv.kill(); await c.end();
 })();

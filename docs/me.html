@@ -139,7 +139,7 @@ button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);backg
 <div class="modal" id="pm" hidden><div class="msheet">
   <h3>写真</h3><div class="meta" id="pProp"></div>
   <label>区分</label><div class="pseg" id="pCats"></div>
-  <div id="pPhase"><label>施工前・施工後</label><div class="pseg"><button type="button" data-pph="前">施工前</button><button type="button" data-pph="後">施工後</button></div></div>
+  <div id="pPhase"><label id="pPhLab">施工前・施工後</label><div class="pseg"><button type="button" data-pph="前">施工前</button><button type="button" data-pph="後">施工後</button></div></div>
   <label class="pick">写真を選ぶ（何枚でも。選ぶとすぐ送り始めます）<input type="file" id="pFiles" accept="image/*" multiple></label>
   <div class="hint" id="pUp" style="margin:6px 0 0"></div>
   <div id="pMine"></div>
@@ -241,8 +241,10 @@ function repBox(p){
 /* ---- 完了報告 ---- */
 let RP=null;   /* {pid, keep:[以前の形で報告に付けた写真の場所]} */
 /* ---- 写真（案件の写真台帳。工程ごとに入れる） ---- */
-const PCATS=['現地調査','清掃','クロス貼替','リペア','その他','完了検査'], PHASED=['清掃','クロス貼替','リペア'];
-const CAT_OF={'現地調査':'現地調査','清掃':'清掃','内装':'クロス貼替','リペア補修':'リペア','AW検査':'完了検査'};
+const PCATS=['現地調査','清掃','クロス貼替','リペア','水道設備','電気設備','その他','完了検査','是正'], PHASED=['清掃','クロス貼替','リペア','水道設備','電気設備','是正'];
+const CAT_OF={'現地調査':'現地調査','清掃':'清掃','内装':'クロス貼替','リペア補修':'リペア','水道設備':'水道設備','電気設備':'電気設備','AW検査':'完了検査'};
+/* 前・後の呼び方：是正は「是正前・是正後」、ほかは「施工前・施工後」 */
+const phLabel=(cat,ph)=>ph?(cat==='是正'?'是正':'施工')+ph:'';
 let PS=null;   /* 写真シート：{pid, cat, phase, ups:[{url,st,path,cat,phase,p,done}], mine:[登録済み]} */
 const today=()=>fmt(new Date());
 async function signed(paths){ if(!paths.length)return {}; const {data}=await sb.storage.from('reports').createSignedUrls(paths,3600); const m={}; (data||[]).forEach(x=>{ if(x.signedUrl)m[x.path]=x.signedUrl; }); return m; }
@@ -274,11 +276,13 @@ function drawPS(){
   if(!PS)return;
   document.getElementById('pCats').innerHTML=PCATS.map(k=>`<button type="button" data-pcat="${k}" class="${k===PS.cat?'on':''}">${k}</button>`).join('');
   document.getElementById('pPhase').hidden=PHASED.indexOf(PS.cat)<0;
+  document.getElementById('pPhLab').textContent=phLabel(PS.cat,'前')+'・'+phLabel(PS.cat,'後');
+  document.querySelectorAll('[data-pph]').forEach(b=>{ b.textContent=phLabel(PS.cat,b.dataset.pph); });
   document.querySelectorAll('[data-pph]').forEach(b=>b.classList.toggle('on',b.dataset.pph===PS.phase));
   const up=PS.ups.filter(u=>u.st==='up').length, ng=PS.ups.filter(u=>u.st==='ng').length;
   document.getElementById('pUp').innerHTML=up?`送信中 ${up}枚…（このまま次の写真を選べます）`:ng?`<span style="color:var(--warn)">送れなかった写真が ${ng}枚。押すと送り直します</span>`:'';
   const pend=PS.ups.filter(u=>u.st!=='ok').map((u,i)=>`<div class="t"><img src="${u.url}" alt="" style="opacity:.45"><span class="tst${u.st==='ng'?' ng':''}" ${u.st==='ng'?`data-retry="${PS.ups.indexOf(u)}"`:''}>${u.st==='ng'?'失敗・押して再送':'送信中'}</span></div>`).join('');
-  const g={}; PS.mine.forEach(x=>{ const k=x.cat+(x.phase?'（施工'+x.phase+'）':''); (g[k]=g[k]||[]).push(x); });
+  const g={}; PS.mine.forEach(x=>{ const k=x.cat+(x.phase?'（'+phLabel(x.cat,x.phase)+'）':''); (g[k]=g[k]||[]).push(x); });
   document.getElementById('pMine').innerHTML=(pend?`<div class="sec">送信中</div><div class="thumbs">${pend}</div>`:'')+
     (Object.keys(g).length?Object.entries(g).map(([k,xs])=>`<div class="sec">${esc(k)}　${xs.length}枚</div><div class="thumbs">${xs.map(x=>`<div class="t"><img src="${esc((PS.urls||{})[x.path]||'')}" alt="" loading="lazy"><button type="button" data-delph="${esc(x.id)}" data-path="${esc(x.path)}">×</button></div>`).join('')}</div>`).join('')
       :'<div class="empty" style="padding:14px 0">この現場の写真はまだありません</div>');

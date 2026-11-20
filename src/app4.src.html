@@ -2565,7 +2565,8 @@ function vBill(){
 
 /* ================= 支払 ================= */
 /* ---- 写真台帳（案件ごと。業者ページから入る。台帳では見る・まとめてダウンロード） ---- */
-const PCATS=['現地調査','清掃','クロス貼替','リペア','その他','完了検査'];
+const PCATS=['現地調査','清掃','クロス貼替','リペア','水道設備','電気設備','その他','完了検査','是正'];
+const phLabel=(cat,ph)=>ph?(cat==='是正'?'是正':'施工')+ph:'';   /* 是正は「是正前・是正後」 */
 let CASEPH={};   /* 案件 id → {at, rows}。写真は件数が多いので、開いた案件の分だけ読む */
 function loadCasePhotos(cid,force){
   const h=CASEPH[cid]; if(!sb||(!force&&h&&(h.busy||Date.now()-h.at<60000)))return h&&h.rows;
@@ -2594,7 +2595,7 @@ async function showCasePhotos(cid,cat){
     <div class="bar" style="margin:0 0 8px"><h4 style="margin:0">${esc(c.prop||'')}　写真</h4><span class="grow"></span>
       <button class="btn small" data-phzip="">この区分をまとめてダウンロード（${mine.length}枚）</button><button class="btn small" id="phClose">閉じる</button></div>
     <div class="seg" style="margin-bottom:10px">${cats.map(k=>`<button data-phtab="${esc(k)}" class="${k===cat?'on':''}">${esc(k)} ${rows.filter(r=>r.cat===k).length}</button>`).join('')}</div>
-    ${groups.map(([ph,rs])=>`<div class="bar" style="margin:8px 0 6px"><b>${ph?'施工'+ph:'写真'}（${rs.length}枚）</b>${ph?`<button class="btn small" data-phzip="${ph}">施工${ph}だけダウンロード</button>`:''}</div>
+    ${groups.map(([ph,rs])=>`<div class="bar" style="margin:8px 0 6px"><b>${ph?phLabel(cat,ph):'写真'}（${rs.length}枚）</b>${ph?`<button class="btn small" data-phzip="${ph}">${phLabel(cat,ph)}だけダウンロード</button>`:''}</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">${rs.map(r=>`<a href="${esc(U[r.path]||'')}" target="_blank" rel="noopener" title="${esc(r.who)} ${esc(String(r.created_at||'').slice(0,10))}"><img src="${esc(U[r.path]||'')}" loading="lazy" style="width:150px;height:150px;object-fit:cover;border-radius:6px;background:#eee"></a>`).join('')}</div>`).join('')}
   </div>`;
 }
@@ -2609,7 +2610,7 @@ async function zipCasePhotos(phase){
     const Z=await loadJsZip(), zip=new Z();
     const {data}=await sb.storage.from('reports').createSignedUrls(rows.map(r=>r.path),3600);
     const U={}; (data||[]).forEach(x=>{ if(x.signedUrl)U[x.path]=x.signedUrl; });
-    const base=(c.prop||cid).replace(/[\\/:*?"<>|\s]+/g,'_')+'_'+cat+(phase?'_施工'+phase:'');
+    const base=(c.prop||cid).replace(/[\\/:*?"<>|\s]+/g,'_')+'_'+cat+(phase?'_'+phLabel(cat,phase):'');
     let i=0; for(const r of rows){ i++; const b=await fetch(U[r.path]).then(x=>x.blob()); zip.file(`${base}_${String(i).padStart(3,'0')}${r.phase&&!phase?'_'+r.phase:''}.jpg`,b); }
     const blob=await zip.generateAsync({type:'blob'});
     await DL.save({filename:base+'.zip',data:blob}); toast(`${rows.length}枚を ${base}.zip にした`);
