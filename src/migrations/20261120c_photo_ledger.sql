@@ -90,6 +90,7 @@ do $$ declare f text; begin
   end loop; end $$;
 revoke execute on function add_photos(text,text,text,text,jsonb), my_photos(text,text), del_my_photo(text,text), case_photos(text) from public;
 grant execute on function add_photos(text,text,text,text,jsonb), my_photos(text,text), del_my_photo(text,text) to anon, authenticated;
+revoke execute on function case_photos(text) from anon;   -- Supabase は新しい関数を anon にも既定で許すので、スタッフ専用は明示的に外す
 grant execute on function case_photos(text) to authenticated;
 revoke execute on function staff_add_photos(text,text,text,jsonb), staff_del_photo(text) from public, anon;
 grant execute on function staff_add_photos(text,text,text,jsonb), staff_del_photo(text) to authenticated;
