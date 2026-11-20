@@ -283,7 +283,10 @@ table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#F
 .pbar{margin:10px 0 6px}
 .avblock{margin:-2px 0 10px}.avwrap{max-height:206px;overflow:auto;margin:0;border-top:0}
 .avwrap tr.avrow td,.avwrap tr.avrow th{height:64px}
-td.av.busy .chip{margin:0 0 2px;cursor:pointer}td.av .chip.me{outline:2px solid var(--acc);outline-offset:-2px}
+td.av.busy .chip{margin:0 0 2px;cursor:pointer}
+/* 予定表の札：物件名を3行まで折り返して見せる。日付の幅が狭いときは2行目（依頼元・区分）を外して物件名に使う（色で依頼元は分かる） */
+td.av .chip{padding:2px 3px}td.av .chip .p{white-space:normal;word-break:break-all;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;font-size:9.5px;line-height:1.22;letter-spacing:-.02em}
+table.narrow td.av .chip .y{display:none}td.av .chip.me{outline:2px solid var(--acc);outline-offset:-2px}
 td.av .chip.q{outline:1.5px dashed #B07A00;outline-offset:-2px}
 .avhead{background:#3E4A46;color:#fff;border-radius:10px 10px 0 0;padding:7px 10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .avhead>b{font-size:13.5px;font-weight:900;min-width:96px}
@@ -3218,7 +3221,7 @@ function fitLnw(){
 function fitProc(){
   const w=document.querySelector('#main .boardwrap.pcw'), t=w&&w.querySelector('table.bd'); if(!t)return;
   const D=+t.dataset.days||31, col=Math.max(52,Math.min(86,Math.floor((w.clientWidth-114)/D)));
-  [t,document.querySelector('#main .avwrap table.bd')].forEach(x=>{ if(x){ x.style.setProperty('--col',col+'px'); x.style.width=(112+col*D)+'px'; } });
+  [t,document.querySelector('#main .avwrap table.bd')].forEach(x=>{ if(x){ x.style.setProperty('--col',col+'px'); x.style.width=(112+col*D)+'px'; x.classList.toggle('narrow',col<76); } });
 }
 window.addEventListener('resize',()=>{ if(tab==='order')fitLnw(); if(tab==='proc')fitProc(); });
 function render(){
