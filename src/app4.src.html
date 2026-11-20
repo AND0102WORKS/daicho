@@ -276,6 +276,14 @@ table.bd th.fd-b,table.bd td.fd-b{box-shadow:inset 3px 0 0 #2F6DB5;background:#E
 table.bd th.fd-y,table.bd td.fd-y{box-shadow:inset 3px 0 0 #E0A800;background:#FBF3D6}
 .flagline{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;font-size:12.5px}
 .pbar{margin:10px 0 6px}
+tr.avsec th,tr.avsec td{background:#F3EFE7;font-size:11.5px;color:var(--sub);text-align:left;padding:5px 8px;height:auto;font-weight:400}
+tr.avsec th{font-weight:700;color:var(--ink)}
+td.av{height:34px;text-align:center;vertical-align:middle;font-size:11px;padding:1px}
+td.av.free{color:#9BB5A9;font-size:14px;cursor:pointer}td.av.free:hover{background:var(--ok-bg);color:var(--ok)}
+td.av.busy{background:#F4ECE2;cursor:pointer}td.av.busy small,td.avi small{display:block;font-size:9.5px;color:var(--sub)}
+td.av.off{background:repeating-linear-gradient(135deg,#F1EFEA,#F1EFEA 5px,#E8E5DE 5px,#E8E5DE 10px);color:var(--sub)}
+td.avi{cursor:pointer}td.avi b{font-size:13px}td.avi.n0 b{color:#B9C4BD}td.avi.n1{background:#FBEFD6}td.avi.n2{background:#F7DCA9}td.avi.n3{background:#F0B88A}
+td.av .chip{height:auto;margin:1px 0;cursor:pointer}
 .pbar .flagline{margin:0 0 0 10px}
 .ohead .kneed{margin:8px 0 0}
 .flagline .fi{display:inline-flex;gap:6px;align-items:center}
@@ -328,7 +336,7 @@ function alog(ev,x){ try{ AWLOG.push([new Date().toISOString().slice(5,19),DEV,e
 
 /* ---- 表と JS 項目の対応 ---- */
 const TABLES={
-  cases: {cols:['id','org','client','prop','kind','st','live','ord','ord_by','sales','add_amt','bill','kisan','want','plan','plan_manual','done','keyx','warr','recv','case_no','src','memo','items','report','photo','addr','key_info'],
+  cases: {cols:['id','org','client','prop','kind','st','live','ord','ord_by','sales','add_amt','bill','kisan','want','plan','plan_manual','done','keyx','warr','recv','case_no','src','memo','items','report','photo','addr','key_info','madori'],
           map:{add:'add_amt',planManual:'plan_manual',caseNo:'case_no',ordBy:'ord_by',keyInfo:'key_info'}, dates:['kisan','want','plan','done'], bools:['live','plan_manual']},
   procs: {cols:['id','org','case_id','kind','who','start_date','end_date','amt','month','prog','order_id','auto','memo'],
           map:{case:'case_id',date:'start_date',end:'end_date',order:'order_id'}, dates:['start_date','end_date'], bools:['auto']},
@@ -336,7 +344,7 @@ const TABLES={
           map:{case:'case_id',order:'order_id'}, dates:[], bools:['cut']},
   orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
-  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','active','src'],
+  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src'],
           map:{full:'full_name',defKind:'def_kind',close:'close_day'}, dates:[], bools:['active','taxable']},
   clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src'],
           map:{full:'full_name',close:'close_day'}, dates:[], bools:[]},
@@ -418,6 +426,7 @@ async function dbLoad(){
   paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
   off.forEach(r=>{ if((r.days||[]).length)(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice(); });
   settings.forEach(r=>{ if(r.key==='basis')DB.basis=r.value;
+    else if(r.key==='cfg'&&r.value&&typeof r.value==='object')DB.cfg=r.value;   /* 会社ごとの設定（ボリュームの点数など）。無ければ画面の既定 */
     else if(String(r.key).indexOf(SKIP_KEY)===0&&r.value===true)DB.skip[String(r.key).slice(SKIP_KEY.length)]=1; });   /* 見送った受注受付 */
   /* 案件は新しいものが上。採番は既存の最大＋1 から */
   DB.cases.sort((a,b)=>String(b.id).localeCompare(String(a.id)));
@@ -721,9 +730,9 @@ const SEN=M.senzoku;
 const STATUS=M.status;
 const stCls=s=>s==='完工'||s==='報告済'?'done':(s==='新規案件'||s==='受付'||s==='現調済'||s==='見積提出'?'new':'wip');
 const KINDS=['清掃のみ','工事一式','鍵交換','入居中修繕','その他'];
-const PKINDS=['現地調査','内装','水道設備','電気設備','清掃','リペア補修','AW検査','鍵交換'];
+const PKINDS=['現地調査','内装','水道設備','電気設備','清掃','リペア補修','AW検査','自社施工','鍵交換'];
 const KCOL={'内装':'#EADFC8','水道設備':'#CCE2EC','電気設備':'#F7E3A8','清掃':'#D7E9D3',
-            'リペア補修':'#E9DAEE','AW検査':'#F6D6D0','鍵交換':'#DCDCD2','現地調査':'#D9E4F2'};
+            'リペア補修':'#E9DAEE','AW検査':'#F6D6D0','鍵交換':'#DCDCD2','現地調査':'#D9E4F2','自社施工':'#F2E4C9'};
 const kcol=k=>KCOL[k]||'var(--c-other)';
 /* 旧データは「工事」「検査」のまま。選択肢に残して、直すのは手作業で */
 const kindOpts=k=>opts(PKINDS,k)+(k&&PKINDS.indexOf(k)<0?`<option selected>${esc(k)}</option>`:'');
@@ -751,7 +760,7 @@ function needKinds(c){
 const isSeko=k=>SEKO.indexOf(k)>=0;
 const isInsp=k=>k==='AW検査'||k==='検査';                        // 清掃より後
 /* 社内の人が行く工程（現地調査・AW検査）：発注しない・1日に何件あってもよい */
-const isStaffJob=k=>isInsp(k)||k==='現地調査';
+const isStaffJob=k=>isInsp(k)||k==='現地調査'||k==='自社施工';
 
 /* ---- 締日サイクル ---- */
 const eom=(y,m)=>new Date(y,m,0).getDate();
@@ -1256,7 +1265,8 @@ function groupHead(c,g){
       ${k?`<span class="cl" style="background:${kcol(k)};font-size:12.5px">${esc(k)}</span>`:`<b style="color:var(--warn)">区分なし</b><span class="note" style="margin:0">行をチェックして下の「区分をつける」で分ける</span>`}
       <span class="note" style="margin:0">${g.rows.length}行　販売 ${yen(gs)}　原価 ${gc?yen(gc):'—'}　粗利 ${gs?yen(gs-gc):'—'}${free.length&&done.length?`　未発注 ${free.length}行 ${yen(amt)}`:''}</span>
       ${ocol?`<span class="ocol">${ocol}</span>`:''}
-      ${k&&free.length?`<span class="grow"></span>
+      ${k&&free.length&&isStaffJob(k)?`<span class="note" style="margin:0 0 0 auto">自社で行う（発注しない）。自社施工は検査のボリュームに入る</span>`:''}
+      ${k&&free.length&&!isStaffJob(k)?`<span class="grow"></span>
         <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px">発注先
           <select class="gwho" style="height:26px;font-size:12px">${vendorSel(whos.length===1?whos[0]:'')}</select></label>
         <button class="btn small primary" data-gord="${esc(k)}">この区分で発注を作る（${free.length}行）</button>`:''}
@@ -1721,6 +1731,8 @@ function drawer(){
     <div class="dwsec"><b>いま決めること</b><span class="note" style="margin:0">日程・状態・金額</span></div>
     <div class="fg" style="margin-top:6px">
       <div><label class="fl"><i class="fdot r"></i>起算日（次回入居日）</label><input type="date" data-f="kisan" value="${esc(c.kisan||'')}"></div>
+      <div><label class="fl" title="検査のボリューム（大・中・小）に使う">間取り${(m=>m.guess?`<small style="color:var(--sub);font-weight:400">（推測：${esc(m.v)}）</small>`:'')(madoriOf(c))}</label>
+        <select data-f="madori"><option value="">${madoriOf(c).guess?'（推測を使う）':'（未設定）'}</option>${MADORI.map(x=>`<option${x===c.madori?' selected':''}>${x}</option>`).join('')}</select></div>
       <div><label class="fl"><i class="fdot b"></i>完了希望日（依頼元）</label><input type="date" data-f="want" value="${esc(c.want||'')}"></div>
       <div><label class="fl"><i class="fdot y"></i>完了予定日（弊社）<span class="note" style="margin:0">${c.planManual?'手入力':'工程の最終日から自動'}</span></label><input type="date" data-f="plan" value="${esc(c.plan||'')}"></div>
       <div><label class="fl">完了日</label><input type="date" data-f="done" value="${esc(c.done||'')}"></div>
@@ -1833,6 +1845,54 @@ function flagLine(c,m){
        :'<span class="note" style="margin:0">—</span>'}</span>`;}).join('')}
 </div>`;
 }
+/* 工程を組む：職人の空き状況（専属＋担当できる区分に検査がある人）と、検査担当の日ごとの検査件数。
+   空いているマスを押すと、選んでいる工程（無ければ区分の合う未定の工程）をその人・その日に入れる */
+function availTarget(c,ps,who){
+  const sel=ps.find(p=>p.id===selProc&&!p.order);
+  if(sel)return sel;
+  const kinds=vendorKinds(vendorOf(who));
+  return ps.find(p=>!p.order&&(!p.who||!p.date)&&kinds.indexOf(p.kind)>=0)||null;
+}
+function availRows(c,ps,m,D,y,mo){
+  const sel=ps.find(p=>p.id===selProc), want=(sel&&sel.kind)||((ps.find(p=>!p.order&&(!p.who||!p.date)&&!isInsp(p.kind))||{}).kind)||'';
+  const people=[...new Set([...SEN,...DB.vendors.filter(v=>v.active!==false&&canInspect(v)).map(v=>v.name)])].filter(n=>vendorOf(n));
+  const workers=people.filter(n=>vendorKinds(vendorOf(n)).some(k=>!isInsp(k)))
+    .sort((a,b)=>(canDo(b,want)?1:0)-(canDo(a,want)?1:0)||SEN.indexOf(a)-SEN.indexOf(b));
+  const insp=people.filter(n=>canInspect(vendorOf(n)));
+  if(!workers.length&&!insp.length)return '';
+  const day=d=>iso(y,mo,d), B=byId();
+  const jobs=(who,ds)=>DB.procs.filter(p=>p.who===who&&p.date&&onDay(p,ds));
+  const cell=(who,d,inspRow)=>{ const ds=day(d), js=jobs(who,ds), off=isOff(who,ds);
+    const ni=js.filter(p=>isInsp(p.kind)).length, other=js.filter(p=>!isInsp(p.kind));
+    const tip=js.map(p=>`${(B[p.case]||{}).prop||''} ${p.kind}`).join('／');
+    if(inspRow){ const lv=ni>=3?3:ni; return `<td class="av avi n${lv}${off?' off':''}" data-avail="${esc(who)}|${ds}|insp" title="${esc(tip||'検査なし')}"><b>${off&&!ni?'休':ni||''}</b>${other.length?`<small>${esc(other.map(p=>p.kind).join('・'))}</small>`:''}</td>`; }
+    if(off)return `<td class="av off" title="休み">休</td>`;
+    if(other.length||ni)return `<td class="av busy" data-avail="${esc(who)}|${ds}" title="${esc(tip)}">${other.slice(0,2).map(p=>`<span class="chip" style="background:${kcol(p.kind)}"><span class="p">${esc(clientShort((B[p.case]||{}).client))} ${esc(p.kind)}</span></span>`).join('')}${ni?`<small>検査${ni}</small>`:''}</td>`;
+    return `<td class="av free" data-avail="${esc(who)}|${ds}" title="空き：押すとこの案件の工程に入れる">□</td>`; };
+  const days=Array.from({length:D},(_,i)=>i+1);
+  return (workers.length?`<tr class="avsec"><th class="nm">職人の空き状況</th><td colspan="${D}">□＝空き（押すと${want?`この案件の「${esc(want)}」に`:'選んでいる工程に'}入る）　色付き＝別の現場　休＝休み${want?`　「${esc(want)}」ができる人が上`:''}</td></tr>`+
+    workers.map(n=>`<tr class="avrow"><th class="nm">${esc(n)}<small>${esc(vendorKinds(vendorOf(n)).join('・'))}</small></th>${days.map(d=>cell(n,d,false)).join('')}</tr>`).join(''):'')+
+    (insp.length?`<tr class="avsec"><th class="nm">検査担当の予定</th><td colspan="${D}">数字＝その日の検査の件数（色が濃いほど忙しい）。押すとこの案件の検査をその人・その日に入れる</td></tr>`+
+    insp.map(n=>`<tr class="avrow"><th class="nm">${esc(n)}<small>検査${vendorKinds(vendorOf(n)).filter(k=>!isInsp(k)).length?'・'+esc(vendorKinds(vendorOf(n)).filter(k=>!isInsp(k)).join('・')):''}</small></th>${days.map(d=>cell(n,d,true)).join('')}</tr>`).join(''):'');
+}
+function askVendorKinds(nm){
+  const v=vendorOf(nm); if(!v)return; const cur=vendorKinds(v);
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="askbox"><h4>${esc(nm)} が担当できる区分</h4><p class="note" style="margin:0 0 8px">兼任できる。例：清掃の人が検査もする → 清掃とAW検査に印。既定の工程区分（${esc(v.defKind||'')}）は外せない</p>
+    ${PKINDS.map(k=>`<label style="display:inline-flex;gap:4px;margin:3px 10px 3px 0;font-size:13px"><input type="checkbox" value="${esc(k)}"${cur.indexOf(k)>=0?' checked':''}${k===v.defKind?' disabled':''}>${esc(k)}</label>`).join('')}
+    <div class="askbtn" style="margin-top:10px"><button class="btn small" id="askNo">やめる</button><button class="btn small primary" id="askYes">決める</button></div></div>`;
+  document.body.appendChild(el);
+  el.querySelector('#askNo').onclick=()=>el.remove();
+  el.querySelector('#askYes').onclick=()=>{ const ks=[...el.querySelectorAll('input:checked')].map(i=>i.value).filter(k=>k!==v.defKind);
+    el.remove(); snap(); v.kinds=ks.join(','); save(); render(); toast(`${nm}：${vendorKinds(v).join('・')}`, undo); };
+}
+function clickAvail(cid,who,ds,insp){
+  const ps=procsOf(cid);
+  let p=insp?ps.find(x=>isInsp(x.kind)&&!x.order):availTarget(DB.cases.find(x=>x.id===cid),ps,who);
+  if(insp&&!p){ addKind(cid,'AW検査'); p=procsOf(cid).find(x=>isInsp(x.kind)); }
+  if(!p){ toast('入れる工程が決まっていない。工程表の行を押して選ぶか、「＋ 工程を足す」で足す'); return; }
+  selProc=p.id; tryMove(p.id,who,ds);
+}
 function procPanel(c){
   const ps=procsOf(c.id).slice().sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
   const m=procMonth(c,ps), D=daysIn(m), y=+m.slice(0,4), mo=+m.slice(5,7);
@@ -1909,7 +1969,7 @@ function procPanel(c){
       ${[...new Set(ps.map(p=>p.kind))].map(k=>`<span><i style="background:${kcol(k)}"></i>${esc(k)}</span>`).join('')}</div>`:''}</div>
     <div class="boardwrap pcw" style="max-height:none;margin-bottom:10px">
       <table class="bd" data-days="${D}" style="width:${112+86*D}px"><thead>${head}</thead><tbody>${body||
-        `<tr><th class="nm"><small>工程なし</small></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">工程がまだ1つも無い。下の「＋ 工程を足す」から、工事・清掃・鍵交換・検査を足していく。旗の日を目安に組む。</td></tr>`}</tbody></table></div>
+        `<tr><th class="nm"><small>工程なし</small></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">工程がまだ1つも無い。下の「＋ 工程を足す」から、工事・清掃・鍵交換・検査を足していく。旗の日を目安に組む。</td></tr>`}${availRows(c,ps,m,D,y,mo)}</tbody></table></div>
     <div class="card">
       <label class="fl" title="日付は期間で入れる。1日だけなら終了日は空欄。上の表では「開始日をクリック→終了日をクリック」でも引ける（同じ日を2回押すとその日だけ）。金額は案件台帳で入れる">工程（誰に・いつからいつまで）<span class="help" style="margin-left:6px;width:18px;height:18px;font-size:11px">？</span></label>
       ${ps.map(p=>`<div class="prow np" data-p="${p.id}">
@@ -2456,7 +2516,7 @@ function vMaster0(){
     const list=DB.vendors.filter(v=>!q||(v.name+v.full+(v.inv||'')).toLowerCase().includes(q));
     return `${mBar(oldN)}
       <div class="tw"><table><thead><tr>
-        <th>入力名</th><th>正式名称</th><th title="発注書の「メールで送る」の宛先">メール（発注書の送り先）</th><th title="免税事業者（インボイス未登録）への発注は、消費税を足さない税抜金額になる">課税</th><th>区分</th><th>既定の工程区分</th>
+        <th>入力名</th><th>正式名称</th><th title="発注書の「メールで送る」の宛先">メール（発注書の送り先）</th><th title="免税事業者（インボイス未登録）への発注は、消費税を足さない税抜金額になる">課税</th><th>区分</th><th>既定の工程区分</th><th title="兼任できる区分（例：清掃の人が検査もする）。押して選ぶ">担当できる区分</th>
         <th>登録番号（インボイス）</th><th class="r">締日</th><th class="r">サイト</th>
         <th class="r">使用</th><th class="r">旧区分</th><th title="業者・職人が自分への発注と工程を見るページ（ログイン無し）">業者ページ</th><th></th></tr></thead>
       <tbody>${list.map(v=>{const used=usedBy(v.name), old=oldKindOf(v.name);
@@ -2468,6 +2528,8 @@ function vMaster0(){
         <td><select class="mv" data-f="taxable" style="height:28px;font-size:12.5px;${v.taxable===false?'border-color:var(--warn)':''}"><option value="1"${v.taxable!==false?' selected':''}>課税事業者</option><option value="0"${v.taxable===false?' selected':''}>免税（消費税なし）</option></select></td>
         <td><select class="mv" data-f="type" style="height:28px;font-size:12.5px">${opts(VTYPES,v.type||'外注')}</select></td>
         <td><select class="mv" data-f="defKind" style="height:28px;font-size:12.5px">${opts(PKINDS,v.defKind||'内装')}</select></td>
+        <td style="min-width:150px">${PKINDS.filter(k=>vendorKinds(v).indexOf(k)>=0).map(k=>`<span class="cl" style="background:${kcol(k)};font-size:11px;margin:1px">${esc(k)}</span>`).join('')}
+          <button class="btn small" data-vkinds="${esc(v.name)}" style="height:22px;padding:0 6px;font-size:11px">選ぶ</button></td>
         <td><input type="text" class="mv" data-f="inv" value="${esc(v.inv||'')}" placeholder="未取得"
           style="width:158px;height:28px;font-size:12px;${v.inv?'':'border-color:var(--warn)'}"></td>
         <td class="r"><input type="number" class="mv" data-f="close" value="${v.close||30}" min="1" max="31" style="width:56px;height:28px;font-size:12px"></td>
@@ -2695,6 +2757,32 @@ function showEstimate(cid){
   el.querySelector('#estPrint').onclick=()=>{ const w=window.open('','_blank'); if(!w)return;
     w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>${esc('見積書_'+(c.prop||c.id))}</title><style>body{font-family:sans-serif;font-size:13px;margin:24px}</style></head><body>${estimateDoc(c)}</body></html>`);
     w.document.close(); w.focus(); w.print(); };
+}
+/* ---- 担当できる区分（兼任）・間取り・検査のボリューム ---- */
+/* 発注先が担当できる区分：既定の工程区分＋「担当できる区分」（カンマ区切り）。清掃と検査を兼ねる人もいる */
+const vendorKinds=v=>{ if(!v)return []; return [...new Set([v.defKind,...String(v.kinds||'').split(/[,、\s]+/)].filter(Boolean))]; };
+const canDo=(nm,kind)=>vendorKinds(vendorOf(nm)).indexOf(kind)>=0;
+const canInspect=v=>vendorKinds(v).some(isInsp);
+const MADORI=['1R','1K','1DK','1LDK','2K','2DK','2LDK','3K以上'];
+/* 間取り：入っていなければ、発注内容・明細・物件名の文字から推測（1K、2LDK など） */
+function madoriOf(c){
+  if(!c)return {v:'',guess:false};
+  if(c.madori)return {v:c.madori,guess:false};
+  const t=[c.memo,c.items,c.prop,...linesOf(c.id).map(l=>l.name)].join(' ');
+  const m=/([1-4])\s*(SLDK|LDK|DK|K|R)/.exec(t.replace(/[１-４]/g,d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0)));
+  if(!m)return {v:'',guess:false};
+  const v=+m[1]>=3?'3K以上':m[1]+m[2].replace('SLDK','LDK');
+  return {v:MADORI.indexOf(v)>=0?v:'',guess:true};
+}
+/* ボリュームの点数（会社ごとに設定で変えられる。settings の cfg.volume。無ければ既定） */
+const VOL_DEF={madori:{'1R':1,'1K':1,'1DK':2,'1LDK':2,'2K':2,'2DK':3,'2LDK':3,'3K以上':4},
+  self:[[10,3],[4,2],[1,1]], size:[[5,'大'],[3,'中'],[0,'小']]};
+const volCfg=()=>Object.assign({},VOL_DEF,((DB&&DB.cfg)||{}).volume||{});
+function volumeOf(c){
+  const C=volCfg(), md=madoriOf(c), mp=C.madori[md.v]||0;
+  const self=linesOf(c.id).filter(l=>l.kind==='自社施工'&&+l.qty>0).length, sp=(C.self.find(([n])=>self>=n)||[0,0])[1];
+  const pt=mp+sp, size=(C.size.find(([n])=>pt>=n)||[0,'小'])[1];
+  return {madori:md.v,guess:md.guess,self,points:pt,size};
 }
 /* ---- 写真台帳（案件ごと。業者ページから入る。台帳では見る・まとめてダウンロード） ---- */
 const PCATS=['現地調査','清掃','クロス貼替','リペア','水道設備','電気設備','その他','完了検査','是正'];
@@ -3081,7 +3169,9 @@ function addKind(cid,k,quiet){
   const c=DB.cases.find(x=>x.id===cid); if(!c)return;
   if(!quiet)snap();
   DB.pseq++;
-  const who=(k==='AW検査')?(M.kensa||'検査担当'):'';
+  /* 検査の担当：検査ができる人が1人だけならその人。何人もいれば空のまま（工程を組むの「検査担当の予定」で選ぶ） */
+  const insps=isInsp(k)?DB.vendors.filter(v=>v.active!==false&&canInspect(v)).map(v=>v.name):[];
+  const who=insps.length===1?insps[0]:'';
   DB.procs.push({id:'Q'+DB.pseq+DEV,case:cid,kind:k,who,date:'',amt:0,month:'',prog:''});
   if(!quiet)save();
 }
@@ -3322,6 +3412,8 @@ document.addEventListener('drop',e=>{ if(tab!=='case'||!isFileDrag(e))return; e.
 document.addEventListener('click',e=>{
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
   const cpl=e.target.closest('[data-cpage]'); if(cpl){ openCasePage(cpl.dataset.cpage); return; }
+  const av=e.target.closest('[data-avail]'); if(av&&pCase){ const [who,ds,ins]=av.dataset.avail.split('|'); clickAvail(pCase,who,ds,ins==='insp'); return; }
+  const vk=e.target.closest('[data-vkinds]'); if(vk){ askVendorKinds(vk.dataset.vkinds); return; }
   if(e.target.id==='cpBack'){ tab=cpBack||'ledger'; render(); return; }
   const est=e.target.closest('[data-estimate]'); if(est){ showEstimate(est.dataset.estimate); return; }
   /* ---- 発注 ---- */

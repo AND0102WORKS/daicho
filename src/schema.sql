@@ -109,6 +109,8 @@ create table if not exists cases (
   updated_at timestamptz default now()
 );
 alter table cases add column if not exists key_info text default '';
+alter table cases add column if not exists madori text default '';     -- 間取り（1R／1K／1DK／1LDK／2K／2DK／2LDK／3K以上）。検査のボリュームに使う
+alter table vendors add column if not exists kinds text default '';    -- 担当できる区分（カンマ区切り。例：清掃,AW検査）。兼任できる。空なら既定の工程区分だけ
 create index if not exists cases_org_live on cases(org,live);
 create index if not exists cases_client on cases(client);
 create index if not exists cases_done on cases(done);
@@ -435,6 +437,25 @@ begin
   update vendors set token=t where name=p_name;
   return t;
 end $$;
+-- ---------- 業者ページ：検査の予定とボリューム ----------
+-- 検査（AW検査）の工程ごとに：間取り（無ければ発注内容・明細の文字から推測）、自社施工の明細の行数、
+-- 同じ現場の他の工程（区分・業者・完了報告の状態）、写真の枚数。業者ページで「大・中・小」と「検査に行ってよいか」を出す
+create or replace function my_inspections(p_token text, p_from date, p_to date)
+returns table(proc_id text, madori text, madori_guess boolean, self_lines int, works jsonb, photos int, cfg jsonb)
+language sql security definer stable as $$
+  select p.id,
+    coalesce(nullif(c.madori,''), substring(coalesce(c.memo,'')||' '||coalesce(c.items,'')||' '||coalesce(c.prop,'')||' '||
+      coalesce((select string_agg(l.name,' ') from lines l where l.case_id=c.id),'') from '([1-4](?:SLDK|LDK|DK|K|R))')),
+    coalesce(c.madori,'')='',
+    (select count(*)::int from lines l where l.case_id=c.id and l.kind='自社施工' and coalesce(l.qty,0)>0),
+    (select coalesce(jsonb_agg(jsonb_build_object('kind',q.kind,'who',q.who,'prog',q.prog,
+        'report',(select r.st from reports r where r.proc_id=q.id)) order by q.start_date nulls last),'[]'::jsonb)
+      from procs q where q.case_id=c.id and q.id<>p.id and q.kind not in ('AW検査','検査','現地調査')),
+    (select count(*)::int from photos f where f.case_id=c.id),
+    (select value from settings s where s.org=c.org and s.key='cfg')
+  from vendors v join procs p on p.who=v.name join cases c on c.id=p.case_id
+  where v.token=p_token and v.active and p.kind in ('AW検査','検査')
+    and p.start_date<=p_to and coalesce(p.end_date,p.start_date)>=p_from $$;
 -- ---------- 写真台帳 ----------
 -- 業者ページから写真を登録（写真の本体は先に保存領域へ送ってある）。自分の工程の案件にだけ。場所は自分のリンクのフォルダだけ
 create or replace function add_photos(p_token text, p_proc text, p_cat text, p_phase text, p_paths jsonb) returns int
@@ -608,7 +629,7 @@ exception when others then null; end $$;
 
 -- ---------- 仕上げ：security definer 関数の search_path 固定、anon に不要な実行権を外す ----------
 do $$ declare f text; begin
-  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','close_period(text,int)','add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','staff_add_photos(text,text,text,jsonb)','staff_del_photo(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
+  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','my_inspections(text,date,date)','close_period(text,int)','add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','staff_add_photos(text,text,text,jsonb)','staff_del_photo(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function next_no(text,text) from anon;
@@ -636,6 +657,8 @@ revoke execute on function case_photos(text) from anon;   -- Supabase は新し�
 grant execute on function case_photos(text) to authenticated;
 revoke execute on function staff_add_photos(text,text,text,jsonb), staff_del_photo(text) from public, anon;
 grant execute on function staff_add_photos(text,text,text,jsonb), staff_del_photo(text) to authenticated;
+revoke execute on function my_inspections(text,date,date) from public;
+grant execute on function my_inspections(text,date,date) to anon, authenticated;
 revoke execute on function my_jobs(text,date,date) from public;
 grant execute on function my_jobs(text,date,date) to anon, authenticated;
 revoke execute on function vendor_token_ok(text), submit_report(text,text,date,text,int,text,jsonb), cancel_report(text,text), my_billing(text), issue_invoice(text,text), confirm_statement(text,text) from public;

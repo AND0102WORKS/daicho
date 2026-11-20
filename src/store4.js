@@ -20,7 +20,7 @@ function alog(ev,x){ try{ AWLOG.push([new Date().toISOString().slice(5,19),DEV,e
 
 /* ---- 表と JS 項目の対応 ---- */
 const TABLES={
-  cases: {cols:['id','org','client','prop','kind','st','live','ord','ord_by','sales','add_amt','bill','kisan','want','plan','plan_manual','done','keyx','warr','recv','case_no','src','memo','items','report','photo','addr','key_info'],
+  cases: {cols:['id','org','client','prop','kind','st','live','ord','ord_by','sales','add_amt','bill','kisan','want','plan','plan_manual','done','keyx','warr','recv','case_no','src','memo','items','report','photo','addr','key_info','madori'],
           map:{add:'add_amt',planManual:'plan_manual',caseNo:'case_no',ordBy:'ord_by',keyInfo:'key_info'}, dates:['kisan','want','plan','done'], bools:['live','plan_manual']},
   procs: {cols:['id','org','case_id','kind','who','start_date','end_date','amt','month','prog','order_id','auto','memo'],
           map:{case:'case_id',date:'start_date',end:'end_date',order:'order_id'}, dates:['start_date','end_date'], bools:['auto']},
@@ -28,7 +28,7 @@ const TABLES={
           map:{case:'case_id',order:'order_id'}, dates:[], bools:['cut']},
   orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
-  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','active','src'],
+  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src'],
           map:{full:'full_name',defKind:'def_kind',close:'close_day'}, dates:[], bools:['active','taxable']},
   clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src'],
           map:{full:'full_name',close:'close_day'}, dates:[], bools:[]},
@@ -110,6 +110,7 @@ async function dbLoad(){
   paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
   off.forEach(r=>{ if((r.days||[]).length)(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice(); });
   settings.forEach(r=>{ if(r.key==='basis')DB.basis=r.value;
+    else if(r.key==='cfg'&&r.value&&typeof r.value==='object')DB.cfg=r.value;   /* 会社ごとの設定（ボリュームの点数など）。無ければ画面の既定 */
     else if(String(r.key).indexOf(SKIP_KEY)===0&&r.value===true)DB.skip[String(r.key).slice(SKIP_KEY.length)]=1; });   /* 見送った受注受付 */
   /* 案件は新しいものが上。採番は既存の最大＋1 から */
   DB.cases.sort((a,b)=>String(b.id).localeCompare(String(a.id)));

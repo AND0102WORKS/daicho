@@ -64,6 +64,14 @@ button.done:disabled{opacity:.5}
 .ord:not(.wait) .go{background:var(--card);color:var(--acc);border:1px solid var(--acc)}
 .sec{margin:16px 0 4px;font-weight:700;color:var(--sub);font-size:14px}
 .hint{font-size:12.5px;color:var(--sub);margin:18px 0 0;line-height:1.7}
+.wk{display:flex;gap:4px;margin:6px 0}.wk div{flex:1;background:#fff;border:1px solid var(--line);border-radius:8px;text-align:center;padding:4px 0;font-size:11px;color:var(--sub)}
+.wk div b{display:block;font-size:17px;color:var(--ink)}.wk .on{border:2px solid var(--acc)}.wk .hi b{color:var(--warn)}
+.vol{font-size:12px;font-weight:700;padding:1px 8px;border-radius:9px;background:var(--amber-bg);color:var(--ink)}
+a.route{display:block;text-align:center;padding:9px;border-radius:8px;border:1px solid var(--acc);color:var(--acc);font-weight:700;background:#fff;margin:4px 0 8px;font-size:14px;text-decoration:none}
+.sz{font-size:12px;font-weight:900;padding:1px 8px;border-radius:9px;color:#fff;vertical-align:2px}.sz-大{background:#C0503A}.sz-中{background:#D99A2B}.sz-小{background:#5E8F6E}
+.ins{margin-top:6px}.ins .works{margin-top:4px;font-size:13.5px}.ins .works div{padding:2px 0}
+.wt{font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:8px;margin-right:6px}.wt.ok{background:var(--ok-bg);color:var(--ok)}.wt.ng{background:var(--warn-bg);color:var(--warn)}
+.warnline{margin-top:4px;font-size:12.5px;color:var(--warn);font-weight:700}
 .rst{font-size:14px;font-weight:700;padding:8px 10px;border-radius:7px;flex-basis:100%}
 .rst.wait{background:var(--amber-bg)}.rst.ok{background:var(--ok-bg);color:var(--ok)}.rst.ng{background:var(--warn-bg);color:var(--warn)}
 button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:14px;color:var(--ink)}
@@ -207,20 +215,25 @@ async function load(){
   if(!rows.length){ list.innerHTML='<div class="empty">この期間の工程はありません</div>'; return; }
   const today=fmt(new Date());
   const left=rows.filter(p=>p.prog!=='完了'&&p.prog!=='仮').length;
+  /* 検査の工程があれば：現場ごとのボリューム（間取り＋自社施工）と、同じ現場の他の工程の進み具合 */
+  INS={};
+  if(rows.some(p=>isInspK(p.kind))){ const r2=await sb.rpc('my_inspections',{p_token:token,p_from:a,p_to:b}); (r2.data||[]).forEach(x=>{ INS[x.proc_id]=x; }); }
   let html=`<p class="sum">${md(a)}〜${md(b)}　全 <b>${rows.length}</b> 件／未完了 <b>${left}</b> 件</p>`, last=null;
+  html+=weekStrip(rows,a,b,today);
   rows.forEach(p=>{
     const carry=p.s<a;                              /* 表示期間より前に始まって、まだ続いている工程 */
     const key=carry?'carry':p.s;
     if(key!==last){ last=key;
       html+=carry?`<div class="day">前から続いている工程</div>`
-                 :`<div class="day ${p.s===today?'today':''}">${md(p.s)}${p.s===today?'　今日':''}</div>`; }
+                 :`<div class="day ${p.s===today?'today':''}">${md(p.s)}${p.s===today?'　今日':''}${daySummary(rows,p.s)}</div>${routeBtn(rows,p.s)}`; }
     const done=p.prog==='完了', tent=p.prog==='仮', multi=p.e!==p.s, now=!done&&!tent&&p.s<=today&&today<=p.e;
     const q=encodeURIComponent(p.addr||p.prop||'');
     html+=`<div class="job ${done?'done':''} ${now?'now':''}" data-id="${esc(p.proc_id)}">
-      <div class="prop">${esc(p.prop)}</div>
+      <div class="prop">${esc(p.prop)}${INS[p.proc_id]?` <span class="sz sz-${volOf(INS[p.proc_id]).size}">${volOf(INS[p.proc_id]).size}</span>`:''}</div>
       <div class="meta">${tent?'<span class="tag" style="background:var(--amber-bg);font-weight:700">仮予定</span> ':''}<span class="tag">${esc(p.kind||'工程')}</span>${p.client?'　'+esc(p.client):''}</div>
       ${multi||carry?`<div class="when">${md(p.s)} 〜 ${md(p.e)}（${days(p.s,p.e)}日間）</div>`:''}
       ${p.addr?`<div class="addr">${esc(p.addr)}</div>`:''}
+      ${INS[p.proc_id]?inspBox(INS[p.proc_id]):''}
       ${p.key_info?`<div class="key"><b>鍵</b>${esc(p.key_info)}</div>`:''}
       ${p.memo?`<div class="memo">${esc(p.memo)}</div>`:''}
       <div class="row">${q?`<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${q}">${p.addr?'地図':'地図（物件名で検索）'}</a>`:''}
@@ -228,6 +241,43 @@ async function load(){
   });
   list.innerHTML=html;
   ROWS={}; rows.forEach(p=>{ ROWS[p.proc_id]=p; });
+}
+/* ---- 検査：ボリューム（間取り＋自社施工）・その日の件数・回る順番 ---- */
+let INS={};
+const isInspK=k=>k==='AW検査'||k==='検査';
+const VOL_DEF={madori:{'1R':1,'1K':1,'1DK':2,'1LDK':2,'2K':2,'2DK':3,'2LDK':3,'3K以上':4},self:[[10,3],[4,2],[1,1]],size:[[5,'大'],[3,'中'],[0,'小']]};
+const normMadori=v=>{ v=String(v||'').replace('SLDK','LDK'); return /^[3-9]/.test(v)?'3K以上':v; };
+function volOf(x){
+  const C=Object.assign({},VOL_DEF,(x.cfg&&x.cfg.volume)||{}), md=normMadori(x.madori), mp=C.madori[md]||0;
+  const sp=(C.self.find(([n])=>(x.self_lines||0)>=n)||[0,0])[1], pt=mp+sp;
+  return {madori:md,points:pt,size:(C.size.find(([n])=>pt>=n)||[0,'小'])[1]};
+}
+const RLAB={'承認':['完了報告済み','ok'],'報告済':['完了報告済み（確認待ち）','ok'],'差し戻し':['差し戻し','ng']};
+function inspBox(x){
+  const v=volOf(x), ws=x.works||[];
+  const notyet=ws.filter(w=>!w.report&&w.prog!=='完了');
+  return `<div class="ins"><div class="meta">間取り ${v.madori?esc(v.madori)+(x.madori_guess?'（推測）':''):'未設定'}　自社施工 ${x.self_lines||0}行　写真 ${x.photos||0}枚</div>
+    ${ws.length?`<div class="works">${ws.map(w=>{ const [l,c]=w.report?(RLAB[w.report]||[w.report,'']):w.prog==='完了'?['完了','ok']:['まだ','ng'];
+      return `<div><span class="wt ${c}">${esc(l)}</span>${esc(w.kind)}（${esc(w.who||'業者未定')}）</div>`; }).join('')}</div>`:''}
+    ${notyet.length?`<div class="warnline">まだ終わっていない工程があります。検査の前に確かめてください</div>`:''}</div>`;
+}
+function daySummary(rows,ds){
+  const ins=rows.filter(p=>p.s===ds&&INS[p.proc_id]); if(!ins.length)return '';
+  const n={大:0,中:0,小:0}; ins.forEach(p=>{ n[volOf(INS[p.proc_id]).size]++; });
+  return ` <span class="vol">検査 ${ins.length}件（${['大','中','小'].filter(k=>n[k]).map(k=>k+n[k]).join('・')}）</span>`;
+}
+function routeBtn(rows,ds){
+  const ps=rows.filter(p=>p.s<=ds&&ds<=p.e&&p.prog!=='仮'); if(ps.length<2)return '';
+  const stops=ps.map(p=>encodeURIComponent(p.addr||p.prop||'')).filter(Boolean);
+  return `<a class="route" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/${stops.join('/')}">この日の現場を回る順番（地図・${ps.length}か所）</a>`;
+}
+function weekStrip(rows,a,b,today){
+  if(!rows.some(p=>INS[p.proc_id]))return '';
+  const out=[]; let d=new Date(a+'T00:00:00'); const end=new Date(b+'T00:00:00');
+  while(d<=end&&out.length<31){ const ds=fmt(d), n=rows.filter(p=>p.s===ds&&INS[p.proc_id]).length; out.push([ds,n]); d.setDate(d.getDate()+1); }
+  if(out.length>7)return '';
+  const mx=Math.max(...out.map(x=>x[1]));
+  return `<div class="wk">${out.map(([ds,n])=>`<div class="${ds===today?'on':''} ${n&&n===mx&&n>=3?'hi':''}">${WD[new Date(ds+'T00:00:00').getDay()]}<b>${n}</b></div>`).join('')}</div><p class="sum" style="margin-top:-4px">検査の件数（日ごと）</p>`;
 }
 /* 工程カードの下：完了報告の状態とボタン */
 function repBox(p){
