@@ -311,7 +311,11 @@ drop function if exists my_schedule(text,date,date);
 create or replace function my_schedule(p_token text, p_from date, p_to date)
 returns table(proc_id text, case_id text, prop text, addr text, kind text, start_date date, end_date date, prog text, memo text, client text, key_info text)
 language sql security definer stable as $$
-  select p.id, c.id, c.prop, c.addr, p.kind, p.start_date, p.end_date, p.prog, p.memo, c.client, c.key_info
+  select p.id, c.id, c.prop, c.addr, p.kind, p.start_date, p.end_date, p.prog, p.memo, c.client,
+    -- 鍵情報は作業日の前後だけ（開始の3日前〜終了の翌日。日本時間）。それ以外は案内だけ返す（URL が漏れたときの被害を小さく）
+    case when coalesce(c.key_info,'')='' then ''
+         when (now() at time zone 'Asia/Tokyo')::date between p.start_date-3 and coalesce(p.end_date,p.start_date)+1 then c.key_info
+         else '（作業日の3日前から表示されます）' end
   from procs p join cases c on c.id=p.case_id join vendors v on v.name=p.who
   where v.token=p_token and v.active
     and p.start_date<=p_to and coalesce(p.end_date,p.start_date)>=p_from   -- 期間に少しでも掛かる工程（前の週から続く工程も出す）
@@ -335,10 +339,12 @@ language sql security definer stable as $$
                  where l.case_id=p.case_id and l.kind=p.kind and p.kind<>'' and not l.cut and l.qty>0)
       ) order by p.start_date nulls last, p.id) from procs p where p.case_id=o.case_id),
     c.key_info, coalesce(o.taxable,true)
-  from orders o join cases c on c.id=o.case_id where o.token=p_token $$;
+  from orders o join cases c on c.id=o.case_id where o.token=p_token
+    and not exists (select 1 from vendors v where v.name=o.who and not v.active) $$;   -- 無効にした発注先への発注書は開けない
 create or replace function order_accept(p_token text, p_by text) returns boolean
 language sql security definer as $$
-  update orders set st='承諾', accepted_at=now(), accepted_by=coalesce(p_by,'') where token=p_token and st in ('送付済','下書き') returning true $$;
+  update orders o set st='承諾', accepted_at=now(), accepted_by=coalesce(p_by,'') where o.token=p_token and o.st in ('送付済','下書き')
+    and not exists (select 1 from vendors v where v.name=o.who and not v.active) returning true $$;   -- 無効にした発注先は承諾できない
 create or replace function proc_done(p_token text, p_proc text, p_done boolean) returns boolean
 language sql security definer as $$
   update procs p set prog = case when p_done then '完了' else '' end
