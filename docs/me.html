@@ -76,6 +76,9 @@ button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);backg
 .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .thumbs .t{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;background:#EEE}
 .thumbs img{width:100%;height:100%;object-fit:cover}
+.thumbs .tst{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);color:#fff;font-size:11px;text-align:center;padding:2px 0}
+.thumbs .tst.ok{background:var(--ok);left:auto;right:auto;width:22px;border-radius:0 8px 0 0}
+.thumbs .tst.ng{background:var(--warn)}
 .thumbs button{position:absolute;top:2px;right:2px;border:0;background:rgba(0,0,0,.6);color:#fff;border-radius:50%;width:24px;height:24px;font-size:14px;line-height:24px;padding:0}
 .btns{display:flex;gap:8px;margin-top:16px}
 .btns button{flex:1;padding:12px;border-radius:8px;font-size:16px;font-weight:700;border:1px solid var(--line);background:var(--card);color:var(--ink)}
@@ -121,7 +124,7 @@ button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);backg
   <h3>完了報告</h3><div class="meta" id="rProp"></div>
   <label>完了日<input type="date" id="rDone"></label>
   <label>コメント（任意）<textarea id="rNote" rows="3" placeholder="作業の内容、気づいたことなど"></textarea></label>
-  <label>写真（任意・何枚でも）<input type="file" id="rFiles" accept="image/*" multiple></label>
+  <label>写真（任意・12枚まで。選ぶとすぐ送り始めます）<input type="file" id="rFiles" accept="image/*" multiple></label>
   <div class="thumbs" id="rThumbs"></div>
   <label>発注金額<input type="text" id="rBase" disabled></label>
   <label>追加金額（税抜・ある場合だけ）<input type="number" id="rExtra" min="0" step="100" inputmode="numeric" placeholder="0"></label>
@@ -222,12 +225,13 @@ function repBox(p){
   return `<div class="rst wait">完了報告済み（会社の確認待ち）${ex}</div><button class="sub" type="button" data-rep="1">報告を直す</button><button class="sub" type="button" data-cancel="1">報告を取り消す</button>`;
 }
 /* ---- 完了報告 ---- */
-let RP=null;   /* {pid, keep:[既に保存した写真の場所], files:[これから送る写真]} */
+let RP=null;   /* {pid, keep:[既に保存した写真の場所], ups:[{url, path, st:'up'|'ok'|'ng', p}]} */
+const MAXPH=12;   /* 1回の報告に付けられる写真の枚数 */
 const today=()=>fmt(new Date());
 async function signed(paths){ if(!paths.length)return {}; const {data}=await sb.storage.from('reports').createSignedUrls(paths,3600); const m={}; (data||[]).forEach(x=>{ if(x.signedUrl)m[x.path]=x.signedUrl; }); return m; }
 async function openReport(pid){
   const p=ROWS[pid]; if(!p)return; const r=p.rep||{};
-  RP={pid,keep:(r.photos||[]).slice(),files:[]};
+  RP={pid,keep:(r.photos||[]).slice(),ups:[]};
   document.getElementById('rProp').textContent=`${p.prop}　${p.kind||''}`;
   const e=String(p.end_date||p.start_date||'').slice(0,10);
   document.getElementById('rDone').value=String(r.done_date||'').slice(0,10)||(e&&e<today()?e:today());
@@ -242,15 +246,27 @@ async function openReport(pid){
 async function drawThumbs(){
   const urls=await signed(RP.keep);
   const k=RP.keep.map((x,i)=>`<div class="t"><img src="${esc(urls[x]||'')}" alt=""><button type="button" data-delkeep="${i}">×</button></div>`);
-  const f=RP.files.map((x,i)=>`<div class="t"><img src="${URL.createObjectURL(x)}" alt=""><button type="button" data-delfile="${i}">×</button></div>`);
+  const f=RP.ups.map((u,i)=>`<div class="t"><img src="${u.url}" alt="" style="${u.st==='ok'?'':'opacity:.45'}">${
+    u.st==='up'?'<span class="tst">送信中</span>':u.st==='ng'?`<span class="tst ng" data-retry="${i}">失敗・押して再送</span>`:'<span class="tst ok">✓</span>'}<button type="button" data-delfile="${i}">×</button></div>`);
   document.getElementById('rThumbs').innerHTML=k.join('')+f.join('');
 }
-/* 写真は長い辺 1600px の JPEG に縮めてから送る（通信量と保存領域を節約） */
+/* 写真は長い辺 1280px・画質 70% の JPEG に縮めてから送る（1枚 150KB 前後。通信量と保存領域を節約） */
 async function shrink(file){
-  try{ const img=await createImageBitmap(file); const sc=Math.min(1,1600/Math.max(img.width,img.height));
+  try{ const img=await createImageBitmap(file); const sc=Math.min(1,1280/Math.max(img.width,img.height));
     const c=document.createElement('canvas'); c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
     c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-    return await new Promise(res=>c.toBlob(b=>res(b||file),'image/jpeg',0.8)); }catch(e){ return file; }
+    return await new Promise(res=>c.toBlob(b=>res(b||file),'image/jpeg',0.7)); }catch(e){ return file; }
+}
+/* 写真は選んだらすぐ送り始める（3枚ずつ並行）。コメントを書いている間に終わるので、「報告を送る」で待たない */
+let upRunning=0; const upQueue=[];
+function upNext(){ while(upRunning<3&&upQueue.length){ const u=upQueue.shift(); upRunning++; upOne(u).finally(()=>{ upRunning--; upNext(); }); } }
+function upStart(u){ u.st='up'; u.p=new Promise(res=>{ u.done=res; }); upQueue.push(u); upNext(); }
+async function upOne(u){
+  try{ const blob=u.blob||(u.blob=await shrink(u.file)), path=`${token}/${RP.pid}/${Date.now()}-${Math.random().toString(36).slice(2,6)}.jpg`;
+    const {error}=await sb.storage.from('reports').upload(path,blob,{contentType:'image/jpeg',upsert:false});
+    if(error)throw error; u.path=path; u.st='ok'; }
+  catch(e){ u.st='ng'; }
+  u.done(); if(RP&&RP.ups.indexOf(u)>=0)drawThumbs();
 }
 async function sendReport(){
   const btn=document.getElementById('rSend');
@@ -259,14 +275,9 @@ async function sendReport(){
   const done=document.getElementById('rDone').value; if(!done){ alert('完了日を入れてください'); return; }
   btn.disabled=true;
   try{
-    const paths=RP.keep.slice();
-    for(let i=0;i<RP.files.length;i++){
-      btn.textContent=`写真を送っています（${i+1}/${RP.files.length}）`;
-      const blob=await shrink(RP.files[i]), path=`${token}/${RP.pid}/${Date.now()}-${i}.jpg`;
-      const {error}=await sb.storage.from('reports').upload(path,blob,{contentType:'image/jpeg',upsert:false});
-      if(error)throw new Error('写真を送れませんでした：'+error.message);
-      paths.push(path);
-    }
+    if(RP.ups.some(u=>u.st==='up')){ btn.textContent='写真の送信を待っています…'; await Promise.all(RP.ups.map(u=>u.p)); }
+    if(RP.ups.some(u=>u.st==='ng'))throw new Error('送れなかった写真があります。写真の「失敗・押して再送」を押すか、×で外してください。');
+    const paths=RP.keep.concat(RP.ups.map(u=>u.path));
     btn.textContent='報告を送っています…';
     const {data,error}=await sb.rpc('submit_report',{p_token:token,p_proc:RP.pid,p_done:done,p_note:document.getElementById('rNote').value,
       p_extra:extra,p_extra_note:exNote,p_photos:paths});
@@ -341,7 +352,8 @@ document.addEventListener('click',async e=>{
   if(e.target.id==='rClose'){ document.getElementById('rm').hidden=true; return; }
   if(e.target.id==='rSend'){ sendReport(); return; }
   const dk=e.target.closest('[data-delkeep]'); if(dk){ RP.keep.splice(+dk.dataset.delkeep,1); drawThumbs(); return; }
-  const df=e.target.closest('[data-delfile]'); if(df){ RP.files.splice(+df.dataset.delfile,1); drawThumbs(); return; }
+  const df=e.target.closest('[data-delfile]'); if(df){ RP.ups.splice(+df.dataset.delfile,1); drawThumbs(); return; }
+  const rt=e.target.closest('[data-retry]'); if(rt){ upStart(RP.ups[+rt.dataset.retry]); drawThumbs(); return; }
   const cb=e.target.closest('[data-cancel]'); if(cb&&!busy){ const job=cb.closest('.job');
     if(!confirm('「'+(job.querySelector('.prop').textContent||'この工程')+'」の完了報告を取り消しますか？'))return;
     busy=true; const {data,error}=await sb.rpc('cancel_report',{p_token:token,p_proc:job.dataset.id}); busy=false;
@@ -359,7 +371,11 @@ document.addEventListener('click',async e=>{
     if(error||data!==true)alert('記録できませんでした。会社に確認してください。'); document.getElementById('docm').hidden=true; loadBill(); return; }
   const t=e.target.closest('[data-r]'); if(t){ range=t.dataset.r; document.querySelectorAll('[data-r]').forEach(b=>b.classList.toggle('on',b===t)); load(); return; }
 });
-document.addEventListener('change',e=>{ if(e.target.id==='rFiles'&&RP){ RP.files.push(...Array.from(e.target.files||[])); e.target.value=''; drawThumbs(); } });
+document.addEventListener('change',e=>{ if(e.target.id==='rFiles'&&RP){
+  let fs=Array.from(e.target.files||[]); e.target.value='';
+  const room=MAXPH-RP.keep.length-RP.ups.length;
+  if(fs.length>room){ alert(`写真は1回の報告に${MAXPH}枚までです。${room>0?`あと${room}枚だけ付けます。`:''}`); fs=fs.slice(0,Math.max(0,room)); }
+  fs.forEach(f=>{ const u={file:f,url:URL.createObjectURL(f)}; RP.ups.push(u); upStart(u); }); drawThumbs(); } });
 /* 画面に戻ってきたら最新にする（朝に開きっぱなしのまま、予定が変わっていることがある） */
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&!busy&&ME&&document.getElementById('rm').hidden){ loadOrders(); load(); if(mode==='bill')loadBill(); } });
 start();

@@ -2573,9 +2573,21 @@ const closeMonthOf=(d,c)=>{ d=String(d||'').slice(0,10); if(!d)return ''; const 
   if(!c||c>=28||day<=c)return d.slice(0,7); return addM(d.slice(0,7),1); };
 function closePeriodOf(mon,c){ const y=+mon.slice(0,4), m=+mon.slice(5,7), f=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   if(!c||c>=28)return [f(new Date(y,m-1,1)),f(new Date(y,m,0))]; return [f(new Date(y,m-2,c+1)),f(new Date(y,m-1,c))]; }
+/* 写真の保存量（無料枠 1GB）。支払タブを開いたときに1回読む */
+let photoUse=null, photoUseAt=0;
+function loadPhotoUse(){
+  if(!sb||Date.now()-photoUseAt<60000)return; photoUseAt=Date.now();
+  sb.rpc('photo_usage').then(({data,error})=>{ if(!error&&data&&data.bytes!=null){ photoUse=data; if(tab==='pay')renderIdle(); } });
+}
+function photoUseNote(){
+  if(!photoUse)return '';
+  const mb=photoUse.bytes/1048576, pct=Math.round(photoUse.bytes/1073741824*100);
+  return `<span class="note" style="margin:0 0 0 auto;${pct>=80?'color:var(--warn);font-weight:700':''}" title="写真の保存領域（無料枠 1GB）。1枚 150KB 前後">写真の保存量 ${mb<1?'1MB未満':Math.round(mb)+'MB'}／1GB（${pct}%・${photoUse.files}枚）</span>`;
+}
 function vPayReports(){
+  loadPhotoUse();
   const B=byId(), pend=(DB.reports||[]).filter(r=>r.st==='報告済').sort((a,b)=>String(a.done).localeCompare(String(b.done)));
-  return `<div class="bar"><h2>完了報告</h2><span class="note" style="margin:0">業者ページから届いた報告。承認すると追加金額が工程の発注金額（原価）に足され、業者が請求できるようになる</span></div>
+  return `<div class="bar"><h2>完了報告</h2><span class="note" style="margin:0">業者ページから届いた報告。承認すると追加金額が工程の発注金額（原価）に足され、業者が請求できるようになる</span>${photoUseNote()}</div>
     ${pend.length?`<div class="tw" style="margin-bottom:16px"><table><thead><tr><th>完了日</th><th>現場</th><th>区分</th><th>業者</th><th class="r">発注金額</th><th class="r">追加</th><th>コメント</th><th>写真</th><th></th></tr></thead><tbody>
       ${pend.map(r=>{const p=DB.procs.find(x=>x.id===r.proc)||{}, ph=(r.photos||[]).length;
         return `<tr><td>${md(r.done)}</td><td>${esc((B[r.case]||{}).prop||'')}</td><td>${esc(p.kind||'')}</td><td>${esc(r.who)}</td>

@@ -496,6 +496,17 @@ create or replace function confirm_statement(p_token text, p_id text) returns bo
 language sql security definer as $$
   update invoices i set st='確認済', confirmed_at=now() from vendors v
   where v.token=p_token and v.active and i.who=v.name and i.id=p_id and i.kind='支払明細書' and i.st='発行' returning true $$;
+-- 写真の保存量（スタッフが台帳で見る）。無料枠は 1GB
+do $$ begin
+  if exists (select 1 from pg_namespace where nspname='storage') then
+    execute $f$create or replace function photo_usage() returns jsonb language sql security definer stable set search_path = public as $b$
+      select case when my_role() in ('hq','staff','viewer') then
+        (select jsonb_build_object('bytes',coalesce(sum((metadata->>'size')::bigint),0),'files',count(*)) from storage.objects where bucket_id='reports')
+      else '{}'::jsonb end $b$ $f$;
+    execute 'revoke execute on function photo_usage() from public, anon';
+    execute 'grant execute on function photo_usage() to authenticated';
+  end if;
+end $$;
 -- 完了報告の写真：非公開の保存領域 reports。業者は自分のリンクの名前のフォルダにだけ置ける・見られる。スタッフは全部見られる
 do $$ begin
   if exists (select 1 from pg_namespace where nspname='storage') then
@@ -527,7 +538,7 @@ exception when others then null; end $$;
 
 -- ---------- 仕上げ：security definer 関数の search_path 固定、anon に不要な実行権を外す ----------
 do $$ declare f text; begin
-  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
+  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','close_period(text,int)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function next_no(text,text) from anon;

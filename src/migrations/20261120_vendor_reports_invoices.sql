@@ -155,7 +155,7 @@ do $$ begin
 end $$;
 
 do $$ declare f text; begin
-  foreach f in array array['my_jobs(text,date,date)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
+  foreach f in array array['my_jobs(text,date,date)','close_period(text,int)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function my_jobs(text,date,date), vendor_token_ok(text), submit_report(text,text,date,text,int,text,jsonb), cancel_report(text,text), my_billing(text), issue_invoice(text,text), confirm_statement(text,text) from public;
