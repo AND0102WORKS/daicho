@@ -1,0 +1,31 @@
+// 今までの案件を隠す：画面からだけ外れ、データは消えない（./reset.sh のあとに node hide.js）
+const {chromium}=require('playwright');const {spawn}=require('child_process');const {Client}=require('pg');
+(async()=>{
+  const c=new Client({host:'localhost',user:'postgres',password:'pw',database:'aw'}); await c.connect(); const q=(s,p)=>c.query(s,p);
+  const srv=spawn('node',['fakesb-server.js'],{stdio:'ignore',cwd:__dirname}); await new Promise(r=>setTimeout(r,800));
+  const b=await chromium.launch({args:['--no-proxy-server']}); const p=await b.newPage({viewport:{width:1300,height:900}});
+  const errs=[]; p.on('pageerror',e=>errs.push(e.message)); p.on('dialog',x=>x.accept());
+  const res=[]; const ok=(n,cnd,x)=>{ res.push(cnd); console.log((cnd?'OK  ':'NG  ')+n+(x!==undefined?'  '+JSON.stringify(x):'')); };
+  await p.goto('http://localhost:8787/'); await p.waitForTimeout(1500);
+  const rows=()=>p.$$eval('[data-cpage]',a=>a.length);
+  const before=await rows(); const dbBefore=(await q('select count(*)::int n from cases')).rows[0].n;
+  await p.click('#hideOn'); await p.waitForTimeout(400);
+  ok('隠すと案件台帳に今までの案件が出ない', (await rows())===0, [before]);
+  ok('黄色の帯が出る', !!(await p.$('.hidebar.on')));
+  await p.evaluate(()=>{ tab='proc'; render(); }); await p.waitForTimeout(300);
+  ok('工程を組むにも出ない', await p.evaluate(()=>!document.querySelector('.pcw')||document.body.innerText.indexOf('プレール')<0));
+  await p.evaluate(()=>{ tab='ledger'; render(); }); await p.waitForTimeout(300);
+  await p.click('#addCase'); await p.fill('#ncProp','新しい物件 201'); await p.selectOption('#ncClient',{index:1}); await p.selectOption('#ncKind','清掃のみ');
+  await p.click('#askYes'); await p.waitForTimeout(2000);
+  ok('新しく作った案件は出る', (await rows())===1);
+  await p.screenshot({path:__dirname+'/hide.png',clip:{x:0,y:0,width:1300,height:420}});
+  const dbAfter=(await q('select count(*)::int n from cases')).rows[0].n;
+  ok('データは消えていない（1件増えただけ）', dbAfter===dbBefore+1, [dbBefore,dbAfter]);
+  await p.reload(); await p.waitForTimeout(1500);
+  ok('再読み込みしても隠したまま', !!(await p.$('.hidebar.on'))&&(await rows())===1);
+  await p.click('#hideOff'); await p.waitForTimeout(400);
+  ok('全部表示に戻せる', (await rows())===before+1);
+  ok('ページのエラーなし', errs.length===0, errs);
+  console.log(res.every(Boolean)?'ALL OK':'SOME NG');
+  await c.end(); await b.close(); srv.kill();
+})();

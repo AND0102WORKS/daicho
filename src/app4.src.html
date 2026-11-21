@@ -294,6 +294,8 @@ td.av[data-ask]{cursor:pointer}td.av.free[data-ask]:hover{background:var(--ok-bg
 td.av.free[data-ask]:hover::after{content:'＋打診';font-size:11px;font-weight:700;color:var(--ok)}
 td.av.busy[data-ask]:hover{filter:brightness(.96)}
 td.av .avj.q{color:#8A5A00}td.av .avj.q i{background:#F2C14E;color:#1E2A32;border-radius:3px;padding:0 2px}
+.hidebar{display:flex;align-items:center;gap:10px;margin:0 0 8px;font-size:12.5px}.hidebar.off{justify-content:flex-end;margin-bottom:-4px}
+.hidebar.on{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:6px 12px}
 .askline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 8px;padding:6px 10px;border-radius:8px;font-size:12.5px;line-height:1.5}
 .askline.wait{background:#FBEFD0}.askline.ok{background:var(--ok-bg)}.askline.ng{background:var(--warn-bg)}.askline b{font-weight:900}.askline .btn{height:26px}
 .obdraft{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:8px 12px;margin:0 0 10px;font-size:13px;font-weight:700;line-height:1.6}
@@ -3311,8 +3313,7 @@ function render(){
   if(!SESSION||!ME){ paintLogin(); return; }
   tipHide(); keepView();
   const mem=memView();
-  renderTabs();
-  paint();
+  withHidden(()=>{ renderTabs(); paint(); });
   if(tab==='order')fitLnw();
   if(tab==='proc')fitProc();
   const hitBoard=restoreView(mem);
@@ -3329,8 +3330,31 @@ function render(){
 /* 入力の change の直後は、ブラウザが次の欄へフォーカスを移してから描き直す（Tabで流せるように） */
 let renderTimer=null;
 function renderSoon(){ clearTimeout(renderTimer); renderTimer=setTimeout(()=>{renderTimer=null; render();},0); }
+/* ---- 今までの案件を隠す（このブラウザだけ）。押した時点にある案件をすべて画面から外す。データは消さない ----
+   画面を描くあいだだけ DB の案件・工程・発注・明細・完了報告を絞り、描き終わったら元に戻す（保存や操作はいつも全部のデータで動く） */
+let HIDE=(()=>{ try{ const v=JSON.parse(localStorage.getItem('aw-hideold')||'null'); return v&&v.ids?{at:v.at,ids:new Set(v.ids)}:null; }catch(e){ return null; } })();
+function setHideOld(on){
+  if(on){ const ids=DB.cases.map(c=>c.id); HIDE={at:new Date().toISOString(),ids:new Set(ids)};
+    try{ localStorage.setItem('aw-hideold',JSON.stringify({at:HIDE.at,ids})); }catch(e){ toast('このブラウザに覚えられなかった'); } }
+  else { HIDE=null; try{ localStorage.removeItem('aw-hideold'); }catch(e){} }
+  selCase=null; pCase=null; oCase=null; render();
+}
+function hideBar(){
+  if(!HIDE)return `<div class="hidebar off"><button class="btn small" id="hideOn" title="押した時点にある案件をすべて画面から隠す。データは消えない。このブラウザだけ">今までの案件を隠す</button></div>`;
+  return `<div class="hidebar on"><b>今までの案件 ${HIDE.ids.size.toLocaleString()} 件を隠しています</b>（${md(HIDE.at.slice(0,10))} に隠した。データは消えていません。このブラウザだけ）
+    <button class="btn small" id="hideOff">全部表示に戻す</button></div>`;
+}
+function withHidden(fn){
+  if(!HIDE)return fn();
+  const keep={cases:DB.cases,procs:DB.procs,orders:DB.orders,lines:DB.lines,reports:DB.reports};
+  const H=HIDE.ids;
+  DB.cases=keep.cases.filter(c=>!H.has(c.id)); DB.procs=keep.procs.filter(p=>!H.has(p.case));
+  DB.orders=keep.orders.filter(o=>!H.has(o.case)); DB.lines=keep.lines.filter(l=>!H.has(l.case));
+  if(keep.reports)DB.reports=keep.reports.filter(r=>!H.has(r.case));
+  try{ return fn(); } finally { Object.assign(DB,keep); }
+}
 function paint(){
-  document.getElementById('main').innerHTML=inboxBanner()+(
+  document.getElementById('main').innerHTML=hideBar()+inboxBanner()+(
     tab==='case'?vCase():tab==='ledger'?vLedger():tab==='order'?vOrder():tab==='proc'?vProc():tab==='board'?vBoard():tab==='kanko'?vKanko():tab==='insp'?vInsp():
     tab==='bill'?vBill():tab==='pay'?vPay():tab==='pl'?vPl():tab==='master'?vMaster():vCheck());
 }
@@ -3747,6 +3771,8 @@ document.addEventListener('click',e=>{
     if(c){snap(); if(c.done)setDone(c,''); else setDone(c,planOf(c)||fmtD(new Date()));
       save();render();} return;}
   if(e.target.id==='addCase'){ newCaseForm(); return; }
+  if(e.target.id==='hideOn'){ if(confirm(`今ある案件 ${DB.cases.length.toLocaleString()} 件を、このブラウザの画面から隠します。\nデータは消えません。これから作る案件だけが表示されます。\n「全部表示に戻す」でいつでも戻せます。`))setHideOld(true); return; }
+  if(e.target.id==='hideOff'){ setHideOld(false); return; }
   if(e.target.id==='addProc'&&selCase){
     snap(); DB.pseq++; DB.procs.push({id:'Q'+DB.pseq+DEV,case:selCase,kind:'清掃',who:'',date:'',end:'',amt:0,month:'',prog:''});
     save(); render(); return;}
