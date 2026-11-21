@@ -30,7 +30,7 @@ p{margin:0}
 .brand{font-weight:900;font-size:15px;line-height:1.25}
 .brand small{display:block;font-size:11px;color:var(--sub);font-weight:500}
 .tabs{display:flex;gap:2px;flex-wrap:wrap}
-.tabs button{border:none;background:transparent;padding:8px 11px;border-radius:8px;font-weight:700;
+.tabs button{border:none;background:transparent;padding:8px 9px;border-radius:8px;font-weight:700;
   color:var(--sub);min-height:36px;font-size:13.5px;cursor:pointer;font-family:inherit}
 .tabs button.on{background:var(--acc);color:var(--acc-ink)}
 .src{margin-left:auto;font-size:11px;color:var(--sub);text-align:right;line-height:1.5}
@@ -1243,7 +1243,7 @@ function importPO(cid){
 }
 const ORDER_HELP='依頼元の発注書を明細に落とす → 行を選んで業者ごとに発注する。「工程を組む」で決めた業者・期間が発注に最初から入る（直せる）。工程が無ければ発注から1本できる。販売＝依頼元からもらう／原価＝業者に払う';
 function vOrder(){
-  const head='<h2>発注</h2>'+
+  const head='<h2>見積・発注</h2>'+
     '<div class="seg"><button data-ov="make" class="'+(oView==='make'?'on':'')+'">発注をつくる</button>'+
     '<button data-ov="list" class="'+(oView==='list'?'on':'')+'">発注一覧</button></div>'+
     '<span class="help" title="'+esc(ORDER_HELP)+'">？</span>';
@@ -1674,7 +1674,7 @@ function orderSheet(oid){
 }
 
 /* ================= tabs ================= */
-const TABS=[['ledger','案件台帳'],['order','発注'],['proc','工程を組む'],['board','手配ボード'],['kanko','完工予定'],['insp','検査カレンダー'],
+const TABS=[['ledger','案件台帳'],['order','見積・発注'],['proc','工程を組む'],['board','手配ボード'],['kanko','完工予定'],['insp','検査カレンダー'],
             ['bill','請求'],['pay','支払'],['pl','月次'],['master','マスタ'],['check','要確認']];
 let tab='ledger', selCase=null, selProc=null;
 let fClient='すべて', fMonth='すべて', fStatus='すべて', fQ='', bMonth=THIS_M, kMonth=THIS_M;
