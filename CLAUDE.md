@@ -12,6 +12,10 @@
 - `src/schema.sql` … DB の表・権限（RLS）・関数。変更は Supabase の migration として適用する
 - `src/config.json` … Supabase の URL と公開キー（anon/publishable）。秘密鍵は置かない
 - `test/` … 手元の PostgreSQL ＋ supabase-js もどきで動かすテスト（Playwright）
+- `docs/test/` … **テスト用の台帳・業者ページ・発注書**（https://and0102works.github.io/daicho/test/）。同じ Supabase の中の別の棚（schema `test`）を見る。写真は `reports-test`。ログインの人と役割は本番と共通（`test.profiles` は `public.profiles` の view）
+  - 2026-11-21 時点で固定。**今後の本番の直しはテスト用には入れない**（北村さんの指示）。`build4.py` は `docs/test/` に触らない
+  - 作り直すときだけ：`python3 src/make_test_schema.py`（→ `src/test_schema.sql`）、`python3 src/make_test_pages.py`（→ `docs/test/`）
+  - 手元でテスト用を試す：`FAKESB_SCHEMA=test node run.js` など（DB の search_path を test にしておく）
 
 ## 直し方
 1. `src/app3.src.html` または `src/store4.js` を直す

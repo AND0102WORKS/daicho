@@ -28,11 +28,13 @@ async function handle(body){
   }
   throw new Error('unknown op '+op);
 }
-pg.connect().then(()=>pg.query("select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000aa',false)")).then(()=>{   // 本部ユーザーとして
+const SCHEMA=process.env.FAKESB_SCHEMA||'', DOCS=__dirname+'/../docs/'+(SCHEMA?SCHEMA+'/':'');   // FAKESB_SCHEMA=test でテスト用の棚・docs/test/ のページ
+pg.connect().then(()=>pg.query("select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000aa',false)"))
+  .then(()=>SCHEMA?pg.query('set search_path = '+ident(SCHEMA).replace(/"/g,'')+', public, extensions'):null).then(()=>{   // 本部ユーザーとして
   http.createServer((req,res)=>{
     if(req.method==='GET'&&req.url.startsWith('/storage/')){ const f=path.join(STORE,decodeURIComponent(req.url.slice(9).split('?')[0]));
       if(fs.existsSync(f)){ res.setHeader('Content-Type','image/jpeg'); res.end(fs.readFileSync(f)); } else { res.statusCode=404; res.end(); } return; }
-    if(req.method==='GET'){ const file=/^\/(me|order)\.html/.test(req.url)?req.url.split('?')[0].slice(1):'index.html'; let h=fs.readFileSync(__dirname+'/../docs/'+file,'utf8').replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/,'<script src="/fake.js"></script>');
+    if(req.method==='GET'){ const file=/^\/(me|order)\.html/.test(req.url)?req.url.split('?')[0].slice(1):'index.html'; let h=fs.readFileSync(DOCS+file,'utf8').replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/,'<script src="/fake.js"></script>');
       if(req.url==='/fake.js'){res.setHeader('Content-Type','text/javascript');res.end(fs.readFileSync(__dirname+'/fakesb-client.js'));return;}
       res.setHeader('Content-Type','text/html;charset=utf-8'); res.end(h); return; }
     let b=''; req.on('data',c=>b+=c); req.on('end',async()=>{
