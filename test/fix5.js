@@ -33,7 +33,15 @@ const sp=__dirname+'/';
   ok('工程の行の下に「打診中」と取り消しボタン', await p.$eval('.askline.wait',x=>x.innerText.includes('打診を取り消す')).catch(()=>false));
   await p.screenshot({path:sp+'fix5-ask.png'});
   await p.click('.askline [data-askclr]'); await p.waitForTimeout(300);
-  ok('打診を取り消せる', await p.evaluate(()=>DB.procs.find(q=>q.id==='P1').ask==='' ));
+  ok('打診を取り消すと、印と一緒に業者・日付も外れる', await p.evaluate(()=>{ const x=DB.procs.find(q=>q.id==='P1'); return x.ask===''&&x.who===''&&!x.date; }));
+  // 日付を何度押しても、同じ区分の工程が増えない（入れ替わる）
+  const np0=await p.evaluate(()=>DB.procs.filter(q=>q.case==='C1302').length);
+  const days=await p.$$eval('.avwrap td.av[data-ask^="長沼俊介|"]',a=>a.slice(0,3).map(x=>x.dataset.ask));
+  for(const d of days){ await p.click(`td.av[data-ask="${d}"]`); await p.waitForTimeout(250); await p.click('[data-askgo="only"]'); await p.waitForTimeout(250); }
+  const np1=await p.evaluate(()=>DB.procs.filter(q=>q.case==='C1302').length);
+  ok('日付を3回押しても工程は増えない', np1===np0, [np0,np1]);
+  await p.click('.askline [data-askclr]'); await p.waitForTimeout(300);
+  await p.evaluate(()=>{ const x=DB.procs.find(q=>q.id==='P1'); x.who='長沼俊介'; x.date=iso(new Date().getFullYear(),new Date().getMonth()+1,new Date().getDate()); save(); render(); }); await p.waitForTimeout(300);
   await p.evaluate(()=>{ const x=DB.procs.find(q=>q.id==='P1'); x.ask='受諾'; render(); }); await p.waitForTimeout(300);
   ok('受けてもらえたら「発注書を作る」', await p.$eval('.askline.ok',x=>x.innerText.includes('発注書を作る')).catch(()=>false));
   await p.evaluate(()=>{ const x=DB.procs.find(q=>q.id==='P1'); x.ask=''; save(); }); await p.waitForTimeout(1500);

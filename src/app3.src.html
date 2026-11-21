@@ -1947,11 +1947,15 @@ function askSheet(cid,who,ds){
   const c=byId()[cid], v=vendorOf(who); if(!c||!v)return;
   const want=avCur==='全部'?(isInsp(v.defKind)?'AW検査':v.defKind):avCur;
   const same=p=>p.case===cid&&(isInsp(want)?isInsp(p.kind):p.kind===want);
-  const tgt=DB.procs.find(p=>same(p)&&!p.who)||null;
+  /* 入れる先：同じ区分でまだ発注していない工程（業者が空のものを先に）。押し直すたびに工程が増えないように、ある工程を入れ替える */
+  const free=DB.procs.filter(p=>same(p)&&!p.order&&p.prog!=='完了');
+  let tgt=free.find(p=>!p.who)||free.find(p=>p.ask)||free[0]||null;
+  if(tgt&&tgt.who&&tgt.who!==who&&!tgt.ask&&
+     !confirm(`この案件の「${tgt.kind}」は ${tgt.who} さん（${tgt.date?md(tgt.date):'日未定'}）に入っています。\n${who} さん・${md(ds)} に入れ替えますか？\n\n「キャンセル」にすると、入れ替えずに「${want}」の工程をもう1本足します。`))tgt=null;
   /* 先に工程へ入れる（業者・開始日）。打診を送るかはこのあと選ぶ */
   snap('ask:'+cid);
   const made=!tgt;
-  let p=tgt; if(!p){ DB.pseq++; p={id:'Q'+DB.pseq+DEV,case:cid,kind:want,who:'',date:'',amt:0,month:'',prog:''}; DB.procs.push(p); }
+  let p=tgt; if(!p){ DB.pseq++; p={id:'Q'+DB.pseq+DEV,case:cid,kind:want,who:'',date:'',amt:0,month:'',prog:'',askNew:1}; DB.procs.push(p); }
   const prev={who:p.who,date:p.date,end:p.end,month:p.month,ask:p.ask,askAt:p.askAt};
   p.who=who; p.date=ds; p.end=''; p.month=''; p.ask=''; p.askAt=null; recalcPlan(c);
   save(); render();
@@ -2009,8 +2013,14 @@ function askResend(pid){
 }
 function clearAsk(pid){
   const p=DB.procs.find(x=>x.id===pid); if(!p||!p.ask)return;
-  if(p.ask==='打診中'&&!confirm(`${p.who} さんへの打診（${p.kind} ${p.date?md(p.date):''}）を取り消します。\n業者ページからも消えます。工程の業者と日付はそのまま残ります。`))return;
-  snap('askclr:'+pid); p.ask=''; p.askAt=null; save(); render(); toast('打診の印を外した');
+  if(p.ask==='打診中'){
+    if(!confirm(`${p.who} さんへの打診（${p.kind} ${p.date?md(p.date):''}）を取り消します。\n業者ページからも消え、この工程の業者と日付も外します。`))return;
+    snap('askclr:'+pid);
+    if(p.askNew&&!p.order){ DB.procs=DB.procs.filter(x=>x!==p); }   /* 打診のときに足した工程は、工程ごと消す */
+    else { p.who=''; p.date=''; p.end=''; p.month=''; p.ask=''; p.askAt=null; }
+    recalcPlan(DB.cases.find(x=>x.id===p.case)); save(); render(); toast('打診を取り消した',undo); return;
+  }
+  snap('askclr:'+pid); p.ask=''; p.askAt=null; save(); render(); toast('印を外した');
 }
 /* 予定表だけ描き直す（業者欄の選択画面を開いたままにするため、画面全体は描き直さない） */
 function avRedraw(){
