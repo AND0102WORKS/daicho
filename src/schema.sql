@@ -461,6 +461,13 @@ begin
   return coalesce(r,'ng');
 end $$;
 
+-- ---------- 業者ページ：工程に発注書をつなぐ（下書きの発注は工程に出さない） ----------
+create or replace function my_job_orders(p_token text)
+returns table(proc_id text, order_no text, order_token text, order_st text)
+language sql security definer stable as $$
+  select p.id, o.no, o.token, o.st
+  from vendors v join procs p on p.who=v.name join orders o on o.id=p.order_id and p.order_id<>''
+  where v.token=p_token and v.active $$;
 -- ---------- 業者ページ：検査の予定とボリューム ----------
 -- 検査（AW検査）の工程ごとに：間取り（無ければ発注内容・明細の文字から推測）、自社施工の明細の行数、
 -- 同じ現場の他の工程（区分・業者・完了報告の状態）、写真の枚数。業者ページで「大・中・小」と「検査に行ってよいか」を出す
@@ -653,7 +660,7 @@ exception when others then null; end $$;
 
 -- ---------- 仕上げ：security definer 関数の search_path 固定、anon に不要な実行権を外す ----------
 do $$ declare f text; begin
-  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','my_inspections(text,date,date)','my_asks(text)','answer_ask(text,text,boolean)','close_period(text,int)','add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','staff_add_photos(text,text,text,jsonb)','staff_del_photo(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
+  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','my_inspections(text,date,date)','my_asks(text)','answer_ask(text,text,boolean)','my_job_orders(text)','close_period(text,int)','add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','staff_add_photos(text,text,text,jsonb)','staff_del_photo(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function next_no(text,text) from anon;
@@ -714,3 +721,5 @@ revoke execute on function handle_new_user() from public, anon, authenticated;
 
 revoke execute on function my_asks(text), answer_ask(text,text,boolean) from public;
 grant execute on function my_asks(text), answer_ask(text,text,boolean) to anon, authenticated;
+revoke execute on function my_job_orders(text) from public;
+grant execute on function my_job_orders(text) to anon, authenticated;

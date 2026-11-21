@@ -26,7 +26,7 @@ const TABLES={
           map:{case:'case_id',date:'start_date',end:'end_date',order:'order_id',askAt:'ask_at'}, dates:['start_date','end_date'], bools:['auto'], ts:['ask_at']},
   lines: {cols:['id','org','case_id','no','name','spec','qty','unit','sell','price','kind','who','memo','cut','src','order_id'],
           map:{case:'case_id',order:'order_id'}, dates:[], bools:['cut']},
-  orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable'],
+  orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable','token'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
   vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src'],
           map:{full:'full_name',defKind:'def_kind',close:'close_day'}, dates:[], bools:['active','taxable']},

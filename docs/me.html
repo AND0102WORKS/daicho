@@ -76,6 +76,9 @@ a.route{display:block;text-align:center;padding:9px;border-radius:8px;border:1px
 .askc .prop{font-weight:900;font-size:16px;margin-bottom:4px}.askc .meta{font-size:13.5px;color:var(--sub);margin-top:2px}.askc .meta b{color:var(--ink);font-size:15px}
 .askb{display:flex;gap:8px;margin-top:10px}.askb button{flex:1;padding:12px 0;border-radius:10px;font-size:15px;font-weight:900;border:1px solid var(--line);background:#fff}
 .askb .ok{background:var(--acc);color:#fff;border-color:var(--acc)}.askb .ng{color:var(--warn)}
+a.olink{display:block;margin:8px 0 2px;padding:10px;border-radius:9px;text-align:center;font-weight:900;font-size:14.5px;text-decoration:none;border:1px solid var(--acc);color:var(--acc);background:#fff}
+a.olink.wait{background:var(--acc);color:#fff}
+.onote{margin:8px 0 2px;font-size:12.5px;color:var(--sub);background:#F3F1EC;border-radius:8px;padding:6px 10px}
 .rst{font-size:14px;font-weight:700;padding:8px 10px;border-radius:7px;flex-basis:100%}
 .rst.wait{background:var(--amber-bg)}.rst.ok{background:var(--ok-bg);color:var(--ok)}.rst.ng{background:var(--warn-bg);color:var(--warn)}
 button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:14px;color:var(--ink)}
@@ -169,7 +172,7 @@ const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${Str
 const md=s=>{ if(!s)return ''; s=String(s).slice(0,10); return `${+s.slice(5,7)}/${+s.slice(8,10)}（${WD[new Date(s+'T00:00:00').getDay()]}）`; };
 const days=(a,b)=>Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000)+1;
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let range='week', ME=null, busy=false, mode='', ROWS={}, ASKS=[];
+let range='week', ME=null, busy=false, mode='', ROWS={}, ASKS=[], JO={};
 const yen=n=>'¥'+Math.round(+n||0).toLocaleString('ja-JP');
 const SLABEL={'送付済':['承諾待ち','wait'],'承諾':['承諾済み','ok'],'完了':['完了',''],'請求済':['請求済み','']};
 /* 発注の一覧（送付済み以降）。承諾待ちを上に。押すと発注書（承諾ボタンのあるページ）を開く */
@@ -222,7 +225,9 @@ async function load(){
   const [a,b]=span();
   const {data,error}=await sb.rpc('my_jobs',{p_token:token,p_from:a,p_to:b});
   if(error){ list.innerHTML='<div class="err">読み込めませんでした：'+esc(error.message)+'</div>'; return; }
-  const rows=(data||[]).map(p=>{ const s=String(p.start_date||'').slice(0,10); const e=String(p.end_date||'').slice(0,10)||s; return Object.assign({},p,{s,e:e<s?s:e}); })
+  /* 工程に紐づいた発注。下書き（会社がまだ送っていない）の発注の工程は出さない */
+  const jo=await sb.rpc('my_job_orders',{p_token:token}); JO={}; (jo.data||[]).forEach(x=>{ JO[x.proc_id]=x; });
+  const rows=(data||[]).filter(p=>!(JO[p.proc_id]&&JO[p.proc_id].order_st==='下書き')).map(p=>{ const s=String(p.start_date||'').slice(0,10); const e=String(p.end_date||'').slice(0,10)||s; return Object.assign({},p,{s,e:e<s?s:e}); })
     .sort((x,y)=>x.s<y.s?-1:x.s>y.s?1:String(x.prop).localeCompare(String(y.prop)));
   if(!rows.length){ list.innerHTML='<div class="empty">この期間の工程はありません</div>'; return; }
   const today=fmt(new Date());
@@ -248,6 +253,7 @@ async function load(){
       ${INS[p.proc_id]?inspBox(INS[p.proc_id]):''}
       ${p.key_info?`<div class="key"><b>鍵</b>${esc(p.key_info)}</div>`:''}
       ${p.memo?`<div class="memo">${esc(p.memo)}</div>`:''}
+      ${ordLink(p)}
       <div class="row">${q?`<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${q}">${p.addr?'地図':'地図（物件名で検索）'}</a>`:''}
         ${tent?'<span class="meta">まだ確定していない予定です</span>':`<button class="sub" type="button" data-photo="1">写真</button>`+repBox(p)}</div></div>`;
   });
@@ -290,6 +296,14 @@ function weekStrip(rows,a,b,today){
   if(out.length>7)return '';
   const mx=Math.max(...out.map(x=>x[1]));
   return `<div class="wk">${out.map(([ds,n])=>`<div class="${ds===today?'on':''} ${n&&n===mx&&n>=3?'hi':''}">${WD[new Date(ds+'T00:00:00').getDay()]}<b>${n}</b></div>`).join('')}</div><p class="sum" style="margin-top:-4px">検査の件数（日ごと）</p>`;
+}
+/* 工程カード：発注書へのリンク。承諾待ちなら目立たせる。発注書の無い外注の工程は「発注書待ち」 */
+function ordLink(p){
+  const o=JO[p.proc_id];
+  if(o){ const href=`order.html?t=${encodeURIComponent(o.order_token)}&v=${encodeURIComponent(token)}`;
+    return o.order_st==='送付済'?`<a class="olink wait" href="${href}">発注書を見て承諾する（${esc(o.order_no)}）</a>`
+                                :`<a class="olink" href="${href}">発注書を見る（${esc(o.order_no)}・${esc((SLABEL[o.order_st]||[o.order_st])[0])}）</a>`; }
+  return ME&&ME.type==='外注'&&p.prog!=='仮'?`<div class="onote">発注書はまだ届いていません。届くと、ここから見て承諾できます</div>`:'';
 }
 /* 工程カードの下：完了報告の状態とボタン */
 function repBox(p){

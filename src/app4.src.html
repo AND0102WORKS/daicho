@@ -294,6 +294,9 @@ td.av[data-ask]{cursor:pointer}td.av.free[data-ask]:hover{background:var(--ok-bg
 td.av.free[data-ask]:hover::after{content:'＋打診';font-size:11px;font-weight:700;color:var(--ok)}
 td.av.busy[data-ask]:hover{filter:brightness(.96)}
 td.av .avj.q{color:#8A5A00}td.av .avj.q i{background:#F2C14E;color:#1E2A32;border-radius:3px;padding:0 2px}
+.askline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 8px;padding:6px 10px;border-radius:8px;font-size:12.5px;line-height:1.5}
+.askline.wait{background:#FBEFD0}.askline.ok{background:var(--ok-bg)}.askline.ng{background:var(--warn-bg)}.askline b{font-weight:900}.askline .btn{height:26px}
+.obdraft{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:8px 12px;margin:0 0 10px;font-size:13px;font-weight:700;line-height:1.6}
 .askst{display:inline-block;font-size:10.5px;font-weight:700;padding:0 6px;border-radius:8px;margin-left:4px;vertical-align:1px;border:0;cursor:pointer;font-family:inherit}.askst:hover{filter:brightness(.93)}
 .askst.wait{background:#FBEFD0;color:#8A5A00}.askst.ok{background:var(--ok-bg);color:var(--ok)}.askst.ng{background:var(--warn-bg);color:var(--warn)}
 .seg{display:inline-flex;border:1px solid #8A9792;border-radius:8px;overflow:hidden;margin-right:14px;vertical-align:middle}
@@ -366,7 +369,7 @@ const TABLES={
           map:{case:'case_id',date:'start_date',end:'end_date',order:'order_id',askAt:'ask_at'}, dates:['start_date','end_date'], bools:['auto'], ts:['ask_at']},
   lines: {cols:['id','org','case_id','no','name','spec','qty','unit','sell','price','kind','who','memo','cut','src','order_id'],
           map:{case:'case_id',order:'order_id'}, dates:[], bools:['cut']},
-  orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable'],
+  orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable','token'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
   vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src'],
           map:{full:'full_name',defKind:'def_kind',close:'close_day'}, dates:[], bools:['active','taxable']},
@@ -1527,6 +1530,7 @@ async function createOrder(cid,ids,f,quiet){
   const amt=DB.lines.filter(l=>ids.indexOf(l.id)>=0).reduce((a,l)=>a+lineAmt(l),0);
   DB.orders.push({id:oid,no,case:cid,who:f.who,kind:f.kind,start:f.start,end:f.end,due:f.due,taxable:vendorTaxable(f.who),
     naiyo:f.naiyo,memo:f.memo,st:'下書き',sent:'',
+    token:Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join(''),   /* 発注書のリンク。作ってすぐ送れるように画面で作る */
     name:`${c?c.prop||'':''} ${f.kind}_${f.who||'業者未定'}`.trim()});
   DB.lines.forEach(l=>{ if(ids.indexOf(l.id)>=0){l.order=oid;l.who=f.who;l.kind=f.kind;} });
   /* 「工程を組む」で作った工程があればそれに紐づける（期間を直していればそちらを正にする）。無ければ新しく1本作る */
@@ -1539,6 +1543,7 @@ async function createOrder(cid,ids,f,quiet){
   oSel={}; if(quiet)return; save(); render();
   toast(p?`${no} を作って、工程（${f.kind}／${f.who||'業者未定'}）に紐づけた`
          :`${no} を作った。工程も1本できた（${f.kind}／${f.who||'業者未定'}）`, undo);
+  orderSheet(oid);   /* 作ったらすぐ発注書を見せる。まだ下書き：業者ページには出ない */
 }
 /* 完了予定日＝最後の工程の日。工程が1本も無ければ今の値を残す。完工済みは触らない */
 function recalcPlan(c){
@@ -1620,7 +1625,7 @@ function orderSheet(oid){
   const ls=orderLines(oid), amt=ls.reduce((a,l)=>a+lineAmt(l),0);
   const v=vendorOf(o.who)||{};
   const el=document.createElement('div'); el.className='ask';
-  el.innerHTML=`<div class="ob"><h3>発 注 書</h3>
+  el.innerHTML=`<div class="ob">${o.st==='下書き'?`<div class="obdraft">まだ下書きです。業者にはまだ届いていません。内容を確かめて、メール・LINEで送ったら「送付済にする」を押すと、業者ページに出て承諾できるようになります。</div>`:''}<h3>発 注 書</h3>
     <div class="meta">
       <b>発注No</b><span>${esc(o.no)}</span>
       <b>発注日</b><span>${esc(o.sent||'（未送付）')}</span>
@@ -1747,6 +1752,40 @@ function vLedger(){
 }
 
 /* ================= 右ドロワー（入力） ================= */
+/* 新しい案件：入力欄に入れて「案件を作る」を押したときだけ案件ができる（空の案件が増えないように） */
+function newCaseForm(){
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg" style="max-width:560px"><h4>新しい案件</h4>
+    <p class="note" style="margin:0 0 10px">＊は必ず入れる。ほかは後からでも入れられる。</p>
+    <div class="fg">
+      <div class="full"><label class="fl">物件名・号室 ＊</label><input type="text" id="ncProp" placeholder="例：コンシェリア恵比寿 102"></div>
+      <div class="full"><label class="fl">住所</label><input type="text" id="ncAddr" placeholder="例：東京都渋谷区恵比寿1-1-1（職人の地図に使う）"></div>
+      <div><label class="fl">顧客 ＊</label><select id="ncClient">${opts(CLIENTS(),fClient!=='すべて'?fClient:'','（選ぶ）')}</select></div>
+      <div><label class="fl">区分 ＊</label><select id="ncKind">${opts(KINDS,'')}</select></div>
+      <div><label class="fl">間取り</label><select id="ncMadori"><option value="">（未設定）</option>${MADORI.map(x=>`<option>${x}</option>`).join('')}</select></div>
+      <div><label class="fl">売上（税抜）</label><input type="number" id="ncSales" step="100" value=""></div>
+      <div><label class="fl">起算日（次回入居日）</label><input type="date" id="ncKisan"></div>
+      <div><label class="fl">完了希望日（依頼元）</label><input type="date" id="ncWant"></div>
+      <div class="full"><label class="fl">メモ</label><input type="text" id="ncMemo"></div>
+    </div>
+    <p class="note" id="ncErr" style="color:var(--warn);margin:8px 0 0"></p>
+    <div class="askbtn" style="margin-top:12px"><button class="btn small" id="askNo">やめる</button><button class="btn small primary" id="askYes">案件を作る</button></div></div>`;
+  document.body.appendChild(el);
+  const g=id=>el.querySelector('#'+id);
+  g('ncKind').insertAdjacentHTML('afterbegin','<option value="" selected>（選ぶ）</option>'); g('ncKind').value='';
+  g('ncProp').focus();
+  g('askNo').onclick=()=>el.remove();
+  g('askYes').onclick=()=>{
+    const prop=g('ncProp').value.trim(), client=g('ncClient').value, kind=g('ncKind').value;
+    const miss=[!prop&&'物件名・号室',!client&&'顧客',!kind&&'区分'].filter(Boolean);
+    if(miss.length){ g('ncErr').textContent=miss.join('・')+' を入れてください'; return; }
+    snap(); DB.seq++; const id='N'+DB.seq+DEV;
+    DB.cases.unshift({id,client,prop,kind,addr:g('ncAddr').value.trim(),madori:g('ncMadori').value,
+      kisan:g('ncKisan').value,want:g('ncWant').value,memo:g('ncMemo').value.trim(),
+      st:STATUS[0]||'受付',live:true,ord:'未',sales:+g('ncSales').value||0,add:0,
+      bill:fMonth!=='すべて'&&fMonth!=='未設定'?fMonth+'-01':'',done:'',plan:'',report:'',photo:'未'});
+    el.remove(); selCase=id; save(); render(); toast(`案件「${prop}」を作った`,undo); };
+}
 function drawer(){
   const c=DB.cases.find(x=>x.id===selCase);
   if(!c) return `<div class="drawer"><h3>案件の中身</h3>
@@ -1938,6 +1977,31 @@ function askSheet(cid,who,ds){
 const askBadge=p=>{ const b=(cls,t,tip)=>`<button type="button" class="askst ${cls}" data-askclr="${p.id}" title="${tip}">${t} ×</button>`;
   return p.ask==='打診中'?b('wait','打診中','押すと打診を取り消す（業者ページからも消える）'):p.ask==='受諾'?b('ok','受諾','押すと印を外す'):
     String(p.ask||'').startsWith('辞退')?b('ng',esc(p.ask.slice(3)||'')+'さん辞退','押すと印を外す'):''; };
+function askLine(p){
+  if(!p.ask)return '';
+  if(p.ask==='打診中')return `<div class="askline wait"><b>打診中</b>　${esc(p.who)} さんに ${p.date?md(p.date):''} を聞いています。業者ページで「受けられる／都合が悪い」を押すと、ここに返事が出ます。
+    <button class="btn small" data-askre="${p.id}">もう一度送る</button><button class="btn small" data-askclr="${p.id}">打診を取り消す</button></div>`;
+  if(p.ask==='受諾')return `<div class="askline ok"><b>受けてもらえた</b>　${esc(p.who)} さん ${p.date?md(p.date):''}。次は発注書を送る。
+    ${p.order?'':`<button class="btn small primary" data-ocopen="${p.case}">発注書を作る →</button>`}<button class="btn small" data-askclr="${p.id}">印を外す</button></div>`;
+  if(String(p.ask).startsWith('辞退'))return `<div class="askline ng"><b>${esc(p.ask.slice(3))} さんは都合が悪い</b>　予定表で別の人の日付を押して、もう一度打診する。
+    <button class="btn small" data-askclr="${p.id}">印を外す</button></div>`;
+  return '';
+}
+/* 打診中のものを、もう一度 LINE・メールで送る */
+function askResend(pid){
+  const p=DB.procs.find(x=>x.id===pid); if(!p)return; const c=byId()[p.case], v=vendorOf(p.who); if(!c||!v)return;
+  const m=askMessage(c,p,v);
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="askbox" style="max-width:420px"><h4>${esc(p.who)} さんにもう一度送る</h4>
+    <div class="askbtn" style="flex-wrap:wrap;gap:6px"><button class="btn small primary" data-g="line">LINEで送る</button>
+    <button class="btn small primary" data-g="mail">メールで送る</button><button class="btn small" data-g="copy">文面をコピー</button>
+    <span class="grow"></span><button class="btn small" data-g="no">閉じる</button></div></div>`;
+  document.body.appendChild(el);
+  el.onclick=e=>{ const b=e.target.closest('[data-g]'); if(!b)return; const g=b.dataset.g; el.remove();
+    if(g==='line')window.open('https://line.me/R/share?text='+encodeURIComponent(m.body),'_blank','noopener');
+    else if(g==='mail'){ const a=document.createElement('a'); a.href='mailto:'+encodeURIComponent(v.email||'')+'?subject='+encodeURIComponent(m.subject)+'&body='+encodeURIComponent(m.body); document.body.appendChild(a); a.click(); a.remove(); }
+    else if(g==='copy')copyText(m.body,'打診の文面をコピーした'); };
+}
 function clearAsk(pid){
   const p=DB.procs.find(x=>x.id===pid); if(!p||!p.ask)return;
   if(p.ask==='打診中'&&!confirm(`${p.who} さんへの打診（${p.kind} ${p.date?md(p.date):''}）を取り消します。\n業者ページからも消えます。工程の業者と日付はそのまま残ります。`))return;
@@ -2071,7 +2135,7 @@ function procPanel(c){
         <input type="date" data-pf="date" value="${esc(p.date||'')}" title="開始日">
         <span class="tl">〜</span>
         <input type="date" data-pf="end" value="${esc(p.end&&p.end>p.date?p.end:'')}" title="終了日（1日だけなら空欄）">
-        <button class="x" data-del="${p.id}" title="削除">×</button></div>`).join('')}
+        <button class="x" data-del="${p.id}" title="削除">×</button></div>${askLine(p)}`).join('')}
       <div style="display:flex;gap:7px;margin-top:8px">
         <button class="btn small" id="addProc2">＋ 工程を足す</button>
         ${(()=>{const un=ps.filter(p=>!p.order&&!isStaffJob(p.kind)), ready=un.filter(p=>p.who&&p.date);
@@ -2732,6 +2796,11 @@ function vBill(){
 /* ================= 支払 ================= */
 /* ================= 案件ページ（物件名から開く。案件の全部を1画面に） ================= */
 let cpCase=null, cpBack='ledger';
+/* 見ていた画面（タブ・開いていた案件）を覚えておき、再読み込みしても同じ画面に戻す（このブラウザのタブの中だけ） */
+(()=>{ try{ const v=JSON.parse(sessionStorage.getItem('aw-view')||'null'); if(!v)return;
+  if(typeof v.tab==='string')tab=v.tab; selCase=v.selCase||null; pCase=v.pCase||null; oCase=v.oCase||null;
+  if(v.oView)oView=v.oView; cpCase=v.cpCase||null; if(v.cpBack)cpBack=v.cpBack; }catch(e){} })();
+function keepView(){ try{ sessionStorage.setItem('aw-view',JSON.stringify({tab,selCase,pCase,oCase,oView,cpCase,cpBack})); }catch(e){} }
 function openCasePage(id){ if(tab!=='case')cpBack=tab; cpCase=id; tab='case'; render(); window.scrollTo(0,0); }
 const RST={'報告済':['確認待ち','wip'],'承認':['承認済み','done'],'差し戻し':['差し戻し','']};
 function vCase(){
@@ -3230,7 +3299,7 @@ function fitProc(){
 window.addEventListener('resize',()=>{ if(tab==='order')fitLnw(); if(tab==='proc')fitProc(); });
 function render(){
   if(!SESSION||!ME){ paintLogin(); return; }
-  tipHide();
+  tipHide(); keepView();
   const mem=memView();
   renderTabs();
   paint();
@@ -3535,6 +3604,9 @@ document.addEventListener('click',e=>{
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
   const cpl=e.target.closest('[data-cpage]'); if(cpl){ openCasePage(cpl.dataset.cpage); return; }
   const acl=e.target.closest('[data-askclr]'); if(acl){ e.stopPropagation(); clearAsk(acl.dataset.askclr); return; }
+  const are=e.target.closest('[data-askre]'); if(are){ askResend(are.dataset.askre); return; }
+  /* 予定表の「打診」の札（この案件のもの）を押したら、取り消すか聞く */
+  const aq=e.target.closest('.chip.q[data-tp]'); if(aq){ const p=DB.procs.find(x=>x.id===aq.dataset.tp); if(p&&p.case===pCase){ e.stopPropagation(); clearAsk(p.id); return; } }
   const avo=e.target.closest('[data-avoff]'); if(avo){ const [n,mm]=avo.dataset.avoff.split('|'); askOff(n,mm); return; }
   const ask=e.target.closest('[data-ask]'); if(ask&&pCase){ const i=ask.dataset.ask.lastIndexOf('|'); askSheet(pCase,ask.dataset.ask.slice(0,i),ask.dataset.ask.slice(i+1)); return; }
   const avk=e.target.closest('[data-avk]'); if(avk){ avOne=avk.dataset.avk; avRedraw(); return; }
@@ -3664,12 +3736,7 @@ document.addEventListener('click',e=>{
     const c=DB.cases.find(x=>x.id===dn.dataset.done);
     if(c){snap(); if(c.done)setDone(c,''); else setDone(c,planOf(c)||fmtD(new Date()));
       save();render();} return;}
-  if(e.target.id==='addCase'){
-    snap(); DB.seq++; const id='N'+DB.seq+DEV;
-    DB.cases.unshift({id,client:fClient!=='すべて'?fClient:'',prop:'',kind:'清掃のみ',st:STATUS[0]||'受付',live:true,ord:'未',
-      sales:0,add:0,bill:fMonth!=='すべて'&&fMonth!=='未設定'?fMonth+'-01':'',done:'',plan:'',report:'',photo:'未'});
-    selCase=id; save(); render();
-    const i=document.querySelector('[data-f="prop"]'); if(i)i.focus(); return;}
+  if(e.target.id==='addCase'){ newCaseForm(); return; }
   if(e.target.id==='addProc'&&selCase){
     snap(); DB.pseq++; DB.procs.push({id:'Q'+DB.pseq+DEV,case:selCase,kind:'清掃',who:'',date:'',end:'',amt:0,month:'',prog:''});
     save(); render(); return;}
