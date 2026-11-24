@@ -11,6 +11,7 @@
   }
   window.supabase={createClient:()=>({
     from, rpc:(fn,args)=>call({op:'rpc',fn,args}),
+    functions:{ invoke:(name,opt)=>call({op:'fn',name,body:(opt&&opt.body)||{}}) },   // Edge Function のまね
     storage:{ from:(bucket)=>({
       upload:async(p,file)=>{ const b=new Uint8Array(await file.arrayBuffer()); let s=''; b.forEach(x=>s+=String.fromCharCode(x));
         const r=await call({op:'upload',bucket,path:p,b64:btoa(s)}); return r.error?{data:null,error:r.error}:{data:{path:p},error:null}; },

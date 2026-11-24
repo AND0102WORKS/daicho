@@ -484,6 +484,20 @@ language sql security definer stable as $$
         and l.kind = case when p.kind in ('AW検査','検査') then '自社施工' else p.kind end)
   from procs p join vendors v on v.name=p.who
   where v.token=p_token and v.active and p.ask='打診中' $$;
+-- 業者ページ：案件の詳細（打診のときも見られる）。鍵情報・金額・ほかの業者の名前は出さない。写真は Edge Function case-photos（src/functions/）が期限つきリンクを返す
+create or replace function my_case_info(p_token text, p_proc text) returns jsonb
+language sql security definer stable as $$
+  select jsonb_build_object('prop',c.prop,'addr',c.addr,'client',c.client,
+    'madori',coalesce(nullif(c.madori,''), substring(coalesce(c.memo,'')||' '||coalesce(c.items,'')||' '||coalesce(c.prop,'') from '([1-4](?:SLDK|LDK|DK|K|R))')),
+    'plan',c.plan,'kind',p.kind,'start_date',p.start_date,'end_date',p.end_date,'ask',p.ask,
+    'items',(select coalesce(jsonb_agg(jsonb_build_object('name',l.name,'spec',l.spec,'qty',coalesce(l.cost_qty,l.qty),'unit',coalesce(nullif(l.cost_unit,''),l.unit),'memo',l.memo) order by l.no, l.id),'[]'::jsonb)
+       from lines l where l.case_id=c.id and not l.cut and l.qty>0
+        and l.kind = case when p.kind in ('AW検査','検査') then '自社施工' else p.kind end),
+    'procs',(select coalesce(jsonb_agg(jsonb_build_object('kind',q.kind,'start_date',q.start_date,'end_date',q.end_date,'prog',q.prog,'mine',q.id=p.id) order by q.start_date nulls last, q.id),'[]'::jsonb)
+       from procs q where q.case_id=c.id),
+    'photos',(select count(*) from photos f where f.case_id=c.id))
+  from vendors v join procs p on p.who=v.name join cases c on c.id=p.case_id
+  where v.token=p_token and v.active and p.id=p_proc $$;
 -- ---------- 業者ページ：検査の予定とボリューム ----------
 -- 検査（AW検査）の工程ごとに：間取り（無ければ発注内容・明細の文字から推測）、自社施工の明細の行数、
 -- 同じ現場の他の工程（区分・業者・完了報告の状態）、写真の枚数。業者ページで「大・中・小」と「検査に行ってよいか」を出す
@@ -676,7 +690,7 @@ exception when others then null; end $$;
 
 -- ---------- 仕上げ：security definer 関数の search_path 固定、anon に不要な実行権を外す ----------
 do $$ declare f text; begin
-  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','my_inspections(text,date,date)','my_asks(text)','answer_ask(text,text,boolean)','my_job_orders(text)','my_ask_items(text)','close_period(text,int)','add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','staff_add_photos(text,text,text,jsonb)','staff_del_photo(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
+  foreach f in array array['next_no(text,text)','my_role()','my_org()','audit_row()','handle_new_user()','my_schedule(text,date,date)','order_view(text)','order_accept(text,text)','proc_done(text,text,boolean)','my_vendor(text)','my_orders(text)','reset_vendor_token(text)','my_jobs(text,date,date)','my_inspections(text,date,date)','my_asks(text)','answer_ask(text,text,boolean)','my_job_orders(text)','my_ask_items(text)','my_case_info(text,text)','close_period(text,int)','add_photos(text,text,text,text,jsonb)','my_photos(text,text)','del_my_photo(text,text)','case_photos(text)','staff_add_photos(text,text,text,jsonb)','staff_del_photo(text)','vendor_token_ok(text)','submit_report(text,text,date,text,int,text,jsonb)','cancel_report(text,text)','my_billing(text)','issue_invoice(text,text)','confirm_statement(text,text)'] loop
     execute format('alter function %s set search_path = public', f);
   end loop; end $$;
 revoke execute on function next_no(text,text) from anon;
@@ -741,3 +755,5 @@ revoke execute on function my_job_orders(text) from public;
 grant execute on function my_job_orders(text) to anon, authenticated;
 revoke execute on function my_ask_items(text) from public;
 grant execute on function my_ask_items(text) to anon, authenticated;
+revoke execute on function my_case_info(text,text) from public;
+grant execute on function my_case_info(text,text) to anon, authenticated;

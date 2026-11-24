@@ -10,6 +10,7 @@
 - `src/store4.js` … 保存層（Supabase の読み書き・Realtime・ログイン）
 - `src/build4.py` … `app3.src.html` + `store4.js` + `config.json` → `docs/index.html`
 - `src/schema.sql` … DB の表・権限（RLS）・関数。変更は Supabase の migration として適用する
+- `src/functions/case-photos/` … 業者ページに案件の写真を渡す Edge Function（Supabase に deploy。service_role は Supabase 側の環境変数だけ。verify_jwt は切り、vendors.token で確かめる）
 - `src/config.json` … Supabase の URL と公開キー（anon/publishable）。秘密鍵は置かない
 - `test/` … 手元の PostgreSQL ＋ supabase-js もどきで動かすテスト（Playwright）
 - `docs/test/` … **テスト用の台帳・業者ページ・発注書**（https://and0102works.github.io/daicho/test/）。同じ Supabase の中の別の棚（schema `test`）を見る。写真は `reports-test`。ログインの人と役割は本番と共通（`test.profiles` は `public.profiles` の view）
@@ -20,7 +21,7 @@
 ## 直し方
 1. `src/app3.src.html` または `src/store4.js` を直す
 2. `python3 src/build4.py` で `docs/index.html` を作り直す
-3. `cd test && ./reset.sh && node run.js`（台帳）／`node pages.js`（業者ページ・発注書）／`node report.js`（完了報告〜請求）／`node ask.js`（日程の打診）／`node fix5.js`（新しい案件・発注書の確認・業者ページの発注書リンク・再読み込み）／`node hide.js`（今までの案件を隠す）／`node est.js`（見積の段）／`node modes.js`（明細の表の切り替え・原価の数量と単位）／`node drag.js`（明細の行の並べ替え）／`node kfocus.js`（区分のボタンで工程を足す）／`node site.js`（住所・鍵情報）が通ること。テストごとに `./reset.sh` からやり直す
+3. `cd test && ./reset.sh && node run.js`（台帳）／`node pages.js`（業者ページ・発注書）／`node report.js`（完了報告〜請求）／`node ask.js`（日程の打診）／`node fix5.js`（新しい案件・発注書の確認・業者ページの発注書リンク・再読み込み）／`node hide.js`（今までの案件を隠す）／`node est.js`（見積の段）／`node modes.js`（明細の表の切り替え・原価の数量と単位）／`node drag.js`（明細の行の並べ替え）／`node kfocus.js`（区分のボタンで工程を足す）／`node site.js`（住所・鍵情報）／`node info.js`（業者ページの案件の詳細・写真）が通ること。テストごとに `./reset.sh` からやり直す
 4. commit → push。GitHub Pages（`docs/`）が数十秒で更新される
 5. DB の表を変えるときは `src/schema.sql` を直し、同じ SQL を Supabase の migration として適用（Claude の Supabase コネクタ `apply_migration`、または SQL Editor）
 

@@ -10,6 +10,11 @@ const fs=require('fs'), path=require('path'), STORE=path.join(require('os').tmpd
 async function handle(body){
   const {op,table,rows,ids,range,fn,args,conflict}=body;
   if(op==='upload'){ const f=path.join(STORE,body.bucket,body.path); fs.mkdirSync(path.dirname(f),{recursive:true}); fs.writeFileSync(f,Buffer.from(body.b64,'base64')); return {path:body.path}; }
+  if(op==='fn'&&body.name==='case-photos'){   // src/functions/case-photos と同じ確かめ方：その業者の工程の案件の写真だけ。場所（path）は返さない
+    const b=body.body||{}; const v=await q('select name from vendors where token=$1 and active',[b.token]); if(!v.rows.length)return {photos:[]};
+    const p=await q('select case_id from procs where id=$1 and who=$2',[b.proc,v.rows[0].name]); if(!p.rows.length)return {photos:[]};
+    const ph=await q('select id,cat,phase,who from photos where case_id=$1 order by created_at',[p.rows[0].case_id]);
+    return {photos:ph.rows.map(r=>({id:r.id,cat:r.cat,phase:r.phase,mine:r.who===v.rows[0].name}))}; }
   if(op==='select'){ const r=await q(`select * from ${ident(table)} order by 1 offset $1 limit $2`,[range[0],range[1]-range[0]+1]); return r.rows; }
   if(op==='rpc'){ Object.keys(args).forEach(k=>{ if(args[k]!==null&&typeof args[k]==='object')args[k]=JSON.stringify(args[k]); });   // jsonb の引数
     const names=Object.keys(args); const r=await q(`select * from ${ident(fn)}(${names.map(n=>ident(n)+' => $'+(names.indexOf(n)+1)).join(',')})`,names.map(n=>args[n]));
@@ -32,9 +37,15 @@ const SCHEMA=process.env.FAKESB_SCHEMA||'', DOCS=__dirname+'/../docs/'+(SCHEMA?S
 pg.connect().then(()=>pg.query("select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000aa',false)"))
   .then(()=>SCHEMA?pg.query('set search_path = '+ident(SCHEMA).replace(/"/g,'')+', public, extensions'):null).then(()=>{   // 本部ユーザーとして
   http.createServer((req,res)=>{
+    if(req.method==='GET'&&req.url.startsWith('/functions/v1/case-photos')){   // 画像そのもの（Edge Function の GET のまね）
+      const u=new URL(req.url,'http://x'), g=k=>u.searchParams.get(k)||'';
+      q('select f.path from vendors v join procs p on p.who=v.name join photos f on f.case_id=p.case_id where v.token=$1 and v.active and p.id=$2 and f.id=$3',[g('t'),g('p'),g('i')]).then(r=>{
+        const f=r.rows.length&&path.join(STORE,'reports',r.rows[0].path);
+        if(f&&fs.existsSync(f)){ res.setHeader('Content-Type','image/jpeg'); res.end(fs.readFileSync(f)); } else { res.statusCode=404; res.end(); } }).catch(()=>{ res.statusCode=404; res.end(); });
+      return; }
     if(req.method==='GET'&&req.url.startsWith('/storage/')){ const f=path.join(STORE,decodeURIComponent(req.url.slice(9).split('?')[0]));
       if(fs.existsSync(f)){ res.setHeader('Content-Type','image/jpeg'); res.end(fs.readFileSync(f)); } else { res.statusCode=404; res.end(); } return; }
-    if(req.method==='GET'){ const file=/^\/(me|order)\.html/.test(req.url)?req.url.split('?')[0].slice(1):'index.html'; let h=fs.readFileSync(DOCS+file,'utf8').replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/,'<script src="/fake.js"></script>');
+    if(req.method==='GET'){ const file=/^\/(me|order)\.html/.test(req.url)?req.url.split('?')[0].slice(1):'index.html'; let h=fs.readFileSync(DOCS+file,'utf8').split('https://stcvyehefqnrxibanlxg.supabase.co').join('http://localhost:8787').replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/,'<script src="/fake.js"></script>');
       if(req.url==='/fake.js'){res.setHeader('Content-Type','text/javascript');res.end(fs.readFileSync(__dirname+'/fakesb-client.js'));return;}
       res.setHeader('Content-Type','text/html;charset=utf-8'); res.end(h); return; }
     let b=''; req.on('data',c=>b+=c); req.on('end',async()=>{

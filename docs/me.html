@@ -75,6 +75,10 @@ a.route{display:block;text-align:center;padding:9px;border-radius:8px;border:1px
 .askc{background:#fff;border:2px solid #E0A21B;border-radius:12px;padding:12px 14px;margin:0 0 10px}
 .askc .prop{font-weight:900;font-size:16px;margin-bottom:4px}.askc .meta{font-size:13.5px;color:var(--sub);margin-top:2px}.askc .meta b{color:var(--ink);font-size:15px}
 .aits{margin-top:8px;background:#F7F5F0;border-radius:8px;padding:8px 10px;font-size:13.5px;line-height:1.6}.aits b{display:block;font-size:12.5px;color:var(--sub)}
+.infob{display:block;width:100%;margin-top:8px;padding:9px;border-radius:9px;border:1px solid var(--line);background:#fff;font-size:14px;font-weight:700;color:var(--acc)}
+.ih{margin:0 0 8px;font-size:18px}.it{width:100%;border-collapse:collapse;font-size:14px}.it th{text-align:left;color:var(--sub);font-weight:400;width:6.5em;padding:5px 0;vertical-align:top}.it td{padding:5px 0}
+.isec{margin:14px 0 6px;font-weight:900;font-size:14px;border-top:1px solid var(--line);padding-top:10px}.pcat{font-size:13px;font-weight:700;margin-top:8px}
+.imemo{display:block;color:var(--sub);font-size:12.5px;padding-left:1em}a.t{display:block}
 .noinfo{font-size:12.5px;color:var(--warn);margin-top:4px}
 .askb{display:flex;gap:8px;margin-top:10px}.askb button{flex:1;padding:12px 0;border-radius:10px;font-size:15px;font-weight:900;border:1px solid var(--line);background:#fff}
 .askb .ok{background:var(--acc);color:#fff;border-color:var(--acc)}.askb .ng{color:var(--warn)}
@@ -194,6 +198,7 @@ async function loadOrders(){
       ${a.addr?`<div class="meta">${esc(a.addr)}</div>`:''}
       ${(its=>its.length?`<div class="aits"><b>内容（${its.length}件）</b>${its.map(i=>`<div>・${esc((i.spec?i.spec+' ':'')+i.name)}　${esc(String(+i.qty))}${esc(i.unit||'')}</div>`).join('')}</div>`
         :`<div class="meta">内容の詳しい明細は、発注書でお知らせします</div>`)(AI[a.proc_id]||[])}
+      <button type="button" class="infob" data-info="${esc(a.proc_id)}">案件の詳細・写真を見る</button>
       <div class="askb"><button type="button" class="ok" data-ans="${esc(a.proc_id)}|1">受けられる</button><button type="button" class="ng" data-ans="${esc(a.proc_id)}|0">都合が悪い</button></div></div>`; }).join(''):'';
   const c=document.getElementById('waitCnt'); c.hidden=!(wait.length+ASKS.length); c.textContent=wait.length+ASKS.length;
   if(!rows.length){ el.innerHTML=askHtml+(ASKS.length?'':'<div class="empty">発注はまだありません</div>'); return rows; }
@@ -260,6 +265,7 @@ async function load(){
       ${p.key_info?`<div class="key"><b>鍵</b>${esc(p.key_info)}</div>`:(tent?'':`<div class="noinfo">鍵情報はまだ登録されていません（会社に確認してください）</div>`)}
       ${p.memo?`<div class="memo">${esc(p.memo)}</div>`:''}
       ${ordLink(p)}
+      <button type="button" class="infob" data-info="${esc(p.proc_id)}">案件の詳細・写真を見る</button>
       <div class="row">${q?`<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${q}">${p.addr?'地図':'地図（物件名で検索）'}</a>`:''}
         ${tent?'<span class="meta">まだ確定していない予定です</span>':`<button class="sub" type="button" data-photo="1">写真</button>`+repBox(p)}</div></div>`;
   });
@@ -302,6 +308,43 @@ function weekStrip(rows,a,b,today){
   if(out.length>7)return '';
   const mx=Math.max(...out.map(x=>x[1]));
   return `<div class="wk">${out.map(([ds,n])=>`<div class="${ds===today?'on':''} ${n&&n===mx&&n>=3?'hi':''}">${WD[new Date(ds+'T00:00:00').getDay()]}<b>${n}</b></div>`).join('')}</div><p class="sum" style="margin-top:-4px">検査の件数（日ごと）</p>`;
+}
+/* 案件の詳細：物件・住所・間取り・自分の作業の内容・全体の工程・案件の写真（現地調査など、ほかの人が入れた写真も）。
+   打診のときも見られる。鍵情報と金額は出ない（鍵は発注書と、作業日が近い工程に出る） */
+const PORDER=['現地調査','清掃','クロス貼替','リペア','水道設備','電気設備','その他','完了検査','是正'];
+async function openInfo(pid){
+  const body=document.getElementById('docBody');
+  document.getElementById('docOk').hidden=true; document.getElementById('docPrint').hidden=true;
+  body.innerHTML='<div class="empty">読み込み中…</div>'; document.getElementById('docm').hidden=false;
+  const {data:d,error}=await sb.rpc('my_case_info',{p_token:token,p_proc:pid});
+  if(error||!d){ body.innerHTML='<div class="err">読み込めませんでした。「更新」を押して、もう一度試してください。</div>'; return; }
+  const s=String(d.start_date||'').slice(0,10), e=String(d.end_date||'').slice(0,10), q=encodeURIComponent(d.addr||d.prop||'');
+  const its=d.items||[], ps=d.procs||[];
+  body.innerHTML=`<h3 class="ih">${esc(d.prop||'')}</h3>
+    <table class="it"><tbody>
+      <tr><th>依頼元</th><td>${esc(d.client||'—')}</td></tr>
+      <tr><th>住所</th><td>${d.addr?esc(d.addr):'<span class="noinfo">まだ登録されていません（会社に確認してください）</span>'}
+        ${q?` <a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${q}">地図</a>`:''}</td></tr>
+      <tr><th>間取り</th><td>${esc(d.madori||'—')}</td></tr>
+      <tr><th>あなたの作業</th><td><b>${esc(d.kind||'')}</b>　${s?md(s)+(e&&e!==s?' 〜 '+md(e):''):'日程未定'}${d.ask==='打診中'?'　<span class="tag" style="background:var(--amber-bg)">打診中</span>':''}</td></tr>
+      ${d.plan?`<tr><th>完了予定</th><td>${md(d.plan)}</td></tr>`:''}
+    </tbody></table>
+    <div class="isec">作業の内容（${its.length}件）</div>
+    ${its.length?`<div class="aits" style="margin-top:0">${its.map(i=>`<div>・${esc((i.spec?i.spec+' ':'')+i.name)}　${esc(String(+i.qty))}${esc(i.unit||'')}${i.memo?`<span class="imemo">${esc(i.memo)}</span>`:''}</div>`).join('')}</div>`
+      :'<div class="meta">内容の明細は、発注書でお知らせします</div>'}
+    <div class="isec">この現場の工程</div>
+    <div class="aits" style="margin-top:0">${ps.length?ps.map(x=>{ const a=String(x.start_date||'').slice(0,10), b=String(x.end_date||'').slice(0,10);
+      return `<div${x.mine?' style="font-weight:900"':''}>${a?md(a)+(b&&b!==a?' 〜 '+md(b):''):'日程未定'}　${esc(x.kind)}${x.mine?'（あなた）':''}${x.prog==='完了'?'　完了':''}</div>`; }).join(''):'—'}</div>
+    <div class="isec">写真（${d.photos||0}枚）</div>
+    <div id="infoPh">${d.photos?'<div class="meta">読み込み中…</div>':'<div class="meta">まだ写真はありません</div>'}</div>`;
+  if(!d.photos)return;
+  const r=await sb.functions.invoke('case-photos',{body:{token,proc:pid}});
+  const ph=(r.data&&r.data.photos)||[], box=document.getElementById('infoPh'); if(!box)return;
+  if(!ph.length){ box.innerHTML='<div class="meta">写真を読み込めませんでした</div>'; return; }
+  const cats=[...new Set(ph.map(x=>x.cat))].sort((a,b)=>(PORDER.indexOf(a)+1||99)-(PORDER.indexOf(b)+1||99));
+  box.innerHTML=cats.map(c=>{ const g=ph.filter(x=>x.cat===c);
+    const src=x=>`${SB_URL}/functions/v1/case-photos?t=${encodeURIComponent(token)}&p=${encodeURIComponent(pid)}&i=${encodeURIComponent(x.id)}`;   /* 画像は会社の窓口（Edge Function）を通して受け取る。保存場所は画面に出さない */
+    return `<div class="pcat">${esc(c)}（${g.length}枚）</div><div class="thumbs">${g.map(x=>`<a class="t" href="${esc(src(x))}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(src(x))}" alt="">${x.phase?`<span class="tst">${esc((c==='是正'?'是正':'施工')+x.phase)}</span>`:''}</a>`).join('')}</div>`; }).join('');
 }
 /* 工程カード：発注書へのリンク。承諾待ちなら目立たせる。発注書の無い外注の工程は「発注書待ち」 */
 function ordLink(p){
@@ -503,7 +546,8 @@ document.addEventListener('click',async e=>{
     if(error)alert('発行できませんでした：'+(/empty/.test(error.message)?'この月に請求できる完了報告がありません':error.message));
     await loadBill(); if(!error)openDoc(0); return; }
   const db2=e.target.closest('[data-doc]'); if(db2){ openDoc(+db2.dataset.doc); return; }
-  if(e.target.id==='docClose'){ document.getElementById('docm').hidden=true; return; }
+  if(e.target.id==='docClose'){ document.getElementById('docm').hidden=true; document.getElementById('docPrint').hidden=false; return; }
+  const infb=e.target.closest('[data-info]'); if(infb){ openInfo(infb.dataset.info); return; }
   if(e.target.id==='docPrint'){ window.print(); return; }
   if(e.target.id==='docOk'&&DOCI&&!busy){ busy=true; const {data,error}=await sb.rpc('confirm_statement',{p_token:token,p_id:DOCI.id}); busy=false;
     if(error||data!==true)alert('記録できませんでした。会社に確認してください。'); document.getElementById('docm').hidden=true; loadBill(); return; }
