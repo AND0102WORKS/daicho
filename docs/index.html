@@ -68,7 +68,7 @@ p{margin:0}
   body.slim .top .src{display:none}
 }
 /* 明細の表のいちばん下：合計の行（列の真下にそろえる。スクロールしても下に残る） */
-.ln tfoot td{position:sticky;bottom:0;z-index:3;background:var(--card);border-top:2px solid var(--acc);padding:9px 8px;font-size:14px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ln tfoot td{position:sticky;bottom:0;z-index:3;background:var(--card);border-top:2px solid var(--acc);padding:6px 8px;font-size:14px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
 .ln tfoot td.lab{text-align:left}.ln tfoot td.lab small{font-weight:500;font-size:11.5px;color:var(--sub);margin-left:12px}.ln tfoot td.lab small.w{color:var(--warn);font-weight:700}
 .cpembed .ohead>.bar>h3,.cpembed .ohead>.bar>.cl,.cpembed .ohead>.bar>.st,.cpembed .ohead>.bar>.flag,.cpembed .ohead [data-open]{display:none}
 .cpembed .siteinfo:not(.miss){display:none}
@@ -282,15 +282,15 @@ a.cplink:hover{color:var(--acc);text-decoration-color:var(--acc)}
 .omemo{margin:6px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;line-height:1.5}
 .omemo.open{white-space:normal}
 table.ln{font-size:12.5px;min-width:1260px}
-table.ln tbody td{padding:4px 6px}
-table.ln input,table.ln select{height:30px;font-size:12.5px;padding:0 6px;width:100%}
+table.ln tbody td{padding:2px 6px}
+table.ln input,table.ln select{height:28px;font-size:12.5px;padding:0 6px;width:100%}
 table.ln input[type=checkbox]{width:16px;height:16px;padding:0;accent-color:var(--acc)}
 table.ln td.n{width:30px;text-align:center}
 table.ln th.nmcol,table.ln td.nmcol{min-width:230px}
 table.ln .x{border:none;background:none;color:var(--warn);font-weight:900;cursor:pointer;font-size:15px;padding:0}
 table.ln .x.pk{color:var(--sub);font-weight:600;font-size:11px;margin-left:3px;border:1px solid var(--line);border-radius:4px;padding:1px 4px;vertical-align:middle}
 table.ln .x.pk:hover{color:var(--ink);border-color:var(--ink)}
-table.ln tr.ghead td{background:#F3EFE7;border-top:2px solid var(--line);padding:6px 8px}
+table.ln tr.ghead td{background:#F3EFE7;border-top:2px solid var(--line);padding:3px 8px}
 table.ln td.rn{color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;padding-right:4px}
 .ocol{display:inline-flex;gap:6px;flex-wrap:wrap;margin-left:6px}
 .ocell{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:12px;cursor:pointer}
@@ -352,15 +352,16 @@ table.ln td.ro{color:var(--sub)}
 table.ln td.ldrag{cursor:grab;white-space:nowrap;user-select:none}table.ln td.ldrag .grip{color:#B5B0A4;margin-right:3px;font-size:13px}table.ln td.ldrag:hover .grip{color:var(--acc)}
 table.ln tr.ldragging{opacity:.35}table.ln tr.dropB td{box-shadow:inset 0 3px 0 var(--acc)}table.ln tr.dropA td{box-shadow:inset 0 -3px 0 var(--acc)}
 table.ln .li.dq{border-color:#D99A2B;background:#FFF8E8}
+.estcard.mini{padding:5px 12px;margin-bottom:6px}
 .estcard{padding:10px 14px;margin-bottom:10px;border-left:4px solid var(--acc)}.estcard.won{border-left-color:var(--line);background:var(--card2)}
 .estf{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sub)}.estf input{height:30px}.estf b{font-size:15px;color:var(--ink)}
 label.estup{cursor:pointer}
 .hidebar{display:flex;align-items:center;gap:10px;margin:0 0 8px;font-size:12.5px}.hidebar.off{justify-content:flex-end;margin-bottom:-4px}
 .hidebar.on{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:6px 12px}
 .cpcrumb{color:var(--sub);font-size:12.5px;margin:2px 0 8px}.cpcrumb a{color:var(--acc);font-weight:700;cursor:pointer}
-.cphead{background:var(--card);border:1px solid var(--line);border-radius:12px 12px 0 0;padding:14px 18px 0}
+.cphead{background:var(--card);border:1px solid var(--line);border-radius:12px 12px 0 0;padding:10px 18px 0}
 .cphead h2{display:inline-block;margin:0 8px 0 0;font-size:20px}.cphead .cl,.cphead .st,.cphead .flag{margin-right:6px;vertical-align:3px}
-.cpsub{color:var(--sub);font-size:12.5px;margin:6px 0 10px}
+.cpsub{color:var(--sub);font-size:12.5px;margin:4px 0 4px}
 .cptabs{display:flex;gap:2px;flex-wrap:wrap}.cptabs button{all:unset;cursor:pointer;padding:9px 16px;font-weight:700;font-size:13.5px;color:var(--sub);border-bottom:3px solid transparent}
 .cptabs button:hover{color:var(--ink)}.cptabs button.on{color:var(--acc);border-bottom-color:var(--acc)}
 .cptabs i{font-style:normal;background:var(--warn);color:#fff;border-radius:9px;font-size:10.5px;padding:0 6px;margin-left:5px}
@@ -1683,11 +1684,17 @@ function groupHead(c,g,ncol){
 const EST_MODES=['依頼元の画面で作る','台帳で作る'];
 const estMode=c=>{ const cl=(DB.clients||[]).find(x=>x.name===c.client); return cl&&cl.estMode==='台帳で作る'?'own':'client'; };
 const stIdx=st=>STATUS.indexOf(st);
+let estOpen=false;
 function estPanel(c,sellSum){
   const own=estMode(c)==='own', won=stIdx(c.st)>=stIdx('受注'), sent=stIdx(c.st)>=stIdx('見積提出');
   const amt=own?(won?(c.estAmt||sellSum):(sellSum||c.estAmt||0)):(c.estAmt||0);   /* 台帳で作る：受注までは明細の合計がそのまま見積金額 */
   const file=c.estFile?`<button class="btn small" data-estview="${c.id}">見積書のファイルを見る</button><button class="x" data-estrm="${c.id}" title="ファイルを外す">×</button>`
     :`<label class="btn small estup" title="依頼元に出した見積書の PDF・画像を残しておく">見積書のファイルを付ける<input type="file" id="estFile" accept="application/pdf,image/*" hidden></label>`;
+  if(won&&!estOpen)return `<div class="card estcard won mini"><div class="bar" style="margin:0;gap:10px;flex-wrap:nowrap">
+      <h3 style="font-size:13px;margin:0">① 見積</h3><span class="st done">受注済み</span>
+      <span class="estf">見積金額（税抜）<b>${amt?yen(amt):'—'}</b></span>${c.estDate?`<span class="estf">提出 ${md(c.estDate)}</span>`:''}
+      ${sellSum?`<button class="btn small" data-estimate="${c.id}">見積書を出す</button>`:''}
+      <span class="grow"></span><button class="btn small" data-estopen="1" title="提出日・見積金額・見積書のファイルを直す">ひらく</button></div></div>`;
   return `<div class="card estcard${won?' won':''}">
     <div class="bar" style="margin:0;gap:10px;flex-wrap:wrap">
       <h3 style="font-size:14px;margin:0">① 見積</h3>
@@ -1701,7 +1708,7 @@ function estPanel(c,sellSum){
       ${!own&&sellSum?`<button class="btn small" data-estimate="${c.id}">見積書を出す</button>`:''}
       ${file}
       <span class="grow"></span>
-      ${won?`<span class="st done">受注済み</span>`
+      ${won?`<span class="st done">受注済み</span><button class="btn small" data-estopen="0">たたむ</button>`
            :`${sent?'<span class="st wip">見積提出済み</span>':`<button class="btn small" data-estgo="submit|${c.id}">見積を提出した</button>`}
              <button class="btn small primary" data-estgo="won|${c.id}" title="受注が決まったら押す。ステータスが「受注」になり、下で発注を作る">受注にする</button>`}
     </div>
@@ -1762,7 +1769,7 @@ function orderPanel(c){
   /* 見出しの金額は案件台帳と同じ税抜（税込は吹き出し）。原価＝工程の発注金額の合計（costOf） */
   const pcost=costOf(c.id), freeCost=Math.round(free.reduce((a,l)=>a+lineAmt(l),0));
   const emb=tab==='case';   /* 案件ページの中：物件名は上に出ているので繰り返さない。住所・鍵が未入力のときだけ欄を出す */
-  const head=emb?((!c.addr||!c.keyInfo)?`<div class="card ohead">${siteInfo(c)}</div>`:''):`<div class="card ohead">
+  const head=emb?'':`<div class="card ohead">
     <div class="bar" style="margin:0;gap:8px">
       <h3 style="font-size:16px;margin:0"><a class="cplink" data-cpage="${c.id}" title="案件ページを開く">${esc(c.prop||'（物件未入力）')}</a></h3>
       <span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span>
@@ -1782,7 +1789,7 @@ function orderPanel(c){
     ${ls.filter(l=>!l.order&&!l.price&&+l.qty>0).length?`<button class="btn small" id="applyPrice">単価表から原価を入れる（${ls.filter(l=>!l.order&&!l.price&&+l.qty>0).length}行）</button>`:''}
     <span class="grow"></span>
     ${ls.filter(l=>!l.order).length?'<button class="btn small danger" id="clearLines">明細を全部消す</button>':''}
-    ${(n=>n?`<span class="note" style="margin:0;color:var(--warn);flex-basis:100%" title="見積には出したが発注になっていない項目。現場で改めて提案しないこと">取り消し線の${n}行は依頼元が落とした項目。現場で改めて提案しない</span>`:'')(ls.filter(l=>!(+l.qty>0)).length)}</div>`;
+    ${(n=>n?`<span class="note" style="margin:0;color:var(--warn)" title="取り消し線の行は、見積には出したが発注にならなかった項目（依頼元が落とした）。現場で改めて提案しないこと">取り消し線 ${n}行＝依頼元が落とした項目</span>`:'')(ls.filter(l=>!(+l.qty>0)).length)}</div>`;
   let rowNo=0;
   /* 表の形：見積＝販売と原価（予算）を並べて入れる／発注＝原価と区分・発注先／まとめ＝見るだけ。列のまとまりごとに色を分ける */
   const M=oMode, W={見積:1380,発注:1320,まとめ:940}[M];
@@ -3886,7 +3893,8 @@ function fitLnw(){
   const t=document.querySelector('#main .lnw'); if(!t)return;
   const top=t.getBoundingClientRect().top+window.scrollY, nav=(document.querySelector('.top')||{offsetHeight:0}).offsetHeight;
   let h=window.innerHeight-top-12;
-  if(h<320)h=window.innerHeight-nav-24;   /* 上が詰められないほど低い画面では、従来どおり画面のほぼ全部 */
+  const wide=window.innerWidth>980;   /* 広い画面：メニューは左なので、上の帯の高さは引かない */
+  if(h<window.innerHeight*0.72)h=window.innerHeight-(wide?16:nav+24);   /* 上が詰められないほど低い画面では、従来どおり画面のほぼ全部 */
   t.style.maxHeight=Math.max(240,Math.round(h))+'px';
 }
 /* 工程を組む：日の幅を、表の枠に1か月が収まる幅にする（52〜86px。狭い画面では横にスクロール） */
@@ -3941,7 +3949,7 @@ function withHidden(fn){
   try{ return fn(); } finally { Object.assign(DB,keep); }
 }
 function paint(){
-  document.getElementById('main').innerHTML=hideBar()+inboxBanner()+(
+  document.getElementById('main').innerHTML=(tab==='case'?'':hideBar()+inboxBanner())+(
     tab==='case'?vCase():tab==='ledger'?vLedger():tab==='order'?vOrder():tab==='proc'?vProc():tab==='board'?vBoard():tab==='kanko'?vKanko():tab==='insp'?vInsp():
     tab==='bill'?vBill():tab==='pay'?vPay():tab==='pl'?vPl():tab==='master'?vMaster():vCheck());
 }
@@ -4222,6 +4230,7 @@ document.addEventListener('drop',e=>{ if(tab!=='case'||!isFileDrag(e))return; e.
   if(e.target.closest('#cpDrop'))cpAddFiles(e.dataTransfer.files); else toast('写真は「パソコンから入れる」の枠の中に落としてください'); });
 /* ================= events ================= */
 document.addEventListener('click',e=>{
+  if(e.target.dataset&&e.target.dataset.estopen!=null){ estOpen=e.target.dataset.estopen==='1'; render(); return; }
   if(e.target.id==='menuFold'){ const on=document.body.classList.toggle('slim'); try{ localStorage.setItem('aw-slim',on?'1':''); }catch(x){} render(); return; }
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
   const cpl=e.target.closest('[data-cpage]'); if(cpl){ openCasePage(cpl.dataset.cpage); return; }
