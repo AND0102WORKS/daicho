@@ -20,8 +20,8 @@ function alog(ev,x){ try{ AWLOG.push([new Date().toISOString().slice(5,19),DEV,e
 
 /* ---- 表と JS 項目の対応 ---- */
 const TABLES={
-  cases: {cols:['id','org','client','prop','kind','st','live','ord','ord_by','sales','add_amt','bill','kisan','want','plan','plan_manual','done','keyx','warr','recv','case_no','src','memo','items','report','photo','addr','key_info','madori'],
-          map:{add:'add_amt',planManual:'plan_manual',caseNo:'case_no',ordBy:'ord_by',keyInfo:'key_info'}, dates:['kisan','want','plan','done'], bools:['live','plan_manual']},
+  cases: {cols:['id','org','client','prop','kind','st','live','ord','ord_by','sales','add_amt','bill','kisan','want','plan','plan_manual','done','keyx','warr','recv','case_no','src','memo','items','report','photo','addr','key_info','madori','est_amt','est_date','est_file'],
+          map:{add:'add_amt',planManual:'plan_manual',caseNo:'case_no',ordBy:'ord_by',keyInfo:'key_info',estAmt:'est_amt',estDate:'est_date',estFile:'est_file'}, dates:['kisan','want','plan','done','est_date'], bools:['live','plan_manual']},
   procs: {cols:['id','org','case_id','kind','who','start_date','end_date','amt','month','prog','order_id','auto','memo','ask','ask_at'],
           map:{case:'case_id',date:'start_date',end:'end_date',order:'order_id',askAt:'ask_at'}, dates:['start_date','end_date'], bools:['auto'], ts:['ask_at']},
   lines: {cols:['id','org','case_id','no','name','spec','qty','unit','sell','price','kind','who','memo','cut','src','order_id'],
@@ -30,8 +30,8 @@ const TABLES={
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
   vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src'],
           map:{full:'full_name',defKind:'def_kind',close:'close_day'}, dates:[], bools:['active','taxable']},
-  clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src'],
-          map:{full:'full_name',close:'close_day'}, dates:[], bools:[]},
+  clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src','est_mode'],
+          map:{full:'full_name',close:'close_day',estMode:'est_mode'}, dates:[], bools:[]},
   prices:{cols:['id','org','name','alias','kind','unit','price','who','client','memo'], map:{}, dates:[], bools:[]},
   /* 完了報告（業者ページから出る）。スタッフは承認・差し戻しだけ書く */
   reports:{cols:['id','org','proc_id','case_id','who','done_date','note','base','extra','extra_note','photos','st','reply','approved_at','invoice_id'],
@@ -62,7 +62,7 @@ function recToRow(t,rec){
     if(T.dates.indexOf(c)>=0) v=(v&&/^\d{4}-\d{2}-\d{2}/.test(String(v)))?String(v).slice(0,10):null;
     else if((T.ts||[]).indexOf(c)>=0) v=v?String(v):null;   /* 日時。空は null */
     else if(T.bools.indexOf(c)>=0) v=!!v;
-    else if(['sales','add_amt','amt','sell','price','close_day','site','base','extra','subtotal','tax','total'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
+    else if(['sales','add_amt','est_amt','amt','sell','price','close_day','site','base','extra','subtotal','tax','total'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
     else if(c==='qty') v=(v===''||v==null)?0:(+v||0);
     else if(v===null) v='';
     row[c]=v; });

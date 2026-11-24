@@ -1,0 +1,42 @@
+// 見積の段：依頼元の画面で作る（記録だけ）／台帳で作る（明細から見積書）、見積提出 → 受注（./reset.sh のあとに node est.js）
+const {chromium}=require('playwright');const {spawn}=require('child_process');const {Client}=require('pg');
+(async()=>{
+  const c=new Client({host:'localhost',user:'postgres',password:'pw',database:'aw'}); await c.connect(); const q=(s,p)=>c.query(s,p);
+  await q("update cases set st='受付', sales=0 where id='C1302'");
+  await q("insert into lines(id,case_id,no,name,qty,unit,sell,price,kind) values ('LE1','C1302',1,'ルームクリーニング',1,'式',30000,20000,'清掃') on conflict do nothing");
+  const srv=spawn('node',['fakesb-server.js'],{stdio:'ignore',cwd:__dirname}); await new Promise(r=>setTimeout(r,800));
+  const b=await chromium.launch({args:['--no-proxy-server']}); const p=await b.newPage({viewport:{width:1300,height:900},deviceScaleFactor:2});
+  const errs=[]; p.on('pageerror',e=>errs.push(e.message)); p.on('dialog',x=>x.accept());
+  const res=[]; const ok=(n,cnd,x)=>{ res.push(cnd); console.log((cnd?'OK  ':'NG  ')+n+(x!==undefined?'  '+JSON.stringify(x):'')); };
+  await p.goto('http://localhost:8787/'); await p.waitForTimeout(1500);
+  await p.evaluate(()=>{ tab='order'; oCase='C1302'; oView='make'; render(); }); await p.waitForTimeout(400);
+  const cs=()=>p.evaluate(()=>{ const x=DB.cases.find(c=>c.id==='C1302'); return {st:x.st,estAmt:x.estAmt,estDate:x.estDate,sales:x.sales,estFile:x.estFile}; });
+  ok('① 見積の段が出る（依頼元の画面で作る）', (await p.textContent('.estcard')).includes('依頼元の画面で作る'));
+  await p.click('[data-estgo^="submit"]'); await p.waitForTimeout(300);
+  ok('金額なしでは見積提出にならない', (await cs()).st==='受付');
+  await p.fill('[data-est="estAmt"]','91500'); await p.keyboard.press('Tab'); await p.waitForTimeout(500);
+  await p.setInputFiles('#estFile',{name:'見積書.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4 test')}); await p.waitForTimeout(800);
+  ok('見積書のファイルを付けられる', String((await cs()).estFile).startsWith('staff/C1302/est-'));
+  await p.click('[data-estgo^="submit"]'); await p.waitForTimeout(400);
+  let s=await cs(); ok('見積提出：ステータス・提出日・金額', s.st==='見積提出'&&!!s.estDate&&s.estAmt===91500, s);
+  await p.screenshot({path:__dirname+'/est-client.png',clip:{x:0,y:60,width:1300,height:330}});
+  await p.click('[data-estgo^="won"]'); await p.waitForTimeout(400);
+  s=await cs(); ok('受注にする：受注になり、売上が空なら見積金額が入る', s.st==='受注'&&s.sales===91500, s);
+  await p.waitForTimeout(1500);
+  const db=(await q("select st, est_amt, est_date::text d, est_file<>'' f from cases where id='C1302'")).rows[0];
+  ok('データベースに保存される', db.st==='受注'&&db.est_amt===91500&&!!db.d&&db.f, db);
+  // 台帳で作る
+  await p.evaluate(()=>{ const x=DB.cases.find(c=>c.id==='C1302'); x.st='受付'; x.estAmt=0; x.estDate=''; x.sales=0; clientOf(x.client).estMode='台帳で作る'; save(); render(); }); await p.waitForTimeout(500);
+  const t=await p.textContent('.estcard');
+  ok('台帳で作る：明細の販売の合計が見積金額に出る', t.includes('台帳で作る')&&t.includes('30,000'));
+  await p.screenshot({path:__dirname+'/est-own.png',clip:{x:0,y:60,width:1300,height:330}});
+  await p.click('.estcard [data-estimate]'); await p.waitForTimeout(300);
+  ok('見積書が出る', (await p.textContent('.dlg')).includes('見積書'));
+  await p.click('#askNo'); await p.click('[data-estgo^="submit"]'); await p.waitForTimeout(300);
+  s=await cs(); ok('台帳で作る：見積提出で金額が残る', s.st==='見積提出'&&s.estAmt===30000, s);
+  await p.evaluate(()=>{ tab='master'; mTab='顧客'; render(); }); await p.waitForTimeout(300);
+  ok('顧客マスタに「見積の作り方」', !!(await p.$('.mc[data-f="estMode"]')));
+  ok('ページのエラーなし', errs.length===0, errs);
+  console.log(res.every(Boolean)?'ALL OK':'SOME NG');
+  await c.end(); await b.close(); srv.kill();
+})();

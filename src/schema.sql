@@ -110,6 +110,10 @@ create table if not exists cases (
 );
 alter table cases add column if not exists key_info text default '';
 alter table cases add column if not exists madori text default '';     -- 間取り（1R／1K／1DK／1LDK／2K／2DK／2LDK／3K以上）。検査のボリュームに使う
+alter table cases add column if not exists est_amt int default 0;        -- 見積金額（税抜）
+alter table cases add column if not exists est_date date;                -- 見積の提出日
+alter table cases add column if not exists est_file text default '';     -- 見積書のファイル（保存領域 reports の中の場所）
+alter table clients add column if not exists est_mode text default '';   -- 見積の作り方：''／依頼元の画面で作る／台帳で作る
 alter table vendors add column if not exists kinds text default '';    -- 担当できる区分（カンマ区切り。例：清掃,AW検査）。兼任できる。空なら既定の工程区分だけ
 create index if not exists cases_org_live on cases(org,live);
 create index if not exists cases_client on cases(client);

@@ -295,6 +295,9 @@ td.av.free[data-ask]:hover::after{content:'＋打診';font-size:11px;font-weight
 td.av.busy[data-ask]:hover{filter:brightness(.96)}
 td.av .avj.q{color:#8A5A00}td.av .avj.q i{background:#F2C14E;color:#1E2A32;border-radius:3px;padding:0 2px}
 input.avq{height:30px;width:150px;border-radius:8px;border:1px solid #8A9792;background:#fff;color:var(--ink);padding:0 10px;font-size:13px}
+.estcard{padding:10px 14px;margin-bottom:10px;border-left:4px solid var(--acc)}.estcard.won{border-left-color:var(--line);background:var(--card2)}
+.estf{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sub)}.estf input{height:30px}.estf b{font-size:15px;color:var(--ink)}
+label.estup{cursor:pointer}
 .hidebar{display:flex;align-items:center;gap:10px;margin:0 0 8px;font-size:12.5px}.hidebar.off{justify-content:flex-end;margin-bottom:-4px}
 .hidebar.on{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:6px 12px}
 .askline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 8px;padding:6px 10px;border-radius:8px;font-size:12.5px;line-height:1.5}
@@ -1345,6 +1348,62 @@ function groupHead(c,g){
         <button class="btn small primary" data-gord="${esc(k)}">この区分で発注を作る（${free.length}行）</button>`:''}
     </div></td></tr>`;
 }
+/* ① 見積：依頼元ごとに作り方が違う（顧客マスタの「見積の作り方」）。
+   依頼元＝依頼元の管理画面などで作る → 提出日・金額・見積書のファイルを記録するだけ。
+   台帳＝下の明細（販売単価）から見積書を出す。どちらも「見積提出」→「受注」とステータスを進める */
+const EST_MODES=['依頼元の画面で作る','台帳で作る'];
+const estMode=c=>{ const cl=(DB.clients||[]).find(x=>x.name===c.client); return cl&&cl.estMode==='台帳で作る'?'own':'client'; };
+const stIdx=st=>STATUS.indexOf(st);
+function estPanel(c,sellSum){
+  const own=estMode(c)==='own', won=stIdx(c.st)>=stIdx('受注'), sent=stIdx(c.st)>=stIdx('見積提出');
+  const amt=own?(c.estAmt||sellSum):(c.estAmt||0);
+  const file=c.estFile?`<button class="btn small" data-estview="${c.id}">見積書のファイルを見る</button><button class="x" data-estrm="${c.id}" title="ファイルを外す">×</button>`
+    :`<label class="btn small estup" title="依頼元に出した見積書の PDF・画像を残しておく">見積書のファイルを付ける<input type="file" id="estFile" accept="application/pdf,image/*" hidden></label>`;
+  return `<div class="card estcard${won?' won':''}">
+    <div class="bar" style="margin:0;gap:10px;flex-wrap:wrap">
+      <h3 style="font-size:14px;margin:0">① 見積</h3>
+      <span class="cl" style="background:${own?'var(--c-crea)':'var(--c-buddy)'}" title="顧客マスタの「見積の作り方」で切り替える">${own?'台帳で作る':'依頼元の画面で作る'}</span>
+      <label class="estf">提出日<input type="date" data-est="estDate" value="${esc(c.estDate||'')}"></label>
+      ${own?`<span class="estf">見積金額（税抜）<b>${yen(amt)}</b><small>税込 ${yen(inc(amt))}</small></span>
+             <button class="btn small" data-estimate="${c.id}"${sellSum?'':' disabled title="下の明細に販売単価を入れると出せる"'}>見積書を出す</button>`
+           :`<label class="estf">見積金額（税抜）<input type="number" data-est="estAmt" value="${c.estAmt||''}" step="100" placeholder="0" style="width:110px"></label>
+             ${c.estAmt?`<small class="note" style="margin:0">税込 ${yen(inc(c.estAmt))}</small>`:''}`}
+      ${file}
+      <span class="grow"></span>
+      ${won?`<span class="st done">受注済み</span>`
+           :`${sent?'<span class="st wip">見積提出済み</span>':`<button class="btn small" data-estgo="submit|${c.id}">見積を提出した</button>`}
+             <button class="btn small primary" data-estgo="won|${c.id}" title="受注が決まったら押す。ステータスが「受注」になり、下で発注を作る">受注にする</button>`}
+    </div>
+    ${own&&!sellSum&&!won?'<p class="note" style="margin:6px 0 0">下の明細に項目と販売単価を入れると、見積金額が出て見積書を出せる。</p>':''}</div>`;
+}
+function estGo(cid,what){
+  const c=DB.cases.find(x=>x.id===cid); if(!c)return;
+  const own=estMode(c)==='own', sellSum=linesOf(cid).reduce((a,l)=>a+lineSell(l),0);
+  if(what==='submit'&&!own&&!(+c.estAmt>0)){ toast('見積金額を入れてから押す'); return; }
+  snap('est:'+cid);
+  if(own&&sellSum)c.estAmt=sellSum;
+  if(!c.estDate&&(what==='submit'||c.estAmt))c.estDate=fmtD(new Date());
+  if(what==='submit'){ if(stIdx(c.st)<stIdx('見積提出'))c.st='見積提出'; }
+  else { if(stIdx(c.st)<stIdx('受注'))c.st='受注'; if(!(+c.sales>0)&&+c.estAmt>0)c.sales=+c.estAmt; }
+  save(); render(); toast(what==='submit'?'見積提出にした':'受注にした。下で発注を作る',undo);
+}
+async function estUpload(cid,file){
+  const c=DB.cases.find(x=>x.id===cid); if(!c||!file||!sb)return;
+  if(file.size>15*1024*1024){ toast('ファイルが大きすぎる（15MBまで）'); return; }
+  const ext=(file.name.split('.').pop()||'pdf').toLowerCase().replace(/[^a-z0-9]/g,'')||'pdf';
+  const path=`staff/${cid}/est-${Date.now()}.${ext}`;
+  toast('見積書のファイルを送っている…');
+  const {error}=await sb.storage.from('reports').upload(path,file,{contentType:file.type||'application/pdf',upsert:false});
+  if(error){ toast('送れなかった：'+error.message); return; }
+  snap('estfile:'+cid); c.estFile=path; save(); render(); toast('見積書のファイルを付けた');
+}
+async function estView(cid){
+  const c=DB.cases.find(x=>x.id===cid); if(!c||!c.estFile)return;
+  const w=window.open('','_blank');
+  const {data,error}=await sb.storage.from('reports').createSignedUrl(c.estFile,3600);
+  if(error||!data){ if(w)w.close(); toast('開けなかった'); return; }
+  if(w)w.location=data.signedUrl; else location.href=data.signedUrl;
+}
 function orderPanel(c){
   const ls=linesOf(c.id);
   const free=ls.filter(l=>!l.order);               /* 数量0の行（依頼元が落とした項目）も発注に載せられる */
@@ -1373,7 +1432,7 @@ function orderPanel(c){
         sales?yen(sales-pcost):'—'}</b><small>${sales?Math.round((sales-pcost)/sales*1000)/10+'%':''}</small></span>
     </div>${c.memo?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${esc(c.memo)}</p>`:''}</div>`;
   const tools=`<div class="bar" style="margin:0 0 8px">
-    <h3 style="font-size:14px;margin:0">明細</h3>
+    <h3 style="font-size:14px;margin:0">② 明細と発注</h3>
     ${po.length?`<button class="btn small ${poLinesOf(c.id).length?'':'primary'}" id="impPO">${poLinesOf(c.id).length?'依頼元の発注書を入れ直す':'依頼元の発注書を取り込む'}（${po.length}行）</button>`:''}
     <button class="btn small" id="impLines">業者見積を貼り付けて取り込む</button>
     <button class="btn small" id="addLine">1行足す</button>
@@ -1440,7 +1499,7 @@ function orderPanel(c){
             o.st==='下書き'?'送る':o.st==='送付済'?'承諾':o.st==='承諾'?'完了':'請求済'}</button>`:''}
           <button class="btn small danger" data-odel="${o.id}">取消</button></td></tr>`;}).join('')}
     </tbody></table></div>`:'';
-  return head+tools+bar+table+olist;
+  return head+estPanel(c,sellSum)+tools+bar+table+olist;
 }
 function vOrderList(){
   const FIN=OFIN;
@@ -2727,13 +2786,14 @@ function vMaster(){
   const list=DB.clients.filter(c=>!q||(c.name+c.full+(c.mail||'')).toLowerCase().includes(q));
   return `${mBar(oldN)}
     <div class="tw"><table><thead><tr>
-      <th>入力名</th><th>正式名称</th><th>請求方法</th><th class="r">締日</th><th class="r">サイト</th>
+      <th>入力名</th><th>正式名称</th><th title="依頼元の管理画面などで見積を作るか、この台帳で見積書を作るか。見積・発注タブの「① 見積」が切り替わる">見積の作り方</th><th>請求方法</th><th class="r">締日</th><th class="r">サイト</th>
       <th>送付先</th><th class="r">案件</th><th></th></tr></thead>
     <tbody>${list.map(c=>{const used=DB.cases.filter(x=>x.client===c.name).length;
       return `<tr data-cm="${esc(c.name)}">
       <td><input type="text" class="mc" data-f="name" value="${esc(c.name)}" style="width:158px;height:28px;font-size:12.5px">
         ${c.src&&c.src!=='マスタ'?`<span class="flag" style="display:block;margin-top:2px">${esc(c.src)}</span>`:''}</td>
       <td><input type="text" class="mc" data-f="full" value="${esc(c.full||'')}" style="width:210px;height:28px;font-size:12.5px"></td>
+      <td><select class="mc" data-f="estMode" style="height:28px;font-size:12.5px">${opts(EST_MODES,c.estMode||EST_MODES[0])}</select></td>
       <td><select class="mc" data-f="method" style="height:28px;font-size:12.5px">${opts(['先方規定','弊社仕様'],c.method||'弊社仕様')}</select></td>
       <td class="r"><input type="number" class="mc" data-f="close" value="${c.close||31}" min="1" max="31" style="width:56px;height:28px;font-size:12px"></td>
       <td class="r"><input type="number" class="mc" data-f="site" value="${c.site||30}" min="0" max="120" style="width:56px;height:28px;font-size:12px"></td>
@@ -3656,6 +3716,10 @@ document.addEventListener('click',e=>{
   const avk=e.target.closest('[data-avk]'); if(avk){ avOne=avk.dataset.avk; avRedraw(); return; }
   if(e.target.id==='cpBack'){ tab=cpBack||'ledger'; render(); return; }
   const est=e.target.closest('[data-estimate]'); if(est){ showEstimate(est.dataset.estimate); return; }
+  const eg=e.target.closest('[data-estgo]'); if(eg){ const [w,id]=eg.dataset.estgo.split('|'); estGo(id,w); return; }
+  const ev=e.target.closest('[data-estview]'); if(ev){ estView(ev.dataset.estview); return; }
+  const er=e.target.closest('[data-estrm]'); if(er){ const c=DB.cases.find(x=>x.id===er.dataset.estrm);
+    if(c&&c.estFile&&confirm('見積書のファイルを外しますか？')){ const p0=c.estFile; snap('estfile:'+c.id); c.estFile=''; save(); render(); if(sb)sb.storage.from('reports').remove([p0]); } return; }
   /* ---- 発注 ---- */
   const ov=e.target.closest('[data-ov]'); if(ov){oView=ov.dataset.ov;render();return;}
   const oc=e.target.closest('[data-oc]'); if(oc){oCase=oc.dataset.oc;oSel={};render();return;}
@@ -3948,6 +4012,9 @@ document.addEventListener('change',e=>{
     const f=el.dataset.f; snap('price:'+pr.id+':'+f);
     pr[f]=(f==='price')?(+el.value||0):el.value;
     save();renderSoon();return;}
+  if(el.id==='estFile'){ if(el.files&&el.files[0]&&oCase)estUpload(oCase,el.files[0]); return; }
+  if(el.dataset&&el.dataset.est&&oCase){ const c=DB.cases.find(x=>x.id===oCase); if(c){ snap('est:'+oCase+':'+el.dataset.est);
+    c[el.dataset.est]=el.dataset.est==='estAmt'?(Math.round(+el.value)||0):el.value; save(); renderSoon(); } return; }
   if(el.classList.contains('mc')){
     const tr=el.closest('[data-cm]'); const c=clientOf(tr.dataset.cm); if(!c)return;
     const f=el.dataset.f, old=c.name; snap('client:'+old+':'+f);
