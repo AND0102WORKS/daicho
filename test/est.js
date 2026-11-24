@@ -34,6 +34,16 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   ok('見積書が出る', (await p.textContent('.dlg')).includes('見積書'));
   await p.click('#askNo'); await p.click('[data-estgo^="submit"]'); await p.waitForTimeout(300);
   s=await cs(); ok('台帳で作る：見積提出で金額が残る', s.st==='見積提出'&&s.estAmt===30000, s);
+  // この画面で見積を作る
+  await p.click('[data-ested]'); await p.waitForTimeout(300);
+  await p.click('#edAdd'); await p.waitForTimeout(200);
+  const tr=(await p.$$('.ested tr[data-el]')).pop();
+  await (await tr.$('[data-ef="name"]')).fill('クロス貼替'); await (await tr.$('[data-ef="qty"]')).fill('20'); await p.keyboard.press('Tab'); await p.waitForTimeout(200);
+  const tr2=(await p.$$('.ested tr[data-el]')).pop(); await (await tr2.$('[data-ef="sell"]')).fill('1000'); await p.keyboard.press('Tab'); await p.waitForTimeout(300);
+  ok('見積の入力画面：行を足すと合計が変わる（30,000＋20×1,000）', (await p.textContent('.estsum')).includes('50,000'));
+  await p.screenshot({path:__dirname+'/est-editor.png'});
+  await p.click('#edClose'); await p.waitForTimeout(400);
+  s=await cs(); ok('閉じると見積金額に入り、明細にも行がある', s.estAmt===50000&&await p.evaluate(()=>linesOf('C1302').some(l=>l.name==='クロス貼替'&&l.sell===1000)), s);
   await p.evaluate(()=>{ tab='master'; mTab='顧客'; render(); }); await p.waitForTimeout(300);
   ok('顧客マスタに「見積の作り方」', !!(await p.$('.mc[data-f="estMode"]')));
   ok('ページのエラーなし', errs.length===0, errs);

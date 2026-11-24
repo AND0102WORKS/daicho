@@ -300,6 +300,9 @@ td.av.free[data-ask]:hover::after{content:'＋打診';font-size:11px;font-weight
 td.av.busy[data-ask]:hover{filter:brightness(.96)}
 td.av .avj.q{color:#8A5A00}td.av .avj.q i{background:#F2C14E;color:#1E2A32;border-radius:3px;padding:0 2px}
 input.avq{height:30px;width:150px;border-radius:8px;border:1px solid #8A9792;background:#fff;color:var(--ink);padding:0 10px;font-size:13px}
+.dlg.ested{max-width:900px;width:96vw;max-height:92vh;overflow:auto}.estw{max-height:56vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.estw table.ln{width:100%;min-width:0;table-layout:fixed}.estw .li{width:100%}
+.estsum{min-width:250px;font-size:13px}.estsum div{display:flex;justify-content:space-between;padding:2px 0}.estsum .tot{border-top:2px solid var(--ink);margin-top:4px;padding-top:5px;font-size:15px}
 .estcard{padding:10px 14px;margin-bottom:10px;border-left:4px solid var(--acc)}.estcard.won{border-left-color:var(--line);background:var(--card2)}
 .estf{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sub)}.estf input{height:30px}.estf b{font-size:15px;color:var(--ink)}
 label.estup{cursor:pointer}
@@ -1336,6 +1339,8 @@ function estPanel(c,sellSum){
              <button class="btn small" data-estimate="${c.id}"${sellSum?'':' disabled title="下の明細に販売単価を入れると出せる"'}>見積書を出す</button>`
            :`<label class="estf">見積金額（税抜）<input type="number" data-est="estAmt" value="${c.estAmt||''}" step="100" placeholder="0" style="width:110px"></label>
              ${c.estAmt?`<small class="note" style="margin:0">税込 ${yen(inc(c.estAmt))}</small>`:''}`}
+      <button class="btn small${own&&!sellSum?' primary':''}" data-ested="${c.id}" title="項目・数量・単価を入れて見積書を作る。入れた行は、受注後そのまま発注の明細になる">${sellSum?'見積を直す':'この画面で見積を作る'}</button>
+      ${!own&&sellSum?`<button class="btn small" data-estimate="${c.id}">見積書を出す</button>`:''}
       ${file}
       <span class="grow"></span>
       ${won?`<span class="st done">受注済み</span>`
@@ -1343,6 +1348,51 @@ function estPanel(c,sellSum){
              <button class="btn small primary" data-estgo="won|${c.id}" title="受注が決まったら押す。ステータスが「受注」になり、下で発注を作る">受注にする</button>`}
     </div>
     ${own&&!sellSum&&!won?'<p class="note" style="margin:6px 0 0">下の明細に項目と販売単価を入れると、見積金額が出て見積書を出せる。</p>':''}</div>`;
+}
+/* 見積の入力画面：見積に要る欄だけ（場所・内容・数量・単位・単価）。行は明細そのもの（販売単価）なので、受注後は下の「② 明細と発注」で原価と発注先を入れる */
+function estEditor(cid){
+  const c=DB.cases.find(x=>x.id===cid); if(!c)return;
+  const el=document.createElement('div'); el.className='ask';
+  const rows=()=>linesOf(cid).filter(l=>!l.cut);
+  const sum=()=>rows().reduce((a,l)=>a+lineSell(l),0);
+  const draw=focusId=>{
+    const ls=rows(), sub=sum();
+    el.innerHTML=`<div class="dlg ested"><h4>見積を作る　<span class="note" style="margin:0;font-weight:400">${esc(c.prop||'')}　${esc(c.client||'')}</span></h4>
+      <div class="estw"><table class="ln"><thead><tr><th style="width:34px" class="r">No</th><th style="width:120px">場所</th><th>内容</th>
+        <th class="r" style="width:70px">数量</th><th style="width:66px">単位</th><th class="r" style="width:100px">単価（税抜）</th><th class="r" style="width:96px">金額</th><th style="width:28px"></th></tr></thead><tbody>
+        ${ls.map((l,i)=>`<tr data-el="${l.id}"><td class="r rn">${i+1}</td>
+          <td><input type="text" class="li" data-ef="spec" value="${esc(l.spec||'')}"></td>
+          <td><input type="text" class="li" data-ef="name" value="${esc(l.name||'')}" placeholder="例：ルームクリーニング"></td>
+          <td><input type="number" class="li" data-ef="qty" value="${l.qty}" step="0.1"></td>
+          <td><select class="li" data-ef="unit">${opts(UNITS,l.unit)}</select></td>
+          <td><input type="number" class="li" data-ef="sell" value="${l.sell||''}" step="100" placeholder="0"></td>
+          <td class="r">${lineSell(l)?yen(lineSell(l)):'—'}</td>
+          <td>${l.order?'':`<button class="x" data-edel="${l.id}" title="この行を消す">×</button>`}</td></tr>`).join('')
+          ||'<tr><td colspan="8" class="note" style="padding:14px;text-align:center">まだ行が無い。「＋ 行を足す」で項目を入れる</td></tr>'}
+      </tbody></table></div>
+      <div class="bar" style="margin:10px 0 0;gap:8px;align-items:flex-start">
+        <button class="btn small" id="edAdd">＋ 行を足す</button>
+        <span class="grow"></span>
+        <div class="estsum"><div><span>小計（税抜）</span><b>${yen(sub)}</b></div><div><span>消費税（10%）</span><span>${yen(Math.round(sub*0.1))}</span></div>
+          <div class="tot"><span>合計（税込）</span><b>${yen(inc(sub))}</b></div></div></div>
+      <div class="askbtn" style="margin-top:12px"><button class="btn small" id="edDoc"${sub?'':' disabled'}>見積書を出す（印刷・PDF）</button>
+        <span class="grow"></span><button class="btn small primary" id="edClose">できた（閉じる）</button></div></div>`;
+    if(focusId){ const f=el.querySelector(`[data-el="${focusId}"] [data-ef="name"]`); if(f)f.focus(); }
+  };
+  const done=()=>{ const sub=sum(); if(sub&&c.estAmt!==sub){ c.estAmt=sub; save(); } el.remove(); render(); };
+  el.addEventListener('change',e=>{ const t=e.target, tr=t.closest('[data-el]'); if(!tr||!t.dataset.ef)return;
+    const l=DB.lines.find(x=>x.id===tr.dataset.el); if(!l)return; const f=t.dataset.ef;
+    snap('ested:'+l.id+':'+f); l[f]=(f==='qty'||f==='sell')?(+t.value||0):t.value; save();
+    if(f==='qty'||f==='sell'){ const a=document.activeElement, nf=a&&a.dataset&&a.dataset.ef, nid=a&&a.closest&&a.closest('[data-el]')&&a.closest('[data-el]').dataset.el;
+      draw(); if(nf&&nid){ const x=el.querySelector(`[data-el="${nid}"] [data-ef="${nf}"]`); if(x)x.focus(); } } });
+  el.addEventListener('click',e=>{
+    if(e.target.id==='edAdd'){ snap('ested:add'); DB.lseq++; const id='L'+DB.lseq+DEV;
+      DB.lines.push({id,case:cid,name:'',spec:'',qty:1,unit:'式',sell:0,price:0,kind:'',who:'',memo:''}); save(); draw(id); return; }
+    const d=e.target.closest('[data-edel]'); if(d){ snap('ested:del'); DB.lines=DB.lines.filter(x=>x.id!==d.dataset.edel); save(); draw(); return; }
+    if(e.target.id==='edDoc'){ const sub=sum(); if(sub){ c.estAmt=sub; save(); } showEstimate(cid); return; }
+    if(e.target.id==='edClose'){ done(); return; } });
+  document.body.appendChild(el); draw();
+  if(!rows().length)el.querySelector('#edAdd').click();
 }
 function estGo(cid,what){
   const c=DB.cases.find(x=>x.id===cid); if(!c)return;
@@ -3718,6 +3768,7 @@ document.addEventListener('click',e=>{
   const avk=e.target.closest('[data-avk]'); if(avk){ avOne=avk.dataset.avk; avRedraw(); return; }
   if(e.target.id==='cpBack'){ tab=cpBack||'ledger'; render(); return; }
   const est=e.target.closest('[data-estimate]'); if(est){ showEstimate(est.dataset.estimate); return; }
+  const ed=e.target.closest('[data-ested]'); if(ed){ estEditor(ed.dataset.ested); return; }
   const eg=e.target.closest('[data-estgo]'); if(eg){ const [w,id]=eg.dataset.estgo.split('|'); estGo(id,w); return; }
   const ev=e.target.closest('[data-estview]'); if(ev){ estView(ev.dataset.estview); return; }
   const er=e.target.closest('[data-estrm]'); if(er){ const c=DB.cases.find(x=>x.id===er.dataset.estrm);
