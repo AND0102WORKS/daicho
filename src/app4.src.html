@@ -304,6 +304,8 @@ input.avq{height:30px;width:150px;border-radius:8px;border:1px solid #8A9792;bac
 table.ln th.gs,table.ln td.gs{background:#EEF4FA}table.ln th.gc,table.ln td.gc{background:#FBF3E6}table.ln th.gp,table.ln td.gp{background:#EEF6F0}
 table.ln tr.gh th{text-align:center;font-size:11.5px;padding:3px 4px;border-bottom:0}
 table.ln td.ro{color:var(--sub)}
+table.ln td.ldrag{cursor:grab;white-space:nowrap;user-select:none}table.ln td.ldrag .grip{color:#B5B0A4;margin-right:3px;font-size:13px}table.ln td.ldrag:hover .grip{color:var(--acc)}
+table.ln tr.ldragging{opacity:.35}table.ln tr.dropB td{box-shadow:inset 0 3px 0 var(--acc)}table.ln tr.dropA td{box-shadow:inset 0 -3px 0 var(--acc)}
 table.ln .li.dq{border-color:#D99A2B;background:#FFF8E8}
 .estcard{padding:10px 14px;margin-bottom:10px;border-left:4px solid var(--acc)}.estcard.won{border-left-color:var(--line);background:var(--card2)}
 .estf{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sub)}.estf input{height:30px}.estf b{font-size:15px;color:var(--ink)}
@@ -1300,6 +1302,31 @@ function lineGroups(ls){
   return keys.map(k=>({kind:k,rows:m[k]}));
 }
 /* 大項目の見出し行：区分名・行数・原価、未発注の行があれば 発注先 と「この区分で発注を作る」 */
+/* 明細の行の並べ替え：No の欄をつかんで上下に動かす。別の区分の行の所に落とすと、その区分に入る（発注済みの行は区分を変えられない）。
+   並び順は行番号（no）で持つので、動かしたら案件の全部の行に 1 から振り直す */
+let dragL=null;
+function moveLine(id,tid,after){
+  const a=DB.lines.find(x=>x.id===id), t=DB.lines.find(x=>x.id===tid); if(!a||!t||a===t||a.case!==t.case)return;
+  const ak=a.kind||'', tk=t.kind||'';
+  if(ak!==tk&&a.order){ toast('発注済みの行は、別の区分へは動かせない'); return; }
+  snap('lmove:'+a.case);
+  const list=lineGroups(linesOf(a.case)).flatMap(g=>g.rows).filter(x=>x!==a);
+  if(ak!==tk)a.kind=t.kind||'';
+  list.splice(list.indexOf(t)+(after?1:0),0,a);
+  list.forEach((l,i)=>{ l.no=i+1; });
+  save(); render();
+  toast(ak!==tk?`「${a.name||'明細'}」を ${tk||'区分なし'} に動かした`:`「${a.name||'明細'}」の順番を変えた`,undo);
+}
+document.addEventListener('dragstart',e=>{ const h=e.target.closest&&e.target.closest('[data-ldrag]'); if(!h)return;
+  dragL=h.dataset.ldrag; e.dataTransfer.effectAllowed='move'; try{ e.dataTransfer.setData('text/plain',dragL); }catch(_){}
+  const tr=h.closest('tr'); if(tr){ try{ e.dataTransfer.setDragImage(tr,20,16); }catch(_){} setTimeout(()=>tr.classList.add('ldragging'),0); } });
+const dragClear=()=>document.querySelectorAll('tr.dropA,tr.dropB,tr.ldragging').forEach(x=>x.classList.remove('dropA','dropB','ldragging'));
+document.addEventListener('dragover',e=>{ if(!dragL)return; const tr=e.target.closest&&e.target.closest('tr[data-l]'); if(!tr||tr.dataset.l===dragL)return;
+  e.preventDefault(); e.dataTransfer.dropEffect='move'; const r=tr.getBoundingClientRect(), after=e.clientY>r.top+r.height/2;
+  document.querySelectorAll('tr.dropA,tr.dropB').forEach(x=>x.classList.remove('dropA','dropB')); tr.classList.add(after?'dropA':'dropB'); });
+document.addEventListener('drop',e=>{ if(!dragL)return; const tr=e.target.closest&&e.target.closest('tr[data-l]'); const id=dragL; dragL=null;
+  if(tr&&tr.dataset.l!==id){ e.preventDefault(); const r=tr.getBoundingClientRect(); dragClear(); moveLine(id,tr.dataset.l,e.clientY>r.top+r.height/2); } else dragClear(); });
+document.addEventListener('dragend',()=>{ dragL=null; dragClear(); });
 function groupHead(c,g,ncol){
   const free=g.rows.filter(l=>!l.order), done=g.rows.filter(l=>l.order);
   const amt=free.reduce((a,l)=>a+lineAmt(l),0);
@@ -1433,12 +1460,12 @@ function orderPanel(c){
   const pct=(sv,cs)=>sv?Math.round((sv-cs)/sv*1000)/10+'%':'—';
   const H={
     見積:`<tr class="gh"><th colspan="5"></th><th colspan="4" class="gs">販売（お客様から）</th><th colspan="4" class="gc">原価（業者へ払う見込み）</th><th colspan="2" class="gp">粗利</th><th colspan="2"></th></tr>
-      <tr><th class="r" style="width:34px">No</th><th style="width:30px"></th><th style="width:100px">場所</th><th class="nmcol">名称</th><th style="width:100px">工程区分</th>
+      <tr><th class="r" style="width:46px">No</th><th style="width:30px"></th><th style="width:100px">場所</th><th class="nmcol">名称</th><th style="width:100px">工程区分</th>
       <th class="r gs" style="width:62px">数量</th><th class="gs" style="width:58px">単位</th><th class="r gs" style="width:88px">単価</th><th class="r gs" style="width:84px">金額</th>
       <th class="r gc" style="width:62px">数量</th><th class="gc" style="width:58px">単位</th><th class="r gc" style="width:108px">単価</th><th class="r gc" style="width:84px">金額</th>
       <th class="r gp" style="width:78px">粗利</th><th class="r gp" style="width:54px">率</th><th style="width:120px">備考</th><th style="width:26px"></th></tr>`,
     発注:`<tr class="gh"><th colspan="5"></th><th colspan="4" class="gs">販売（お客様から・見るだけ）</th><th colspan="4" class="gc">原価（業者へ。発注書に出る）</th><th colspan="2" class="gp">粗利</th><th colspan="2"></th></tr>
-      <tr><th class="r" style="width:34px">No</th><th style="width:30px"></th><th style="width:100px">場所</th><th class="nmcol">名称</th><th style="width:100px">工程区分</th>
+      <tr><th class="r" style="width:46px">No</th><th style="width:30px"></th><th style="width:100px">場所</th><th class="nmcol">名称</th><th style="width:100px">工程区分</th>
       <th class="r gs" style="width:52px">数量</th><th class="gs" style="width:44px">単位</th><th class="r gs" style="width:80px">単価</th><th class="r gs" style="width:84px">金額</th>
       <th class="r gc" style="width:62px">数量</th><th class="gc" style="width:58px">単位</th><th class="r gc" style="width:108px">単価</th><th class="r gc" style="width:84px">金額</th>
       <th class="r gp" style="width:78px">粗利</th><th class="r gp" style="width:54px">率</th><th style="width:120px">備考</th><th style="width:26px"></th></tr>`,
@@ -1447,7 +1474,8 @@ function orderPanel(c){
   const ncol={見積:17,発注:17,まとめ:10}[M];
   const row=l=>{const o=l.order?DB.orders.find(x=>x.id===l.order):null;
     const sv=lineSell(l), cs=lineAmt(l), cut=!(+l.qty>0);   /* 数量0＝発注に出せない行。cut は由来の印 */
-    const no=`<td class="r rn">${++rowNo}</td>`;
+    const no=M==='まとめ'?`<td class="r rn">${++rowNo}</td>`
+      :`<td class="r rn ldrag" draggable="true" data-ldrag="${l.id}" title="つかんで上下に動かすと、行の順番を変えられる"><span class="grip">⠿</span>${++rowNo}</td>`;
     const chk=`<td class="n">${l.order||M==='まとめ'?'':`<input type="checkbox" class="lchk" ${oSel[l.id]?'checked':''}>`}</td>`;
     const spec=`<td><input type="text" class="li" data-lf="spec" value="${esc(l.spec||'')}"></td>`;
     const name=`<td class="nmcol" style="white-space:nowrap"><input type="text" class="li" data-lf="name" value="${esc(l.name)}"${cut?' style="width:calc(100% - 78px)"':''}>${
