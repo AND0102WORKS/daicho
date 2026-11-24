@@ -18,7 +18,9 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   ok('PDF：6行目 場所なし／諸経費／35,990', rows[5]==='|諸経費|1|式|35990|', rows[5]);
   ok('PDF：合計が発注書の小計と合う（225,740）', (await p.textContent('.dlg.ested')).includes('225,740'));
   await p.screenshot({path:__dirname+'/pdf.png'});
+  ok('PDF：上に合計が出て、書類の合計と合っていると出る', (await p.textContent('.pdftot')).includes('225,740')&&(await p.textContent('.pdftot .ok')).includes('合っている'), await p.textContent('.pdftot'));
   await p.click('.dlg.ested tr[data-i="5"] [data-pf="on"]'); await p.waitForTimeout(300);
+  ok('PDF：行を外すと、書類の合計と違うと出る', (await p.textContent('.pdftot .ng')).includes('違う'));
   await p.click('#askYes'); await p.waitForTimeout(1800);
   const db=await q("select name,spec,qty::float,unit,sell,price,src from lines where case_id='C1302' and src='PDF' order by no");
   ok('PDF：5行が販売の単価で入る（原価は0）', db.length===5&&db[0].sell===1500&&db[0].price===0&&db[0].qty===42.5&&db[0].spec==='LD', db.map(r=>r.name+':'+r.sell));

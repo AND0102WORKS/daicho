@@ -330,6 +330,9 @@ label.estup{cursor:pointer}
 .siteinfo{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px;font-size:12.5px;color:var(--sub)}
 .siteinfo label{display:inline-flex;align-items:center;gap:6px;flex:1 1 300px}.siteinfo input{flex:1;height:30px;min-width:0}
 .siteinfo input.ng{border-color:var(--warn);background:var(--warn-bg)}
+.pdftot{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:0 0 10px;padding:10px 14px;border:1px solid var(--line,#ddd);border-radius:10px;background:#f6faf8}
+.pdftot>div{display:flex;flex-direction:column;line-height:1.25}.pdftot small{font-size:11px;color:#667}.pdftot b{font-size:22px}.pdftot span{font-size:15px}
+.pdftot .grow{flex:1}.pdftot .ok,.pdftot .ng{font-weight:700;font-size:13.5px;padding:6px 12px;border-radius:8px}.pdftot .ok{background:#e3f4ea;color:#17683a}.pdftot .ng{background:#fde8e6;color:#b3261e}
 .pdfmeta{margin-top:12px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--card2);font-size:12.5px}
 .pdfmeta label{display:flex;align-items:center;gap:6px;margin-top:5px}.pdfmeta label .li{flex:1;height:28px}.pdfmeta small{color:var(--sub);white-space:nowrap}
 .askits{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0 0 10px;font-size:12.5px;line-height:1.6;max-height:180px;overflow:auto}.askits b{display:block;margin-bottom:2px}
@@ -1408,7 +1411,15 @@ function pdfToLines(rows){
       }
     }
   }
-  return {lines:out.filter(l=>l.name),header:hi>=0,meta:docMeta(rows)};
+  return {lines:out.filter(l=>l.name),header:hi>=0,meta:Object.assign(docMeta(rows),{tot:docTotal(rows)})};
+}
+/* 書類に書いてある合計：小計（税抜）・消費税・合計（税込）。読み取った明細の合計と見比べるために使う */
+function docTotal(rows){
+  const t={};
+  rows.forEach(r=>{ const tx=r.map(c=>c.t).join(' ').replace(/[（(]?\s*\d+\s*[%％]\s*[）)]?/g,'');
+    const k=/小\s*計|税\s*抜|税\s*別/.test(tx)?'sub':/消\s*費\s*税/.test(tx)?'tax':/税\s*込|合\s*計|総\s*額|御?請求金?額/.test(tx)?'total':''; if(!k||t[k]!=null)return;
+    const m=/(?:小\s*計|税\s*抜|税\s*別|消\s*費\s*税|税\s*込|合\s*計|総\s*額|請求金?額)[^\d]*?(\d[\d,]*)/.exec(tx); if(!m)return; const v=+m[1].replace(/,/g,''); if(v>0)t[k]=v; });
+  return t;
 }
 /* 書類の上の方に書いてある案件の情報：住所・鍵の場所・間取り・日付。ラベル（物件所在地：など）の右の文字を読む */
 function docMeta(rows){
@@ -1451,9 +1462,17 @@ function pdfConfirm(cid,fname,lines,warn,meta){
   const el=document.createElement('div'); el.className='ask'; let as='sell'; const both=lines.some(l=>l.cprice!=null);
   /* 書類から読んだ案件の情報。案件の欄が空のものだけ、最初からチェックを入れる */
   const cs=DB.cases.find(x=>x.id===cid)||{}, ML=[['addr','住所','addr'],['key','鍵情報','keyInfo'],['madori','間取り','madori'],['want','完了希望日','want'],['kisan','起算日','kisan']];
-  const mrows=ML.filter(([k])=>meta&&meta[k]).map(([k,l,f])=>({k,l,f,v:meta[k],on:!cs[f]&&meta[k]!==cs[f],cur:cs[f]||''}));
+  const mrows=ML.filter(([k])=>meta&&meta[k]&&typeof meta[k]==='string').map(([k,l,f])=>({k,l,f,v:meta[k],on:!cs[f]&&meta[k]!==cs[f],cur:cs[f]||''}));
   const sum=()=>lines.filter(l=>!l.off).reduce((a,l)=>a+Math.round((+l.qty||0)*(+l.price||0)),0);
-  const draw=()=>{ el.innerHTML=`<div class="dlg ested"><h4>読み取った明細　<span class="note" style="margin:0;font-weight:400">${esc(fname)}</span></h4>
+  const dt=(meta&&meta.tot)||{}, csum=()=>lines.filter(l=>!l.off).reduce((a,l)=>a+Math.round((+l.qty||0)*(+l.cprice||0)),0);
+  const totBox=()=>{ if(!lines.length)return ''; const v=sum(), tax=Math.round(v*0.1);
+    const ref=dt.sub!=null?dt.sub:(dt.total!=null&&dt.tax!=null?dt.total-dt.tax:null), same=ref!=null?ref===v:(dt.total!=null?(dt.total===v||dt.total===v+tax):null);
+    return `<div class="pdftot"><div><small>読み取った合計（税抜）</small><b>${yen(v)}</b></div><div><small>消費税 10%</small><span>${yen(tax)}</span></div><div><small>税込</small><span>${yen(v+tax)}</span></div>
+      ${both?`<div><small>原価の合計</small><span>${yen(csum())}</span></div><div><small>粗利</small><span>${yen(v-csum())}</span></div>`:''}
+      <div class="grow"></div>${same===true?`<div class="ok">書類の合計と合っている<small>書類：${yen(ref!=null?ref:dt.total)}${ref==null?'':'（税抜）'}</small></div>`
+        :same===false?`<div class="ng">書類の合計と違う<small>書類：${yen(ref!=null?ref:dt.total)}${ref!=null?'（税抜）':''}　差 ${yen(v-(ref!=null?ref:dt.total))}</small></div>`
+        :`<div class="na"><small>書類から合計を読めなかった。元の書類と見比べてください</small></div>`}</div>`; };
+  const draw=()=>{ el.innerHTML=`<div class="dlg ested"><h4>読み取った明細　<span class="note" style="margin:0;font-weight:400">${esc(fname)}</span></h4>${totBox()}
     ${warn==='scan'||warn==='none'?`<p class="note" style="color:var(--warn);margin:0 0 8px">${warn==='scan'?'文字を読み取れなかった。':'文字は読めたが、明細の行（名称と数量・金額が並ぶ行）を見つけられなかった。'}写真のときは、明るい所で、表をまっすぐ大きく写すと読みやすい。「貼り付けて取り込む」か、1行ずつ入れることもできる。</p>`
       :warn==='ocr'?`<p class="note" style="color:var(--warn);margin:0 0 8px">写真・スキャンから文字を読んだ（OCR）。読み違いが出やすいので、名称・数量・単価を元の書類と見比べて、直してから取り込んでください。</p>`
       :warn==='nohead'?`<p class="note" style="color:var(--warn);margin:0 0 8px">表の見出し（名称・数量・単価 など）が見つからなかったので、文字と数字の並びから読んだ。違う所を直してから取り込んでください。</p>`
