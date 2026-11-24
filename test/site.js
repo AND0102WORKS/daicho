@@ -1,0 +1,34 @@
+// 現場の情報（住所・鍵情報）：台帳の案件の見出しの下で入れる → 業者ページの工程・発注書に出る（./reset.sh のあとに node site.js）
+const {chromium}=require('playwright');const {spawn}=require('child_process');const {Client}=require('pg');
+(async()=>{
+  const c=new Client({host:'localhost',user:'postgres',password:'pw',database:'aw'}); await c.connect(); const q=(s,p)=>c.query(s,p);
+  const VT='toksite0000000000000001';
+  await q("update vendors set token=$1, active=true where id='V1'",[VT]);
+  await q("update cases set addr='', key_info='' where id='C1302'");
+  await q("update procs set who='長沼俊介', start_date=current_date where id='P1'");
+  const srv=spawn('node',['fakesb-server.js'],{stdio:'ignore',cwd:__dirname}); await new Promise(r=>setTimeout(r,800));
+  const b=await chromium.launch({args:['--no-proxy-server']}); const p=await b.newPage({viewport:{width:1300,height:900},deviceScaleFactor:2});
+  const errs=[]; p.on('pageerror',e=>errs.push(e.message)); p.on('dialog',x=>x.accept());
+  const res=[]; const ok=(n,cnd,x)=>{ res.push(cnd); console.log((cnd?'OK  ':'NG  ')+n+(x!==undefined?'  '+JSON.stringify(x):'')); };
+  const v=await b.newPage({viewport:{width:390,height:800},deviceScaleFactor:2}); v.on('pageerror',e=>errs.push('me:'+e.message));
+  const me=async()=>{ await v.goto('http://localhost:8787/me.html?t='+VT); await v.waitForTimeout(1200); await v.click('[data-m="sched"]'); await v.waitForTimeout(1000); return (await v.textContent('#list')).replace(/\s+/g,' '); };
+  let t=await me();
+  ok('未入力のとき：業者ページに「まだ登録されていません」', t.includes('住所はまだ登録されていません')&&t.includes('鍵情報はまだ登録されていません'));
+  await p.goto('http://localhost:8787/'); await p.waitForTimeout(1500);
+  await p.evaluate(()=>{ tab='proc'; pCase='C1302'; render(); }); await p.waitForTimeout(400);
+  ok('工程を組む：住所・鍵情報の欄が赤く出る', (await p.$$('.siteinfo input.ng')).length===2);
+  await p.screenshot({path:__dirname+'/site.png',clip:{x:300,y:130,width:1000,height:190}});
+  await p.fill('[data-cinfo="addr"]','東京都中央区日本橋本町1-1-1'); await p.keyboard.press('Tab'); await p.waitForTimeout(300);
+  await p.fill('[data-cinfo="keyInfo"]','キーボックス 玄関ノブ 1234'); await p.keyboard.press('Tab'); await p.waitForTimeout(1800);
+  ok('入れると赤が消える', (await p.$$('.siteinfo input.ng')).length===0);
+  const db=(await q("select addr,key_info from cases where id='C1302'")).rows[0];
+  ok('データベースに保存', db.addr==='東京都中央区日本橋本町1-1-1'&&db.key_info==='キーボックス 玄関ノブ 1234', db);
+  await p.evaluate(()=>{ tab='order'; oCase='C1302'; render(); }); await p.waitForTimeout(300);
+  ok('見積・発注タブにも同じ欄', await p.$eval('[data-cinfo="addr"]',x=>x.value)==='東京都中央区日本橋本町1-1-1');
+  t=await me();
+  ok('業者ページの工程に住所と鍵が出る', t.includes('東京都中央区日本橋本町1-1-1')&&t.includes('キーボックス 玄関ノブ 1234'), t.slice(0,160));
+  await v.screenshot({path:__dirname+'/site-me.png'});
+  ok('ページのエラーなし', errs.length===0, errs);
+  console.log(res.every(Boolean)?'ALL OK':'SOME NG');
+  await c.end(); await b.close(); srv.kill();
+})();

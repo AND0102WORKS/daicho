@@ -317,6 +317,9 @@ table.ln .li.dq{border-color:#D99A2B;background:#FFF8E8}
 label.estup{cursor:pointer}
 .hidebar{display:flex;align-items:center;gap:10px;margin:0 0 8px;font-size:12.5px}.hidebar.off{justify-content:flex-end;margin-bottom:-4px}
 .hidebar.on{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:6px 12px}
+.siteinfo{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px;font-size:12.5px;color:var(--sub)}
+.siteinfo label{display:inline-flex;align-items:center;gap:6px;flex:1 1 300px}.siteinfo input{flex:1;height:30px;min-width:0}
+.siteinfo input.ng{border-color:var(--warn);background:var(--warn-bg)}
 .askits{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0 0 10px;font-size:12.5px;line-height:1.6;max-height:180px;overflow:auto}.askits b{display:block;margin-bottom:2px}
 .prow.pflash{outline:3px solid #E0A21B;outline-offset:2px;border-radius:8px;transition:outline-color .3s}
 button.kk.has small{margin-left:6px;font-weight:400;font-size:10.5px;background:rgba(255,255,255,.75);border-radius:8px;padding:0 6px}
@@ -1424,6 +1427,14 @@ async function estView(cid){
   if(error||!data){ if(w)w.close(); toast('開けなかった'); return; }
   if(w)w.location=data.signedUrl; else location.href=data.signedUrl;
 }
+/* 現場の情報（住所・鍵情報）：業者ページと発注書にそのまま出る。空だと業者が現場に行けないので、空の欄は赤くして知らせる */
+function siteInfo(c){
+  const na=!c.addr, nk=!c.keyInfo;
+  return `<div class="siteinfo${na||nk?' miss':''}">
+    <label>住所<input type="text" data-cinfo="addr" data-c="${c.id}" value="${esc(c.addr||'')}" placeholder="未入力：業者の地図に出ない" class="${na?'ng':''}"></label>
+    <label>鍵情報<input type="text" data-cinfo="keyInfo" data-c="${c.id}" value="${esc(c.keyInfo||'')}" placeholder="未入力：キーボックスの場所・番号など" class="${nk?'ng':''}"></label>
+    <span class="note" style="margin:0" title="住所は業者ページの工程と発注書に出る。鍵情報は発注書と、業者ページの工程（作業日の3日前〜終了の翌日だけ）に出る。打診の段階では鍵情報は出ない">業者ページ・発注書に出る</span></div>`;
+}
 function orderPanel(c){
   const ls=linesOf(c.id);
   const free=ls.filter(l=>!l.order);               /* 数量0の行（依頼元が落とした項目）も発注に載せられる */
@@ -1451,7 +1462,7 @@ function orderPanel(c){
       ${(()=>{ const sb_=sales||sellSum, ct=pcost+freeCost, est=!!freeCost||!sales;   /* 見込み＝（売上。未入力なら明細の販売計）−（発注済みの原価＋未発注の明細の原価） */
         return `<span class="okpi" title="${est?`見込み：${sales?'売上':'明細の販売計'} ${yen(sb_)} −（発注済みの原価 ${yen(pcost)} ＋ 未発注の明細の原価 ${yen(freeCost)}）。明細の原価を直すとすぐ変わる`:`売上 − 発注済みの原価。税込 ${yen(inc(sales)-costIncOf(c.id))}`}"><small>粗利${est?'（見込み）':''} 税抜</small><b style="color:${sb_-ct<0?'var(--warn)':'var(--ok)'}">${
         sb_?yen(sb_-ct):'—'}</b><small>${sb_?Math.round((sb_-ct)/sb_*1000)/10+'%':''}</small></span>`; })()}
-    </div>${c.memo?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${esc(c.memo)}</p>`:''}</div>`;
+    </div>${siteInfo(c)}${c.memo?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${esc(c.memo)}</p>`:''}</div>`;
   const tools=`<div class="bar" style="margin:0 0 8px">
     <h3 style="font-size:14px;margin:0">② 明細</h3>
     <span class="mseg" title="表の形を切り替える">${[['見積','見積を作る（販売と原価の見込み）'],['発注','発注する（原価・区分・発注先）'],['まとめ','まとめ（見るだけ）']].map(([k,t])=>
@@ -1771,7 +1782,7 @@ function orderSheet(oid){
   const ls=orderLines(oid), amt=ls.reduce((a,l)=>a+lineAmt(l),0);
   const v=vendorOf(o.who)||{};
   const el=document.createElement('div'); el.className='ask';
-  el.innerHTML=`<div class="ob">${o.st==='下書き'?`<div class="obdraft">まだ下書きです。業者にはまだ届いていません。内容を確かめて、メール・LINEで送ったら「送付済にする」を押すと、業者ページに出て承諾できるようになります。</div>`:''}<h3>発 注 書</h3>
+  el.innerHTML=`<div class="ob">${o.st!=='完了'&&o.st!=='請求済'&&(!c.addr||!c.keyInfo)?`<div class="obdraft" style="background:var(--warn-bg);border-color:var(--warn)">この案件は ${[!c.addr&&'住所',!c.keyInfo&&'鍵情報'].filter(Boolean).join('・')} が未入力です。業者に現場の場所や入り方が伝わりません。この画面を閉じて、案件の見出しの下の欄に入れてください。</div>`:''}${o.st==='下書き'?`<div class="obdraft">まだ下書きです。業者にはまだ届いていません。内容を確かめて、メール・LINEで送ったら「送付済にする」を押すと、業者ページに出て承諾できるようになります。</div>`:''}<h3>発 注 書</h3>
     <div class="meta">
       <b>発注No</b><span>${esc(o.no)}</span>
       <b>発注日</b><span>${esc(o.sent||'（未送付）')}</span>
@@ -1908,6 +1919,7 @@ function newCaseForm(){
     <div class="fg">
       <div class="full"><label class="fl">物件名・号室 ＊</label><input type="text" id="ncProp" placeholder="例：コンシェリア恵比寿 102"></div>
       <div class="full"><label class="fl">住所</label><input type="text" id="ncAddr" placeholder="例：東京都渋谷区恵比寿1-1-1（職人の地図に使う）"></div>
+      <div class="full"><label class="fl">鍵情報</label><input type="text" id="ncKey" placeholder="例：キーボックス 玄関ドアノブ 番号1234（発注書と、作業日が近い業者のページに出る）"></div>
       <div><label class="fl">顧客 ＊</label><select id="ncClient">${opts(CLIENTS(),fClient!=='すべて'?fClient:'','（選ぶ）')}</select></div>
       <div><label class="fl">区分 ＊</label><select id="ncKind">${opts(KINDS,'')}</select></div>
       <div><label class="fl">間取り</label><select id="ncMadori"><option value="">（未設定）</option>${MADORI.map(x=>`<option>${x}</option>`).join('')}</select></div>
@@ -1929,7 +1941,7 @@ function newCaseForm(){
     if(miss.length){ g('ncErr').textContent=miss.join('・')+' を入れてください'; return; }
     snap(); DB.seq++; const id='N'+DB.seq+DEV;
     DB.cases.unshift({id,client,prop,kind,addr:g('ncAddr').value.trim(),madori:g('ncMadori').value,
-      kisan:g('ncKisan').value,want:g('ncWant').value,memo:g('ncMemo').value.trim(),
+      kisan:g('ncKisan').value,want:g('ncWant').value,memo:g('ncMemo').value.trim(),keyInfo:g('ncKey').value.trim(),
       st:STATUS[0]||'受付',live:true,ord:'未',sales:+g('ncSales').value||0,add:0,
       bill:fMonth!=='すべて'&&fMonth!=='未設定'?fMonth+'-01':'',done:'',plan:'',report:'',photo:'未'});
     el.remove(); selCase=id; save(); render(); toast(`案件「${prop}」を作った`,undo); };
@@ -2271,6 +2283,7 @@ function procPanel(c){
         <span class="okpi" title="税込 ${yen(inc(sales)-costIncOf(c.id))}"><small>粗利 税抜</small><b>${yen(sales-cost)}</b><small>${sales?((sales-cost)/sales*100).toFixed(0)+'%':''}</small></span>
         ${c.done?`<span class="okpi"><small>完工</small><b>${md(c.done)}</b></span>`:''}
         <button class="btn small" data-open="${c.id}">案件台帳で開く</button></div>
+      ${siteInfo(c)}
       ${c.memo||c.items?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${
         c.memo?`<b>発注内容：</b>${esc(c.memo)}`:''}${c.memo&&c.items?'　':''}${c.items?`<b>削除／追加項目：</b>${esc(c.items)}`:''}</p>`:''}
       ${(()=>{let nk=needKinds(c); const guess=nk.length;
@@ -4110,6 +4123,7 @@ document.addEventListener('change',e=>{
     const f=el.dataset.f; snap('price:'+pr.id+':'+f);
     pr[f]=(f==='price')?(+el.value||0):el.value;
     save();renderSoon();return;}
+  if(el.dataset&&el.dataset.cinfo){ const c=DB.cases.find(x=>x.id===el.dataset.c); if(c){ snap('cinfo:'+c.id+':'+el.dataset.cinfo); c[el.dataset.cinfo]=el.value.trim(); save(); renderSoon(); } return; }
   if(el.id==='estFile'){ if(el.files&&el.files[0]&&oCase)estUpload(oCase,el.files[0]); return; }
   if(el.dataset&&el.dataset.est&&oCase){ const c=DB.cases.find(x=>x.id===oCase); if(c){ snap('est:'+oCase+':'+el.dataset.est);
     c[el.dataset.est]=el.dataset.est==='estAmt'?(Math.round(+el.value)||0):el.value; save(); renderSoon(); } return; }
