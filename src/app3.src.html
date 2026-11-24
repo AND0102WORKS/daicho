@@ -312,6 +312,9 @@ table.ln .li.dq{border-color:#D99A2B;background:#FFF8E8}
 label.estup{cursor:pointer}
 .hidebar{display:flex;align-items:center;gap:10px;margin:0 0 8px;font-size:12.5px}.hidebar.off{justify-content:flex-end;margin-bottom:-4px}
 .hidebar.on{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:6px 12px}
+.askits{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0 0 10px;font-size:12.5px;line-height:1.6;max-height:180px;overflow:auto}.askits b{display:block;margin-bottom:2px}
+.prow.pflash{outline:3px solid #E0A21B;outline-offset:2px;border-radius:8px;transition:outline-color .3s}
+button.kk.on{cursor:pointer;border:none;font-family:inherit}
 .askline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 8px;padding:6px 10px;border-radius:8px;font-size:12.5px;line-height:1.5}
 .askline.wait{background:#FBEFD0}.askline.ok{background:var(--ok-bg)}.askline.ng{background:var(--warn-bg)}.askline b{font-weight:900}.askline .btn{height:26px}
 .obdraft{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:8px 12px;margin:0 0 10px;font-size:13px;font-weight:700;line-height:1.6}
@@ -2072,10 +2075,16 @@ const avMatch=(v,k)=>isInsp(k)?canInspect(v):vendorKinds(v).indexOf(k)>=0;
 /* ---- 打診：予定表のマスを押す → この案件の工程にその業者・日付を「打診中」で入れ、LINE・メールで聞く。
    業者は業者ページで「受けられる／都合が悪い」を押す。受けると「受諾」、断ると工程の業者が空に戻り「○○さんが辞退」と残る ---- */
 const askLink=v=>(typeof vendorLink==='function'&&v&&v.token)?vendorLink(v):'';
+/* 打診する工程で、その業者が受け持つ工事：その区分の明細（検査の人は自社施工）。金額は出さない（数量・単位は発注する側のもの） */
+function askItems(p){
+  return linesOf(p.case).filter(l=>!l.cut&&+l.qty>0&&(isInsp(p.kind)?l.kind==='自社施工':l.kind===p.kind))
+    .map(l=>`${l.spec?l.spec+' ':''}${l.name}　${costQty(l)}${costUnit(l)}`);
+}
 function askMessage(c,p,v){
-  const lk=askLink(v);
+  const lk=askLink(v), its=askItems(p);
   const body=[`${v.full||v.name} 様`,'',`お疲れさまです。下記の日程でお願いできるか、ご都合を教えてください。`,'',
     `日程：${spanLabel(p)}`,`作業：${p.kind}`,`物件：${c.prop||''}`,...(c.addr?[`住所：${c.addr}`]:[]),'',
+    ...(its.length?[`内容（${its.length}件）：`,...its.slice(0,20).map(x=>'・'+x),...(its.length>20?[`ほか${its.length-20}件`]:[]),'']:[]),
     ...(lk?[`こちらのページで「受けられる／都合が悪い」を押してください（ログイン不要）：`,lk+'&m=orders','']:['このメッセージにご返信ください。','']),
     (DB.cfg&&DB.cfg.company)||'アンドワークス株式会社'].join('\n');
   return {subject:`【日程の打診】${md(p.date)} ${p.kind} ${c.prop||''}`,body};
@@ -2099,6 +2108,8 @@ function askSheet(cid,who,ds){
   const el=document.createElement('div'); el.className='ask';
   el.innerHTML=`<div class="askbox" style="max-width:440px"><h4>工程に入れました</h4>
     <p style="margin:4px 0 10px;font-size:14px;line-height:1.7">${esc(p.kind)}　<b>${esc(who)}</b> さん　<b>${md(ds)}</b><br>${esc(c.prop||'')}</p>
+    ${(its=>its.length?`<div class="askits"><b>${esc(who)} さんに伝わる内容（${esc(p.kind)}の明細 ${its.length}件）</b>${its.slice(0,8).map(x=>`<div>・${esc(x)}</div>`).join('')}${its.length>8?`<div>ほか${its.length-8}件</div>`:''}</div>`
+      :`<p class="note" style="margin:0 0 8px;color:var(--warn)">この案件には「${esc(p.kind)}」の明細がまだ無い。業者には日程と物件だけが伝わる。先に「見積・発注」で明細に区分を付けると、内容も伝わる。</p>`)(askItems(p))}
     <p class="note" style="margin:0 0 12px">続けて ${esc(who)} さんに日程を聞くときは、送り方を選んでください。「打診中」の印が付き、業者ページに「受けられる／都合が悪い」が出ます。
       もう決まっている日なら「送らない」。期間が2日以上なら、下の工程の終了日を入れてください。</p>
     <div class="askbtn" style="flex-wrap:wrap;gap:6px">
@@ -2266,7 +2277,7 @@ function procPanel(c){
         if(!miss.length)return '';   /* 必要そうな工程が全部入っていれば、この行は出さない */
         return `<div class="kneed"><span class="note" style="margin:0">${guess?'必要そうな工程':'発注内容から読み取れない。工程を選ぶ'}</span>
           ${nk.map(k=>have.has(k)
-            ? `<span class="kk on" style="background:${kcol(k)}">${esc(k)}　入力済</span>`
+            ? `<button class="kk on" data-kfocus="${esc(k)}" style="background:${kcol(k)}" title="この区分の工程はもうある。押すと、下の予定表がこの区分の業者になり、工程の行が光る">${esc(k)}　入力済</button>`
             : `<button class="kk" data-addkind="${c.id}|${esc(k)}" style="background:${kcol(k)}">＋ ${esc(k)}</button>`).join('')}
           ${miss.length>1?`<button class="btn small primary" data-addkinds="${c.id}">足りない${miss.length}件をまとめて作る</button>`:''}</div>`;})()}
     </div>
@@ -4009,6 +4020,12 @@ document.addEventListener('click',e=>{
   if(d2){const c=DB.cases.find(x=>x.id===d2.dataset.done2);
     if(c){snap(); setDone(c,d2.dataset.d); save(); render();
       toast(`${c.prop||'案件'} の完工日に ${md(c.done)} を入れた`, undo);} return;}
+  const kf=e.target.closest('[data-kfocus]');
+  if(kf&&pCase){ const k=kf.dataset.kfocus; avFollow(k);
+    const p=procsOf(pCase).find(x=>x.kind===k&&!x.who)||procsOf(pCase).find(x=>x.kind===k);
+    const row=p&&document.querySelector(`.prow[data-p="${p.id}"]`);
+    if(row){ row.scrollIntoView({block:'center',behavior:'smooth'}); row.classList.add('pflash'); setTimeout(()=>row.classList.remove('pflash'),1800); }
+    toast(`${k}：下の予定表で、人の日付のマスを押すと工程に入る`); return; }
   const ak=e.target.closest('[data-addkind]');
   if(ak){const [cid,k]=ak.dataset.addkind.split('|'); addKind(cid,k); render();
     toast(`${k} の工程を作った。業者と日を入れる`, undo); return;}

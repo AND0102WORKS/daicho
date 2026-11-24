@@ -5,6 +5,7 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   await q("update vendors set type='専属', def_kind='清掃', kinds='AW検査' where id='V1'");
   await q("insert into vendors(id,name,full_name,type,def_kind,kinds,token,active) values ('V3','國吉','國吉','専属','清掃','','tokkuniyoshi0000000001',true),('V4','検査B','検査B','専属','AW検査','','tokkensab000000000001',true) on conflict do nothing");
   await q(`update procs set start_date=null, who='' where id='P1'`);
+  await q("insert into lines(id,case_id,no,name,spec,qty,unit,sell,price,kind) values ('LA1','C1302',1,'ルームクリーニング','全室',1,'式',30000,20000,'清掃'),('LA2','C1302',2,'エアコン洗浄','洋室',2,'台',8000,5000,'清掃') on conflict do nothing");
   await q(`insert into procs(id,case_id,kind,who) values ('P2','C1302','AW検査','') on conflict do nothing`);
   const srv=spawn('node',['fakesb-server.js'],{stdio:'ignore',cwd:'/home/user/daicho/test'}); await new Promise(r=>setTimeout(r,800));
   const b=await chromium.launch({args:['--no-proxy-server']}); const p=await b.newPage({viewport:{width:1300,height:900},deviceScaleFactor:2});
@@ -34,6 +35,8 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   await p.reload(); await p.waitForTimeout(1500); await p.evaluate(()=>{tab='proc';pCase='C1302';pHide=true;render();}); await p.waitForTimeout(800);
   await p.screenshot({path:sp+'ask3.png'});
   const warns=await p.$$eval('.card',a=>a.map(x=>x.innerText).join(' ').match(/[^\n]*(打診|辞退|都合)[^\n]*/g));
+  const itemsOk=card.length===1&&card[0].includes('全室 ルームクリーニング')&&card[0].includes('エアコン洗浄')&&card[0].includes('2台')&&!card[0].includes('20000')&&!card[0].includes('20,000');
+  console.log((itemsOk?'OK  ':'NG  ')+'業者ページの打診に、受け持つ工事の内容が出る（金額は出ない）');
   console.log(JSON.stringify({r1,card,r2,warns,errs},null,0));
   await c.end(); await b.close(); srv.kill();
 })();

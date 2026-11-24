@@ -74,6 +74,7 @@ a.route{display:block;text-align:center;padding:9px;border-radius:8px;border:1px
 .warnline{margin-top:4px;font-size:12.5px;color:var(--warn);font-weight:700}
 .askc{background:#fff;border:2px solid #E0A21B;border-radius:12px;padding:12px 14px;margin:0 0 10px}
 .askc .prop{font-weight:900;font-size:16px;margin-bottom:4px}.askc .meta{font-size:13.5px;color:var(--sub);margin-top:2px}.askc .meta b{color:var(--ink);font-size:15px}
+.aits{margin-top:8px;background:#F7F5F0;border-radius:8px;padding:8px 10px;font-size:13.5px;line-height:1.6}.aits b{display:block;font-size:12.5px;color:var(--sub)}
 .askb{display:flex;gap:8px;margin-top:10px}.askb button{flex:1;padding:12px 0;border-radius:10px;font-size:15px;font-weight:900;border:1px solid var(--line);background:#fff}
 .askb .ok{background:var(--acc);color:#fff;border-color:var(--acc)}.askb .ng{color:var(--warn)}
 a.olink{display:block;margin:8px 0 2px;padding:10px;border-radius:9px;text-align:center;font-weight:900;font-size:14.5px;text-decoration:none;border:1px solid var(--acc);color:var(--acc);background:#fff}
@@ -183,11 +184,15 @@ async function loadOrders(){
   const rows=data||[], wait=rows.filter(o=>o.st==='送付済');
   /* 日程の打診（返事待ち）。発注の一覧の一番上に出す */
   const ra=await sb.rpc('my_asks',{p_token:token}); ASKS=(ra.data||[]);
+  /* 打診された工程で受け持つ工事の内容（会社が明細に区分を付けていれば出る） */
+  const AI={}; if(ASKS.length){ const ri=await sb.rpc('my_ask_items',{p_token:token}); (ri.data||[]).forEach(x=>{ AI[x.proc_id]=x.items||[]; }); }
   const askHtml=ASKS.length?`<div class="sec" style="margin-top:0">日程の打診（${ASKS.length}件）　お返事ください</div>`+ASKS.map(a=>{
     const s=String(a.start_date||'').slice(0,10), e=String(a.end_date||'').slice(0,10);
     return `<div class="askc"><div class="prop">${esc(a.prop)}</div>
       <div class="meta"><span class="tag">${esc(a.kind)}</span>　<b>${md(s)}${e&&e!==s?' 〜 '+md(e):''}</b></div>
       ${a.addr?`<div class="meta">${esc(a.addr)}</div>`:''}
+      ${(its=>its.length?`<div class="aits"><b>内容（${its.length}件）</b>${its.map(i=>`<div>・${esc((i.spec?i.spec+' ':'')+i.name)}　${esc(String(+i.qty))}${esc(i.unit||'')}</div>`).join('')}</div>`
+        :`<div class="meta">内容の詳しい明細は、発注書でお知らせします</div>`)(AI[a.proc_id]||[])}
       <div class="askb"><button type="button" class="ok" data-ans="${esc(a.proc_id)}|1">受けられる</button><button type="button" class="ng" data-ans="${esc(a.proc_id)}|0">都合が悪い</button></div></div>`; }).join(''):'';
   const c=document.getElementById('waitCnt'); c.hidden=!(wait.length+ASKS.length); c.textContent=wait.length+ASKS.length;
   if(!rows.length){ el.innerHTML=askHtml+(ASKS.length?'':'<div class="empty">発注はまだありません</div>'); return rows; }
