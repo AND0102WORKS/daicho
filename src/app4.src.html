@@ -314,7 +314,7 @@ label.estup{cursor:pointer}
 .hidebar.on{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:6px 12px}
 .askits{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0 0 10px;font-size:12.5px;line-height:1.6;max-height:180px;overflow:auto}.askits b{display:block;margin-bottom:2px}
 .prow.pflash{outline:3px solid #E0A21B;outline-offset:2px;border-radius:8px;transition:outline-color .3s}
-button.kk.on{cursor:pointer;border:none;font-family:inherit}
+button.kk.has small{margin-left:6px;font-weight:400;font-size:10.5px;background:rgba(255,255,255,.75);border-radius:8px;padding:0 6px}
 .askline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 8px;padding:6px 10px;border-radius:8px;font-size:12.5px;line-height:1.5}
 .askline.wait{background:#FBEFD0}.askline.ok{background:var(--ok-bg)}.askline.ng{background:var(--warn-bg)}.askline b{font-weight:900}.askline .btn{height:26px}
 .obdraft{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:8px 12px;margin:0 0 10px;font-size:13px;font-weight:700;line-height:1.6}
@@ -1307,7 +1307,7 @@ function lineGroups(ls){
 /* 大項目の見出し行：区分名・行数・原価、未発注の行があれば 発注先 と「この区分で発注を作る」 */
 /* 明細の行の並べ替え：No の欄をつかんで上下に動かす。別の区分の行の所に落とすと、その区分に入る（発注済みの行は区分を変えられない）。
    並び順は行番号（no）で持つので、動かしたら案件の全部の行に 1 から振り直す */
-let dragL=null;
+let dragL=null, pFlash=null;   /* pFlash：足したばかりの工程の行（少しの間光らせる） */
 function moveLine(id,tid,after){
   const a=DB.lines.find(x=>x.id===id), t=DB.lines.find(x=>x.id===tid); if(!a||!t||a===t||a.case!==t.case)return;
   const ak=a.kind||'', tk=t.kind||'';
@@ -2270,10 +2270,10 @@ function procPanel(c){
         if(!nk.length)nk=KORDER;
         const have=new Set(ps.map(x=>x.kind));
         const miss=nk.filter(k=>!have.has(k));
-        if(!miss.length)return '';   /* 必要そうな工程が全部入っていれば、この行は出さない */
-        return `<div class="kneed"><span class="note" style="margin:0">${guess?'必要そうな工程':'発注内容から読み取れない。工程を選ぶ'}</span>
+        const full=!miss.length; if(full)nk=KORDER;   /* 必要そうな工程が全部入っていても、足すボタンは出す（同じ区分を2社に頼むことがある） */
+        return `<div class="kneed"><span class="note" style="margin:0">${full?'工程を足す（同じ区分をもう1本でも）':guess?'必要そうな工程':'発注内容から読み取れない。工程を選ぶ'}</span>
           ${nk.map(k=>have.has(k)
-            ? `<button class="kk on" data-kfocus="${esc(k)}" style="background:${kcol(k)}" title="この区分の工程はもうある。押すと、下の予定表がこの区分の業者になり、工程の行が光る">${esc(k)}　入力済</button>`
+            ? `<button class="kk has" data-addkind="${c.id}|${esc(k)}" style="background:${kcol(k)}" title="この区分の工程はもう ${ps.filter(p=>p.kind===k).length}本 ある。押すと、同じ区分の工程をもう1本足す（2社に頼むとき）">＋ ${esc(k)}<small>入力済 ${ps.filter(p=>p.kind===k).length}</small></button>`
             : `<button class="kk" data-addkind="${c.id}|${esc(k)}" style="background:${kcol(k)}">＋ ${esc(k)}</button>`).join('')}
           ${miss.length>1?`<button class="btn small primary" data-addkinds="${c.id}">足りない${miss.length}件をまとめて作る</button>`:''}</div>`;})()}
     </div>
@@ -2292,7 +2292,7 @@ function procPanel(c){
         `<tr><th class="nm"><small>工程なし</small></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">工程がまだ1つも無い。下の「＋ 工程を足す」から、工事・清掃・鍵交換・検査を足していく。旗の日を目安に組む。</td></tr>`}</tbody></table></div>${availBlock(c,ps,m,D,y,mo)}
     <div class="card">
       <label class="fl" title="日付は期間で入れる。1日だけなら終了日は空欄。上の表では「開始日をクリック→終了日をクリック」でも引ける（同じ日を2回押すとその日だけ）。金額は案件台帳で入れる">工程（誰に・いつからいつまで）<span class="help" style="margin-left:6px;width:18px;height:18px;font-size:11px">？</span></label>
-      ${ps.map(p=>`<div class="prow np" data-p="${p.id}">
+      ${ps.map(p=>`<div class="prow np${pFlash===p.id?' pflash':''}" data-p="${p.id}">
         <select data-pf="kind">${kindOpts(p.kind)}</select>
         <select data-pf="who">${vendorSel(p.who)}</select>
         <input type="date" data-pf="date" value="${esc(p.date||'')}" title="開始日">
@@ -4020,8 +4020,12 @@ document.addEventListener('click',e=>{
     if(row){ row.scrollIntoView({block:'center',behavior:'smooth'}); row.classList.add('pflash'); setTimeout(()=>row.classList.remove('pflash'),1800); }
     toast(`${k}：下の予定表で、人の日付のマスを押すと工程に入る`); return; }
   const ak=e.target.closest('[data-addkind]');
-  if(ak){const [cid,k]=ak.dataset.addkind.split('|'); addKind(cid,k); render();
-    toast(`${k} の工程を作った。業者と日を入れる`, undo); return;}
+  if(ak){const [cid,k]=ak.dataset.addkind.split('|'); const n0=procsOf(cid).filter(p=>p.kind===k).length; addKind(cid,k); render();
+    avFollow(k);   /* 下の予定表をその区分にして、足した工程の行を光らせる */
+    const np=procsOf(cid).filter(p=>p.kind===k).pop(), row=np&&document.querySelector(`.prow[data-p="${np.id}"]`);
+    if(np){ pFlash=np.id; setTimeout(()=>{ pFlash=null; document.querySelectorAll('.prow.pflash').forEach(x=>x.classList.remove('pflash')); },2200); }   /* 保存の反映で描き直されても光ったままにする */
+    if(row){ row.scrollIntoView({block:'nearest',behavior:'smooth'}); row.classList.add('pflash'); }
+    toast(n0?`${k} の工程をもう1本足した（${n0+1}本目）。業者と日を入れる`:`${k} の工程を作った。業者と日を入れる`, undo); return;}
   const aks=e.target.closest('[data-addkinds]');
   if(aks){const cid=aks.dataset.addkinds, c=DB.cases.find(x=>x.id===cid);
     const have=new Set(procsOf(cid).map(p=>p.kind));
