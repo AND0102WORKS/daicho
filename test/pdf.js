@@ -34,6 +34,23 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   ok('写真：5行以上を読み、単価 25,000・45,000・38,000 が取れる', rows.length>=5&&[25000,45000,38000].every(v=>prices.indexOf(v)>=0), prices);
   await p.screenshot({path:__dirname+'/ocr.png'});
   await p.click('#askNo');
+  // 箇条書きの依頼書（・項目　¥金額）と、上に書いてある住所・鍵・間取り・日付
+  await p.waitForTimeout(300); await c.query("update cases set addr='',key_info='' where id='C1302'"); await p.reload(); await p.waitForTimeout(1500);
+  await p.evaluate(()=>{ tab='order'; oCase='C1302'; oView='make'; render(); }); await p.waitForTimeout(400);
+  rows=await read('list-sample.pdf');
+  ok('箇条書き：4行。品番が次の行でも1行にまとまる', rows.length===4&&rows[0]==='|ルームクリーニング|1|式|18000|（浴室鏡研磨含む）'&&/シート貼.*TA0000.*\|1\|式\|6000\|/.test(rows[2]), rows);
+  ok('箇条書き：合計 34,000', (await p.textContent('.dlg.ested')).includes('34,000'));
+  const mv=await p.$$eval('.dlg.ested [data-mv]',a=>a.map(x=>x.value));
+  ok('箇条書き：住所・鍵・間取り・日付を読み取る', mv.includes('東京都杉並区見本町１－２－３')&&mv.some(v=>/フェンス\s*0000/.test(v))&&mv.includes('1K')&&mv.includes('2026-11-20'), mv);
+  await p.click('#askYes'); await p.waitForTimeout(1800);
+  const cs=(await q("select addr,key_info from cases where id='C1302'"))[0];
+  ok('箇条書き：取り込むと、案件の住所と鍵情報に入る', cs.addr==='東京都杉並区見本町１－２－３'&&/フェンス/.test(cs.key_info), cs);
+  // 表（材・手／工事区分の列つき、備考の折り返し、2ページ目は案内だけ）
+  rows=await read('table2-sample.pdf');
+  ok('表2：7行。知らない列（材・手・工事区分）は名称に混ざらない', rows.length===7&&rows[1]==='|浴室鏡薬品洗浄|1|式|3000|'&&rows[4].startsWith('|キッチンガスコンロ電池交換（単1×2本）|2|本|250|'), rows);
+  ok('表2：折り返した備考は、その行だけに付く', /^\|仕上り調整費\|1\|式\|3000\|建具.*ぐ\s?らつき.*写真撮影.*清掃後/.test(rows[2])&&rows[1].endsWith('|')&&rows[3].endsWith('|'), rows[2]);
+  ok('表2：合計 23,560（2ページ目の案内は行にならない）', (await p.textContent('.dlg.ested')).includes('23,560'));
+  await p.click('#askNo');
   ok('ページのエラーなし', errs.length===0, errs);
   console.log(res.every(Boolean)?'ALL OK':'SOME NG');
   await c.end(); await b.close(); srv.kill();
