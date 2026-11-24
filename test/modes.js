@@ -13,15 +13,15 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   await p.click('[data-omode="見積"]'); await p.waitForTimeout(300);
   ok('見積の形：販売と原価の両方に数量・単位・単価', await p.$$eval('tr[data-l="LM1"] [data-lf]',a=>a.map(x=>x.dataset.lf).join(','))==='spec,name,kind,qty,unit,sell,cqty,cunit,price,memo');
   let l=await L(); ok('最初は原価の数量＝販売の数量（20×1,000＝20,000）', l.amt===20000&&l.sell===30000, l);
-  const kpi=()=>p.$$eval('.ohead .okpi',a=>a[a.length-1].innerText.replace(/\s+/g,' '));
-  let k=await kpi(); ok('右上の粗利は未発注の明細の原価も入れた見込み（91,500−22,000−20,000）', k.includes('見込み')&&k.includes('49,500'), k);
+  const kpi=()=>p.$eval('.ln tfoot .sumrow',x=>x.innerText.replace(/\s+/g,' '));
+  let k=await kpi(); ok('表の下の合計の行：販売 30,000・原価 20,000・粗利 10,000、案件の粗利は見込み（91,500−22,000−20,000）', k.includes('見込み')&&k.includes('49,500')&&k.includes('30,000')&&k.includes('20,000')&&k.includes('10,000'), k);
   await p.screenshot({path:__dirname+'/modes-est.png',clip:{x:0,y:290,width:1440,height:330}});
   // 発注は一式に変える
   await p.fill('tr[data-l="LM1"] [data-lf="cqty"]','1'); await p.keyboard.press('Tab'); await p.waitForTimeout(500);
   await p.selectOption('tr[data-l="LM1"] [data-lf="cunit"]','式'); await p.waitForTimeout(500);
   await p.fill('tr[data-l="LM1"] [data-lf="price"]','18000'); await p.keyboard.press('Tab'); await p.waitForTimeout(600);
   l=await L(); ok('原価だけ 1式×18,000 に。販売は 20㎡×1,500 のまま', l.amt===18000&&l.sell===30000&&+l.qty===20&&l.unit==='㎡'&&l.cunit==='式', l);
-  k=await kpi(); ok('原価を直すと右上の粗利も変わる（91,500−22,000−18,000）', k.includes('51,500'), k);
+  k=await kpi(); ok('原価を直すと合計の行の粗利も変わる（91,500−22,000−18,000）', k.includes('51,500'), k);
   await p.click('[data-omode="発注"]'); await p.waitForTimeout(300);
   ok('発注の形：左に販売（20 ㎡ 1,500 30,000）が見える', (await p.textContent('tr[data-l="LM1"]')).replace(/\s+/g,' ').includes('30,000'));
   ok('発注の形：原価の数量・単位・単価と区分', await p.$$eval('tr[data-l="LM1"] [data-lf]',a=>a.map(x=>x.dataset.lf).join(','))==='spec,name,kind,cqty,cunit,price,memo');

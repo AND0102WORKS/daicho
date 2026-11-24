@@ -34,6 +34,46 @@ p{margin:0}
   color:var(--sub);min-height:36px;font-size:13.5px;cursor:pointer;font-family:inherit}
 .tabs button.on{background:var(--acc);color:var(--acc-ink)}
 .src{margin-left:auto;font-size:11px;color:var(--sub);text-align:right;line-height:1.5}
+.tabs button{display:inline-flex;align-items:center;gap:6px;position:relative}
+.tabs button svg{flex:none;width:17px;height:17px}
+.tabs button .bdg{font-style:normal;background:var(--warn);color:#fff;border-radius:9px;font-size:10.5px;padding:0 6px;font-weight:700;line-height:1.6}
+.tabs .sep{display:none}
+#menuFold{display:none}
+.src .btn{margin-top:4px}
+/* 広い画面：メニューは左に縦に並べる。たたむとアイコンだけ（body.slim） */
+@media (min-width:981px){
+  .top{position:fixed;left:0;top:0;bottom:0;width:var(--side);flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:6px;
+    padding:14px 10px 10px;border-bottom:none;border-right:1px solid var(--line);overflow-y:auto;overflow-x:hidden}
+  body{--side:196px}
+  body.slim{--side:56px}
+  .top .brand{padding:2px 8px 10px;font-size:16px;white-space:nowrap}
+  .top .brand small{display:none}
+  .tabs{flex-direction:column;gap:2px;flex-wrap:nowrap}
+  .tabs button{text-align:left;padding:9px 12px;font-size:14px;gap:11px;min-height:40px;white-space:nowrap}
+  .tabs button svg{width:21px;height:21px}
+  .tabs button .bdg{margin-left:auto}
+  .tabs .sep{display:block;height:1px;background:var(--line);margin:6px 4px}
+  #menuFold{display:block;border:none;background:transparent;text-align:left;padding:8px 12px;color:var(--sub);font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  #menuFold:hover{color:var(--ink)}
+  .top .src{margin:auto 0 0;text-align:left;padding:8px 6px 0;border-top:1px solid var(--line)}
+  .wrap{margin-left:var(--side);padding-top:12px}
+  .drawer{top:10px;max-height:calc(100vh - 24px)}
+  body.slim .top{padding:14px 6px 10px}
+  body.slim .top .brand{font-size:0;padding:0 0 8px;text-align:center}
+  body.slim .top .brand::before{content:"W";font-size:18px}
+  body.slim .tabs button{justify-content:center;padding:9px 0;gap:0}
+  body.slim .tabs button span{display:none}
+  body.slim .tabs button .bdg{position:absolute;right:1px;top:1px;margin:0;font-size:10px;padding:0 5px}
+  body.slim #menuFold{text-align:center;padding:8px 0;font-size:14px}
+  body.slim .top .src{display:none}
+}
+/* 明細の表のいちばん下：合計の行（列の真下にそろえる。スクロールしても下に残る） */
+.ln tfoot td{position:sticky;bottom:0;z-index:3;background:var(--card);border-top:2px solid var(--acc);padding:9px 8px;font-size:14px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ln tfoot td.lab{text-align:left}.ln tfoot td.lab small{font-weight:500;font-size:11.5px;color:var(--sub);margin-left:12px}.ln tfoot td.lab small.w{color:var(--warn);font-weight:700}
+.cpembed .ohead>.bar>h3,.cpembed .ohead>.bar>.cl,.cpembed .ohead>.bar>.st,.cpembed .ohead>.bar>.flag,.cpembed .ohead [data-open]{display:none}
+.cpembed .siteinfo:not(.miss){display:none}
+.cpback{color:var(--acc);font-weight:700;cursor:pointer;font-size:12.5px;margin-right:12px;vertical-align:3px;white-space:nowrap}
+.cpsub a{color:inherit;cursor:pointer}.cpsub a:hover{color:var(--acc)}.cpsub .ed{margin-left:8px;color:var(--acc);font-weight:700}
 .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0 10px}
 .bar h2{font-size:17px;margin-right:4px}
 .kpi{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
@@ -388,6 +428,7 @@ td.av .chip{height:auto;margin:1px 0;cursor:pointer}
 <div class="top">
   <div class="brand">ワークス台帳 <small>案件管理 ＋ 完工予定 ＋ スケジュール管理 を1つに</small></div>
   <div class="tabs" id="tabs"></div>
+  <button type="button" id="menuFold"></button>
   <div class="src" id="src"></div>
 </div>
 <div class="wrap"><div id="main"></div></div>
@@ -1720,22 +1761,14 @@ function orderPanel(c){
   const diff=sellSum&&c.sales&&sellSum!==(+c.sales);
   /* 見出しの金額は案件台帳と同じ税抜（税込は吹き出し）。原価＝工程の発注金額の合計（costOf） */
   const pcost=costOf(c.id), freeCost=Math.round(free.reduce((a,l)=>a+lineAmt(l),0));
-  const head=`<div class="card ohead">
+  const emb=tab==='case';   /* 案件ページの中：物件名は上に出ているので繰り返さない。住所・鍵が未入力のときだけ欄を出す */
+  const head=emb?((!c.addr||!c.keyInfo)?`<div class="card ohead">${siteInfo(c)}</div>`:''):`<div class="card ohead">
     <div class="bar" style="margin:0;gap:8px">
       <h3 style="font-size:16px;margin:0"><a class="cplink" data-cpage="${c.id}" title="案件ページを開く">${esc(c.prop||'（物件未入力）')}</a></h3>
       <span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span>
       <span class="st ${stCls(c.st)}">${esc(c.st)}</span>
       <button class="btn small" data-open="${c.id}">台帳で開く</button>
       <button class="btn small" data-pcopen="${c.id}">工程を組む</button>
-      <span class="grow"></span>
-      <span class="okpi" title="受注受付の売上（追加受注を含む）。税込 ${yen(inc(sales))}"><small>売上 税抜</small><b>${yen(sales)}</b></span>
-      <span class="okpi" title="明細の販売の合計。税込 ${yen(inc(sellSum))}${diff?`。受注受付の売上税抜 ${yen(c.sales)} と ${yen(Math.abs(sellSum-(+c.sales)))} 違う`:''}"><small>販売計 税抜</small><b style="color:${diff?'var(--warn)':'inherit'}">${sellSum?yen(sellSum):'—'}</b>${
-        diff?`<small style="color:var(--warn)">（${yen(Math.abs(sellSum-(+c.sales)))} 違う）</small>`:''}</span>
-      <span class="okpi" title="工程の発注金額の合計（案件台帳の原価と同じ）。税込 ${yen(costIncOf(c.id))}${freeCost?`。まだ発注していない明細の原価が ${yen(freeCost)} ある`:''}"><small>原価 税抜</small><b>${pcost?yen(pcost):'—'}</b>${
-        freeCost?`<small>＋未発注 ${yen(freeCost)}</small>`:''}</span>
-      ${(()=>{ const sb_=sales||sellSum, ct=pcost+freeCost, est=!!freeCost||!sales;   /* 見込み＝（売上。未入力なら明細の販売計）−（発注済みの原価＋未発注の明細の原価） */
-        return `<span class="okpi" title="${est?`見込み：${sales?'売上':'明細の販売計'} ${yen(sb_)} −（発注済みの原価 ${yen(pcost)} ＋ 未発注の明細の原価 ${yen(freeCost)}）。明細の原価を直すとすぐ変わる`:`売上 − 発注済みの原価。税込 ${yen(inc(sales)-costIncOf(c.id))}`}"><small>粗利${est?'（見込み）':''} 税抜</small><b style="color:${sb_-ct<0?'var(--warn)':'var(--ok)'}">${
-        sb_?yen(sb_-ct):'—'}</b><small>${sb_?Math.round((sb_-ct)/sb_*1000)/10+'%':''}</small></span>`; })()}
     </div>${siteInfo(c)}${c.memo?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${esc(c.memo)}</p>`:''}</div>`;
   const tools=`<div class="bar" style="margin:0 0 8px">
     <h3 style="font-size:14px;margin:0">② 明細</h3>
@@ -1801,7 +1834,13 @@ function orderPanel(c){
     return `<tr data-l="${l.id}" class="${cut?'cutln':''}${oSel[l.id]&&!l.order?' on':''}">${body}</tr>`; };
   const table=ls.length?`<div class="lnw"><table class="ln m-${M}" style="min-width:${W}px"><thead>${H}</thead><tbody>
     ${lineGroups(ls).map(g=>groupHead(c,g,ncol)+g.rows.map(row).join('')).join('')}
-    </tbody></table></div>`
+    </tbody><tfoot>${(()=>{   /* 合計の行。販売・原価・粗利を、それぞれの列の真下に */
+      const sb_=sales||sellSum, ct=pcost+freeCost, caseP=sb_-ct, rowP=sellSum-cost;
+      const lab=`<td colspan="5" class="lab">合計（税抜）　${ls.length}行${diff?`<small class="w" title="受注受付の売上（税抜）${yen(c.sales)} と、明細の販売の合計が違う">受注額 ${yen(c.sales)} と ${yen(Math.abs(sellSum-(+c.sales)))} 違う</small>`:''}${
+        sb_&&caseP!==rowP?`<small class="cprof" title="${sales?'売上':'明細の販売計'} ${yen(sb_)} −（発注済みの原価 ${yen(pcost)} ＋ 未発注の明細の原価 ${yen(freeCost)}）">案件の粗利（見込み） <b style="color:${caseP<0?'var(--warn)':'var(--ok)'}">${yen(caseP)}</b> ${Math.round(caseP/sb_*1000)/10}%</small>`:''}</td>`;
+      const sv=`<td class="r gs" title="税込 ${yen(inc(sellSum))}">${sellSum?yen(sellSum):'—'}</td>`, cv=`<td class="r gc" title="明細の原価の合計">${cost?yen(Math.round(cost)):'—'}</td>`;
+      const pv=`<td class="r gp" style="color:${rowP<0?'var(--warn)':'var(--ok)'}">${sellSum?yen(Math.round(rowP)):'—'}</td><td class="r gp">${pct(sellSum,cost)}</td>`;
+      return `<tr class="sumrow">${lab}${M==='まとめ'?sv+cv+pv+'<td></td>':'<td class="gs" colspan="3"></td>'+sv+'<td class="gc" colspan="3"></td>'+cv+pv+'<td colspan="2"></td>'}</tr>`; })()}</tfoot></table></div>`
     :`<div class="card empty">この案件の明細はまだ無い。<br>
         ${poLive(po).length?`依頼元の発注書が ${poLive(po).length}行 届いている。上のボタンで取り込める。`
           :'業者から来た見積を貼り付けるか、1行ずつ足す。'}</div>`;
@@ -2113,14 +2152,30 @@ let oMemoOpen=false;   /* 発注画面の案件の備考を全部見せるか */
 let oHide=(()=>{try{return localStorage.getItem('aw-ohide')!=='0';}catch(e){return true;}})();   /* 発注画面で左の案件一覧をたたむ */
 let oSort='起算日が近い順', oLSort='工期が近い順';
 
+/* メニューのアイコン（線の絵。自前） */
+const TABIC={
+  ledger:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  order:'<path d="M9 4h6v3H9z"/><path d="M15 5.5h2a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h4"/>',
+  proc:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7 14h6M11 17.5h6"/>',
+  board:'<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="10" rx="1.5"/><rect x="16" y="4" width="5" height="13" rx="1.5"/>',
+  kanko:'<path d="M5 21V4"/><path d="M5 5h11l-2 3.5 2 3.5H5"/>',
+  insp:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8.5 15.5l2.5 2.5 4.5-4.5"/>',
+  bill:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9.5 8l2.5 3.5L14.5 8M12 11.5V16M9.5 12.5h5M9.5 14.5h5"/>',
+  pay:'<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 15h2"/>',
+  pl:'<path d="M4 20h16"/><path d="M7 20v-6M12 20V6M17 20v-9"/>',
+  master:'<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.5a3 3 0 0 1 0 5.5M17.5 14.8c2.1.7 3.5 2.5 3.5 5.2"/>',
+  check:'<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>' };
+const tabIcon=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TABIC[k]||''}</svg>`;
+try{ if(localStorage.getItem('aw-slim')==='1')document.body.classList.add('slim'); }catch(e){}
 function renderTabs(){
   /* タブの数字は運用中の案件ぶんだけ（案件単位で数える）。過去データの件数は要確認タブの中で見る */
   const B=byId(); const seen=new Set();
   issues().forEach(i=>{const c=B[i.c]; if(c&&c.live)seen.add(i.k+'|'+i.c);});
   const n=seen.size;
   document.getElementById('tabs').innerHTML=TABS.map(([k,l])=>
-    `<button class="${tab===k||(tab==='case'&&k==='ledger')?'on':''}" data-t="${k}">${l}${k==='check'&&n?` <span style="opacity:.75">${n}</span>`:''}</button>`).join('');
-  document.getElementById('src').innerHTML=
+    `${k==='bill'||k==='master'?'<div class="sep"></div>':''}<button class="${tab===k||(tab==='case'&&k==='ledger')?'on':''}" data-t="${k}" title="${l}">${tabIcon(k)}<span>${l}</span>${k==='check'&&n?`<i class="bdg">${n}</i>`:''}</button>`).join('');
+  const slim=document.body.classList.contains('slim'), mf=document.getElementById('menuFold'); if(mf){ mf.textContent=slim?'≫':'≪ メニューをたたむ'; mf.title=slim?'メニューを開く':'メニューをたたんで、画面を広く使う'; }
+  document.getElementById('src').innerHTML=(HIDE?'':`<button class="btn small" id="hideOn" title="押した時点にある案件をすべて画面から隠す。データは消えない。このブラウザだけ">今までの案件を隠す</button><br>`)+
     `運用中 ${DB.cases.filter(c=>c.live).length} 件／過去 ${DB.cases.filter(c=>!c.live).length} 件／工程 ${DB.procs.length} 件`+
     `<br><span id="dbState">${esc(dbState)}</span>`;
 }
@@ -3309,11 +3364,10 @@ function vCase(){
   const kv=(k,v)=>`<div class="cpkv"><small>${k}</small><div>${v||'—'}</div></div>`;
   const todos=caseTodos(c), tn={}; todos.forEach(t=>{ if(t.lv!=='wait')tn[t.t]=(tn[t.t]||0)+1; });
   const mad=madoriOf(c);
-  const head=`<div class="cpcrumb"><a id="cpBack">← ${esc((TABS.find(t=>t[0]===cpBack)||['','案件台帳'])[1])}にもどる</a>　／　${esc(c.client||'顧客未設定')}　／　${esc(c.prop||'（物件未入力）')}</div>
-    <div class="cphead">
-      <h2>${esc(c.prop||'（物件未入力）')}</h2><span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span><span class="st ${stCls(c.st)}">${esc(c.st)}</span>
+  const head=`<div class="cphead">
+      <a id="cpBack" class="cpback" title="${esc((TABS.find(t=>t[0]===cpBack)||['','案件台帳'])[1])}にもどる">← ${esc((TABS.find(t=>t[0]===cpBack)||['','案件台帳'])[1])}</a><h2>${esc(c.prop||'（物件未入力）')}</h2><span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span><span class="st ${stCls(c.st)}">${esc(c.st)}</span>
       ${(c.ord||'未')==='未'?'<span class="flag">発注 未</span>':'<span class="st done">発注済</span>'}
-      <div class="cpsub">${[c.addr?esc(c.addr):'<span style="color:var(--warn)">住所 未入力</span>',mad.v?esc(mad.v)+(mad.guess?'（推測）':''):'',esc(c.kind||''),c.done?'完了 '+md(c.done):c.plan?'完了予定 '+md(c.plan):''].filter(Boolean).join('　／　')}</div>
+      <div class="cpsub">${[`<a data-cptab="案件情報" title="案件情報で直す">${c.addr?esc(c.addr):'<span style="color:var(--warn)">住所 未入力</span>'}</a>`,`<a data-cptab="案件情報" title="鍵情報。案件情報で直す">${c.keyInfo?'鍵：'+esc(c.keyInfo):'<span style="color:var(--warn)">鍵情報 未入力</span>'}</a>`,mad.v?esc(mad.v)+(mad.guess?'（推測）':''):'',esc(c.kind||''),c.done?'完了 '+md(c.done):c.plan?'完了予定 '+md(c.plan):''].filter(Boolean).join('　／　')}</div>
       <div class="cptabs">${CPTABS.map(t=>`<button class="${t===cpTab?'on':''}" data-cptab="${t}">${t}${tn[t]?`<i>${tn[t]}</i>`:''}</button>`).join('')}</div></div>`;
   let body='';
   if(cpTab==='概要'){
@@ -3873,7 +3927,7 @@ function setHideOld(on){
   selCase=null; pCase=null; oCase=null; render();
 }
 function hideBar(){
-  if(!HIDE)return `<div class="hidebar off"><button class="btn small" id="hideOn" title="押した時点にある案件をすべて画面から隠す。データは消えない。このブラウザだけ">今までの案件を隠す</button></div>`;
+  if(!HIDE)return '';   /* 隠していないとき：ボタンはメニューの下に置く（renderTabs） */
   return `<div class="hidebar on"><b>今までの案件 ${HIDE.ids.size.toLocaleString()} 件を隠しています</b>（${md(HIDE.at.slice(0,10))} に隠した。データは消えていません。このブラウザだけ）
     <button class="btn small" id="hideOff">全部表示に戻す</button></div>`;
 }
@@ -4168,6 +4222,7 @@ document.addEventListener('drop',e=>{ if(tab!=='case'||!isFileDrag(e))return; e.
   if(e.target.closest('#cpDrop'))cpAddFiles(e.dataTransfer.files); else toast('写真は「パソコンから入れる」の枠の中に落としてください'); });
 /* ================= events ================= */
 document.addEventListener('click',e=>{
+  if(e.target.id==='menuFold'){ const on=document.body.classList.toggle('slim'); try{ localStorage.setItem('aw-slim',on?'1':''); }catch(x){} render(); return; }
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
   const cpl=e.target.closest('[data-cpage]'); if(cpl){ openCasePage(cpl.dataset.cpage); return; }
   const acl=e.target.closest('[data-askclr]'); if(acl){ e.stopPropagation(); clearAsk(acl.dataset.askclr); return; }
