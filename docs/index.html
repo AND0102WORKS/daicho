@@ -308,6 +308,7 @@ input.avq{height:30px;width:150px;border-radius:8px;border:1px solid #8A9792;bac
 .mseg button:first-child{border-left:0}.mseg button.on{background:var(--acc);color:#fff}
 table.ln th.gs,table.ln td.gs{background:#EEF4FA}table.ln th.gc,table.ln td.gc{background:#FBF3E6}table.ln th.gp,table.ln td.gp{background:#EEF6F0}
 table.ln tr.gh th{text-align:center;font-size:11.5px;padding:3px 4px;border-bottom:0}
+table.ln td.ro{color:var(--sub)}
 table.ln .li.dq{border-color:#D99A2B;background:#FFF8E8}
 .estcard{padding:10px 14px;margin-bottom:10px;border-left:4px solid var(--acc)}.estcard.won{border-left-color:var(--line);background:var(--card2)}
 .estf{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sub)}.estf input{height:30px}.estf b{font-size:15px;color:var(--ink)}
@@ -1417,8 +1418,9 @@ function orderPanel(c){
         diff?`<small style="color:var(--warn)">（${yen(Math.abs(sellSum-(+c.sales)))} 違う）</small>`:''}</span>
       <span class="okpi" title="工程の発注金額の合計（案件台帳の原価と同じ）。税込 ${yen(costIncOf(c.id))}${freeCost?`。まだ発注していない明細の原価が ${yen(freeCost)} ある`:''}"><small>原価 税抜</small><b>${pcost?yen(pcost):'—'}</b>${
         freeCost?`<small>＋未発注 ${yen(freeCost)}</small>`:''}</span>
-      <span class="okpi" title="税込 ${yen(inc(sales)-costIncOf(c.id))}"><small>粗利 税抜</small><b style="color:${sales-pcost<0?'var(--warn)':'var(--ok)'}">${
-        sales?yen(sales-pcost):'—'}</b><small>${sales?Math.round((sales-pcost)/sales*1000)/10+'%':''}</small></span>
+      ${(()=>{ const sb_=sales||sellSum, ct=pcost+freeCost, est=!!freeCost||!sales;   /* 見込み＝（売上。未入力なら明細の販売計）−（発注済みの原価＋未発注の明細の原価） */
+        return `<span class="okpi" title="${est?`見込み：${sales?'売上':'明細の販売計'} ${yen(sb_)} −（発注済みの原価 ${yen(pcost)} ＋ 未発注の明細の原価 ${yen(freeCost)}）。明細の原価を直すとすぐ変わる`:`売上 − 発注済みの原価。税込 ${yen(inc(sales)-costIncOf(c.id))}`}"><small>粗利${est?'（見込み）':''} 税抜</small><b style="color:${sb_-ct<0?'var(--warn)':'var(--ok)'}">${
+        sb_?yen(sb_-ct):'—'}</b><small>${sb_?Math.round((sb_-ct)/sb_*1000)/10+'%':''}</small></span>`; })()}
     </div>${c.memo?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${esc(c.memo)}</p>`:''}</div>`;
   const tools=`<div class="bar" style="margin:0 0 8px">
     <h3 style="font-size:14px;margin:0">② 明細</h3>
@@ -1434,7 +1436,7 @@ function orderPanel(c){
     ${(n=>n?`<span class="note" style="margin:0;color:var(--warn);flex-basis:100%" title="見積には出したが発注になっていない項目。現場で改めて提案しないこと">取り消し線の${n}行は依頼元が落とした項目。現場で改めて提案しない</span>`:'')(ls.filter(l=>!(+l.qty>0)).length)}</div>`;
   let rowNo=0;
   /* 表の形：見積＝販売と原価（予算）を並べて入れる／発注＝原価と区分・発注先／まとめ＝見るだけ。列のまとまりごとに色を分ける */
-  const M=oMode, W={見積:1380,発注:1180,まとめ:940}[M];
+  const M=oMode, W={見積:1380,発注:1320,まとめ:940}[M];
   const pct=(sv,cs)=>sv?Math.round((sv-cs)/sv*1000)/10+'%':'—';
   const H={
     見積:`<tr class="gh"><th colspan="5"></th><th colspan="4" class="gs">販売（お客様から）</th><th colspan="4" class="gc">原価（業者へ払う見込み）</th><th colspan="2" class="gp">粗利</th><th colspan="2"></th></tr>
@@ -1442,13 +1444,14 @@ function orderPanel(c){
       <th class="r gs" style="width:62px">数量</th><th class="gs" style="width:58px">単位</th><th class="r gs" style="width:88px">単価</th><th class="r gs" style="width:84px">金額</th>
       <th class="r gc" style="width:62px">数量</th><th class="gc" style="width:58px">単位</th><th class="r gc" style="width:108px">単価</th><th class="r gc" style="width:84px">金額</th>
       <th class="r gp" style="width:78px">粗利</th><th class="r gp" style="width:54px">率</th><th style="width:120px">備考</th><th style="width:26px"></th></tr>`,
-    発注:`<tr class="gh"><th colspan="5"></th><th colspan="4" class="gc">原価（業者へ。発注書に出る）</th><th colspan="2" class="gs">販売と粗利（見るだけ）</th><th colspan="2"></th></tr>
-      <tr><th class="r" style="width:34px">No</th><th style="width:30px"></th><th style="width:110px">場所</th><th class="nmcol">名称</th><th style="width:104px">工程区分</th>
-      <th class="r gc" style="width:66px">数量</th><th class="gc" style="width:60px">単位</th><th class="r gc" style="width:110px">単価</th><th class="r gc" style="width:88px">金額</th>
-      <th class="r gs" style="width:88px">販売</th><th class="r gp" style="width:82px">粗利</th><th style="width:140px">備考</th><th style="width:26px"></th></tr>`,
+    発注:`<tr class="gh"><th colspan="5"></th><th colspan="4" class="gs">販売（お客様から・見るだけ）</th><th colspan="4" class="gc">原価（業者へ。発注書に出る）</th><th colspan="2" class="gp">粗利</th><th colspan="2"></th></tr>
+      <tr><th class="r" style="width:34px">No</th><th style="width:30px"></th><th style="width:100px">場所</th><th class="nmcol">名称</th><th style="width:100px">工程区分</th>
+      <th class="r gs" style="width:52px">数量</th><th class="gs" style="width:44px">単位</th><th class="r gs" style="width:80px">単価</th><th class="r gs" style="width:84px">金額</th>
+      <th class="r gc" style="width:62px">数量</th><th class="gc" style="width:58px">単位</th><th class="r gc" style="width:108px">単価</th><th class="r gc" style="width:84px">金額</th>
+      <th class="r gp" style="width:78px">粗利</th><th class="r gp" style="width:54px">率</th><th style="width:120px">備考</th><th style="width:26px"></th></tr>`,
     まとめ:`<tr><th class="r" style="width:34px">No</th><th style="width:8px"></th><th style="width:110px">場所</th><th class="nmcol">名称</th><th style="width:100px">工程区分</th>
       <th class="r gs" style="width:96px">販売</th><th class="r gc" style="width:96px">原価</th><th class="r gp" style="width:90px">粗利</th><th class="r gp" style="width:60px">率</th><th style="width:150px">発注</th></tr>`}[M];
-  const ncol={見積:17,発注:13,まとめ:10}[M];
+  const ncol={見積:17,発注:17,まとめ:10}[M];
   const row=l=>{const o=l.order?DB.orders.find(x=>x.id===l.order):null;
     const sv=lineSell(l), cs=lineAmt(l), cut=!(+l.qty>0);   /* 数量0＝発注に出せない行。cut は由来の印 */
     const no=`<td class="r rn">${++rowNo}</td>`;
@@ -1472,7 +1475,8 @@ function orderPanel(c){
     const memo=`<td><input type="text" class="li" data-lf="memo" value="${esc(l.memo||'')}"></td>`;
     const del=`<td>${l.order?'':`<button class="x" data-dell="${l.id}">×</button>`}</td>`;
     const body=M==='見積'?no+chk+spec+name+kind+sell+cost+prof+`<td class="r gp">${pct(sv,cs)}</td>`+memo+del
-      :M==='発注'?no+chk+spec+name+kind+cost+`<td class="r gs">${sv?yen(sv):'—'}</td>`+prof+memo+del
+      :M==='発注'?no+chk+spec+name+kind+`<td class="r gs ro">${+l.qty||0}</td><td class="gs ro">${esc(l.unit||'')}</td><td class="r gs ro">${l.sell?yen(l.sell):'—'}</td><td class="r gs"><b>${sv?yen(sv):'—'}</b></td>`
+        +cost+prof+`<td class="r gp">${pct(sv,cs)}</td>`+memo+del
       :no+chk+`<td>${esc(l.spec||'')}</td><td class="nmcol">${esc(l.name)}${cut?' <span class="cl cutbadge">'+(l.cut?'依頼元が削除':'数量0')+'</span>':''}</td>
         <td>${l.kind?`<span class="cl" style="background:${kcol(l.kind)}">${esc(l.kind)}</span>`:'—'}</td>
         <td class="r gs">${sv?yen(sv):'—'}</td><td class="r gc">${cs?yen(cs):'—'}</td>${prof}<td class="r gp">${pct(sv,cs)}</td>
