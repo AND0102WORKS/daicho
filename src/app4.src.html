@@ -341,6 +341,11 @@ input.avq{height:30px;width:150px;border-radius:8px;border:1px solid #8A9792;bac
 .mseg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
 .mseg button{all:unset;cursor:pointer;padding:5px 16px;font-size:13px;font-weight:700;color:var(--sub);border-left:1px solid var(--line)}
 .mseg button:first-child{border-left:0}.mseg button.on{background:var(--acc);color:#fff}
+/* 列ごとに縦の線。販売・原価・粗利のまとまりの境目は太い線 */
+table.ln th,table.ln td{border-right:1px solid #DDD8CC}
+table.ln tr>:last-child{border-right:none}
+table.ln tr.ghead td{border-right:none}
+table.ln :not(.gs)+.gs,table.ln .gs+.gc,table.ln :not(.gc)+.gc,table.ln .gc+.gp,table.ln :not(.gp)+.gp,table.ln .gp+:not(.gp),table.ln .gs+:not(.gs):not(.gc),table.ln .gc+:not(.gc):not(.gp){border-left:2px solid #8E9AA0}
 table.ln th.gs,table.ln td.gs{background:#EEF4FA}table.ln th.gc,table.ln td.gc{background:#FBF3E6}table.ln th.gp,table.ln td.gp{background:#EEF6F0}
 table.ln tr.gh th{text-align:center;font-size:11.5px;padding:3px 4px;border-bottom:0}
 table.ln td.ro{color:var(--sub)}
