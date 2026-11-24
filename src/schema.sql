@@ -160,6 +160,8 @@ create table if not exists lines (               -- 明細
   updated_at timestamptz default now()
 );
 create index if not exists lines_case on lines(case_id);
+alter table lines add column if not exists cost_qty numeric;            -- 原価の数量（発注書に出る）。空なら qty と同じ。受注は数量×単価、発注は一式…と変えられる
+alter table lines add column if not exists cost_unit text default '';   -- 原価の単位。空なら unit と同じ
 
 create table if not exists orders (              -- 発注
   id text primary key,
@@ -400,7 +402,7 @@ returns table(order_no text, who text, kind text, start_date date, end_date date
               prop text, addr text, client text, lines jsonb, plan date, procs jsonb, key_info text, taxable boolean)
 language sql security definer stable as $$
   select o.no, o.who, o.kind, o.start_date, o.end_date, o.due, o.naiyo, o.memo, o.st, o.accepted_at, c.prop, c.addr, c.client,
-    (select jsonb_agg(jsonb_build_object('name',l.name,'spec',l.spec,'qty',l.qty,'unit',l.unit,'price',l.price,'memo',l.memo) order by l.no) from lines l where l.order_id=o.id),
+    (select jsonb_agg(jsonb_build_object('name',l.name,'spec',l.spec,'qty',coalesce(l.cost_qty,l.qty),'unit',coalesce(nullif(l.cost_unit,''),l.unit),'price',l.price,'memo',l.memo) order by l.no) from lines l where l.order_id=o.id),
     c.plan,
     (select jsonb_agg(jsonb_build_object('kind',p.kind,'start_date',p.start_date,'end_date',p.end_date,'prog',p.prog,
         'mine',(p.order_id=o.id or p.id=o.proc_id),
@@ -428,7 +430,7 @@ returns table(order_no text, order_token text, prop text, client text, kind text
               st text, accepted_at timestamptz, amount numeric, taxable boolean, sent timestamptz)
 language sql security definer stable as $$
   select o.no, o.token, c.prop, c.client, o.kind, o.start_date, o.end_date, o.due, o.st, o.accepted_at,
-    coalesce((select sum(round(coalesce(l.qty,0)*coalesce(l.price,0))) from lines l where l.order_id=o.id),0),
+    coalesce((select sum(round(coalesce(l.cost_qty,l.qty,0)*coalesce(l.price,0))) from lines l where l.order_id=o.id),0),
     coalesce(o.taxable,true), o.sent
   from vendors v join orders o on o.who=v.name join cases c on c.id=o.case_id
   where v.token=p_token and v.active and o.st in ('送付済','承諾','完了','請求済')

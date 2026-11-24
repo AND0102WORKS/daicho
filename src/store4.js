@@ -24,8 +24,8 @@ const TABLES={
           map:{add:'add_amt',planManual:'plan_manual',caseNo:'case_no',ordBy:'ord_by',keyInfo:'key_info',estAmt:'est_amt',estDate:'est_date',estFile:'est_file'}, dates:['kisan','want','plan','done','est_date'], bools:['live','plan_manual']},
   procs: {cols:['id','org','case_id','kind','who','start_date','end_date','amt','month','prog','order_id','auto','memo','ask','ask_at'],
           map:{case:'case_id',date:'start_date',end:'end_date',order:'order_id',askAt:'ask_at'}, dates:['start_date','end_date'], bools:['auto'], ts:['ask_at']},
-  lines: {cols:['id','org','case_id','no','name','spec','qty','unit','sell','price','kind','who','memo','cut','src','order_id'],
-          map:{case:'case_id',order:'order_id'}, dates:[], bools:['cut']},
+  lines: {cols:['id','org','case_id','no','name','spec','qty','unit','sell','price','kind','who','memo','cut','src','order_id','cost_qty','cost_unit'],
+          map:{case:'case_id',order:'order_id',cqty:'cost_qty',cunit:'cost_unit'}, dates:[], bools:['cut']},
   orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable','token'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
   vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src'],
@@ -64,6 +64,7 @@ function recToRow(t,rec){
     else if(T.bools.indexOf(c)>=0) v=!!v;
     else if(['sales','add_amt','est_amt','amt','sell','price','close_day','site','base','extra','subtotal','tax','total'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
     else if(c==='qty') v=(v===''||v==null)?0:(+v||0);
+    else if(c==='cost_qty') v=(v===''||v==null)?null:(+v||0);   /* 空＝販売の数量と同じ */
     else if(v===null) v='';
     row[c]=v; });
   return row;

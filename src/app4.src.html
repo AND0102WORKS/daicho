@@ -298,6 +298,12 @@ input.avq{height:30px;width:150px;border-radius:8px;border:1px solid #8A9792;bac
 .dlg.ested{max-width:900px;width:96vw;max-height:92vh;overflow:auto}.estw{max-height:56vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
 .estw table.ln{width:100%;min-width:0;table-layout:fixed}.estw .li{width:100%}
 .estsum{min-width:250px;font-size:13px}.estsum div{display:flex;justify-content:space-between;padding:2px 0}.estsum .tot{border-top:2px solid var(--ink);margin-top:4px;padding-top:5px;font-size:15px}
+.mseg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
+.mseg button{all:unset;cursor:pointer;padding:5px 16px;font-size:13px;font-weight:700;color:var(--sub);border-left:1px solid var(--line)}
+.mseg button:first-child{border-left:0}.mseg button.on{background:var(--acc);color:#fff}
+table.ln th.gs,table.ln td.gs{background:#EEF4FA}table.ln th.gc,table.ln td.gc{background:#FBF3E6}table.ln th.gp,table.ln td.gp{background:#EEF6F0}
+table.ln tr.gh th{text-align:center;font-size:11.5px;padding:3px 4px;border-bottom:0}
+table.ln .li.dq{border-color:#D99A2B;background:#FFF8E8}
 .estcard{padding:10px 14px;margin-bottom:10px;border-left:4px solid var(--acc)}.estcard.won{border-left-color:var(--line);background:var(--card2)}
 .estf{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sub)}.estf input{height:30px}.estf b{font-size:15px;color:var(--ink)}
 label.estup{cursor:pointer}
@@ -376,8 +382,8 @@ const TABLES={
           map:{add:'add_amt',planManual:'plan_manual',caseNo:'case_no',ordBy:'ord_by',keyInfo:'key_info',estAmt:'est_amt',estDate:'est_date',estFile:'est_file'}, dates:['kisan','want','plan','done','est_date'], bools:['live','plan_manual']},
   procs: {cols:['id','org','case_id','kind','who','start_date','end_date','amt','month','prog','order_id','auto','memo','ask','ask_at'],
           map:{case:'case_id',date:'start_date',end:'end_date',order:'order_id',askAt:'ask_at'}, dates:['start_date','end_date'], bools:['auto'], ts:['ask_at']},
-  lines: {cols:['id','org','case_id','no','name','spec','qty','unit','sell','price','kind','who','memo','cut','src','order_id'],
-          map:{case:'case_id',order:'order_id'}, dates:[], bools:['cut']},
+  lines: {cols:['id','org','case_id','no','name','spec','qty','unit','sell','price','kind','who','memo','cut','src','order_id','cost_qty','cost_unit'],
+          map:{case:'case_id',order:'order_id',cqty:'cost_qty',cunit:'cost_unit'}, dates:[], bools:['cut']},
   orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable','token'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
   vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src'],
@@ -416,6 +422,7 @@ function recToRow(t,rec){
     else if(T.bools.indexOf(c)>=0) v=!!v;
     else if(['sales','add_amt','est_amt','amt','sell','price','close_day','site','base','extra','subtotal','tax','total'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
     else if(c==='qty') v=(v===''||v==null)?0:(+v||0);
+    else if(c==='cost_qty') v=(v===''||v==null)?null:(+v||0);   /* 空＝販売の数量と同じ */
     else if(v===null) v='';
     row[c]=v; });
   return row;
@@ -1156,7 +1163,9 @@ const OSTS=['下書き','送付済','承諾','完了','請求済'];
 const OLSORTS=['工期が近い順','起算日が近い順','完了希望日が近い順','発注日が早い順','発注No順'];
 const OSTC={'下書き':'','送付済':'wip','承諾':'wip','完了':'done','請求済':'done'};
 const UNITS=['式','m','㎡','枚','個','箇所','台','本','日','人工'];
-const lineAmt=l=>Math.round((+l.qty||0)*(+l.price||0));   /* 原価（業者に払う） */
+const costQty=l=>(l.cqty===''||l.cqty==null)?(+l.qty||0):(+l.cqty||0);   /* 原価の数量。空なら販売の数量と同じ */
+const costUnit=l=>l.cunit||l.unit||'式';
+const lineAmt=l=>Math.round(costQty(l)*(+l.price||0));   /* 原価（業者に払う）＝原価の数量×原価単価 */
 const lineSell=l=>Math.round((+l.qty||0)*(+l.sell||0));   /* 販売（依頼元からもらう） */
 const lnum=id=>{const m=/^L(\d+)/.exec(String(id||'')); return m?+m[1]:0;};
 /* 明細は依頼元の行番号（no）の順、無ければ作った順（id の番号）。共有保存は id のハッシュで箱分けしているので、読んだままだと順が崩れる */
@@ -1290,7 +1299,7 @@ function lineGroups(ls){
   return keys.map(k=>({kind:k,rows:m[k]}));
 }
 /* 大項目の見出し行：区分名・行数・原価、未発注の行があれば 発注先 と「この区分で発注を作る」 */
-function groupHead(c,g){
+function groupHead(c,g,ncol){
   const free=g.rows.filter(l=>!l.order), done=g.rows.filter(l=>l.order);
   const amt=free.reduce((a,l)=>a+lineAmt(l),0);
   const gs=g.rows.reduce((a,l)=>a+lineSell(l),0), gc=g.rows.reduce((a,l)=>a+lineAmt(l),0);
@@ -1301,12 +1310,12 @@ function groupHead(c,g){
   const allSel=free.length&&free.every(l=>oSel[l.id]);
   const k=g.kind;
   return `<tr class="ghead" data-g="${esc(k)}"><td></td><td class="n">${free.length?`<input type="checkbox" class="gchk" ${allSel?'checked':''} title="この区分の行を全部選ぶ">`:''}</td>
-    <td colspan="12"><div class="bar" style="margin:0;gap:8px">
+    <td colspan="${(ncol||14)-2}"><div class="bar" style="margin:0;gap:8px">
       ${k?`<span class="cl" style="background:${kcol(k)};font-size:12.5px">${esc(k)}</span>`:`<b style="color:var(--warn)">区分なし</b><span class="note" style="margin:0">行をチェックして下の「区分をつける」で分ける</span>`}
       <span class="note" style="margin:0">${g.rows.length}行　販売 ${yen(gs)}　原価 ${gc?yen(gc):'—'}　粗利 ${gs?yen(gs-gc):'—'}${free.length&&done.length?`　未発注 ${free.length}行 ${yen(amt)}`:''}</span>
       ${ocol?`<span class="ocol">${ocol}</span>`:''}
       ${k&&free.length&&isStaffJob(k)?`<span class="note" style="margin:0 0 0 auto">自社で行う（発注しない）。自社施工は検査のボリュームに入る</span>`:''}
-      ${k&&free.length&&!isStaffJob(k)?`<span class="grow"></span>
+      ${k&&free.length&&!isStaffJob(k)&&oMode==='発注'?`<span class="grow"></span>
         <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px">発注先
           <select class="gwho" style="height:26px;font-size:12px">${vendorSel(whos.length===1?whos[0]:'')}</select></label>
         <button class="btn small primary" data-gord="${esc(k)}">この区分で発注を作る（${free.length}行）</button>`:''}
@@ -1320,7 +1329,7 @@ const estMode=c=>{ const cl=(DB.clients||[]).find(x=>x.name===c.client); return 
 const stIdx=st=>STATUS.indexOf(st);
 function estPanel(c,sellSum){
   const own=estMode(c)==='own', won=stIdx(c.st)>=stIdx('受注'), sent=stIdx(c.st)>=stIdx('見積提出');
-  const amt=own?(c.estAmt||sellSum):(c.estAmt||0);
+  const amt=own?(won?(c.estAmt||sellSum):(sellSum||c.estAmt||0)):(c.estAmt||0);   /* 台帳で作る：受注までは明細の合計がそのまま見積金額 */
   const file=c.estFile?`<button class="btn small" data-estview="${c.id}">見積書のファイルを見る</button><button class="x" data-estrm="${c.id}" title="ファイルを外す">×</button>`
     :`<label class="btn small estup" title="依頼元に出した見積書の PDF・画像を残しておく">見積書のファイルを付ける<input type="file" id="estFile" accept="application/pdf,image/*" hidden></label>`;
   return `<div class="card estcard${won?' won':''}">
@@ -1342,50 +1351,11 @@ function estPanel(c,sellSum){
     </div>
     ${own&&!sellSum&&!won?'<p class="note" style="margin:6px 0 0">下の明細に項目と販売単価を入れると、見積金額が出て見積書を出せる。</p>':''}</div>`;
 }
-/* 見積の入力画面：見積に要る欄だけ（場所・内容・数量・単位・単価）。行は明細そのもの（販売単価）なので、受注後は下の「② 明細と発注」で原価と発注先を入れる */
+/* 「この画面で見積を作る」：下の明細の表を「見積」の形にして、行が無ければ1行足す */
 function estEditor(cid){
-  const c=DB.cases.find(x=>x.id===cid); if(!c)return;
-  const el=document.createElement('div'); el.className='ask';
-  const rows=()=>linesOf(cid).filter(l=>!l.cut);
-  const sum=()=>rows().reduce((a,l)=>a+lineSell(l),0);
-  const draw=focusId=>{
-    const ls=rows(), sub=sum();
-    el.innerHTML=`<div class="dlg ested"><h4>見積を作る　<span class="note" style="margin:0;font-weight:400">${esc(c.prop||'')}　${esc(c.client||'')}</span></h4>
-      <div class="estw"><table class="ln"><thead><tr><th style="width:34px" class="r">No</th><th style="width:120px">場所</th><th>内容</th>
-        <th class="r" style="width:70px">数量</th><th style="width:66px">単位</th><th class="r" style="width:100px">単価（税抜）</th><th class="r" style="width:96px">金額</th><th style="width:28px"></th></tr></thead><tbody>
-        ${ls.map((l,i)=>`<tr data-el="${l.id}"><td class="r rn">${i+1}</td>
-          <td><input type="text" class="li" data-ef="spec" value="${esc(l.spec||'')}"></td>
-          <td><input type="text" class="li" data-ef="name" value="${esc(l.name||'')}" placeholder="例：ルームクリーニング"></td>
-          <td><input type="number" class="li" data-ef="qty" value="${l.qty}" step="0.1"></td>
-          <td><select class="li" data-ef="unit">${opts(UNITS,l.unit)}</select></td>
-          <td><input type="number" class="li" data-ef="sell" value="${l.sell||''}" step="100" placeholder="0"></td>
-          <td class="r">${lineSell(l)?yen(lineSell(l)):'—'}</td>
-          <td>${l.order?'':`<button class="x" data-edel="${l.id}" title="この行を消す">×</button>`}</td></tr>`).join('')
-          ||'<tr><td colspan="8" class="note" style="padding:14px;text-align:center">まだ行が無い。「＋ 行を足す」で項目を入れる</td></tr>'}
-      </tbody></table></div>
-      <div class="bar" style="margin:10px 0 0;gap:8px;align-items:flex-start">
-        <button class="btn small" id="edAdd">＋ 行を足す</button>
-        <span class="grow"></span>
-        <div class="estsum"><div><span>小計（税抜）</span><b>${yen(sub)}</b></div><div><span>消費税（10%）</span><span>${yen(Math.round(sub*0.1))}</span></div>
-          <div class="tot"><span>合計（税込）</span><b>${yen(inc(sub))}</b></div></div></div>
-      <div class="askbtn" style="margin-top:12px"><button class="btn small" id="edDoc"${sub?'':' disabled'}>見積書を出す（印刷・PDF）</button>
-        <span class="grow"></span><button class="btn small primary" id="edClose">できた（閉じる）</button></div></div>`;
-    if(focusId){ const f=el.querySelector(`[data-el="${focusId}"] [data-ef="name"]`); if(f)f.focus(); }
-  };
-  const done=()=>{ const sub=sum(); if(sub&&c.estAmt!==sub){ c.estAmt=sub; save(); } el.remove(); render(); };
-  el.addEventListener('change',e=>{ const t=e.target, tr=t.closest('[data-el]'); if(!tr||!t.dataset.ef)return;
-    const l=DB.lines.find(x=>x.id===tr.dataset.el); if(!l)return; const f=t.dataset.ef;
-    snap('ested:'+l.id+':'+f); l[f]=(f==='qty'||f==='sell')?(+t.value||0):t.value; save();
-    if(f==='qty'||f==='sell'){ const a=document.activeElement, nf=a&&a.dataset&&a.dataset.ef, nid=a&&a.closest&&a.closest('[data-el]')&&a.closest('[data-el]').dataset.el;
-      draw(); if(nf&&nid){ const x=el.querySelector(`[data-el="${nid}"] [data-ef="${nf}"]`); if(x)x.focus(); } } });
-  el.addEventListener('click',e=>{
-    if(e.target.id==='edAdd'){ snap('ested:add'); DB.lseq++; const id='L'+DB.lseq+DEV;
-      DB.lines.push({id,case:cid,name:'',spec:'',qty:1,unit:'式',sell:0,price:0,kind:'',who:'',memo:''}); save(); draw(id); return; }
-    const d=e.target.closest('[data-edel]'); if(d){ snap('ested:del'); DB.lines=DB.lines.filter(x=>x.id!==d.dataset.edel); save(); draw(); return; }
-    if(e.target.id==='edDoc'){ const sub=sum(); if(sub){ c.estAmt=sub; save(); } showEstimate(cid); return; }
-    if(e.target.id==='edClose'){ done(); return; } });
-  document.body.appendChild(el); draw();
-  if(!rows().length)el.querySelector('#edAdd').click();
+  oMode='見積'; try{ localStorage.setItem('aw-omode','見積'); }catch(e){}
+  if(!linesOf(cid).length){ snap('est:add'); DB.lseq++; DB.lines.push({id:'L'+DB.lseq+DEV,case:cid,name:'',spec:'',qty:1,unit:'式',sell:0,price:0,kind:'',who:'',memo:'',order:''}); save(); }
+  render(); const i=document.querySelector('tr[data-l] .li[data-lf="name"]'); if(i){ i.scrollIntoView({block:'center'}); i.focus(); }
 }
 function estGo(cid,what){
   const c=DB.cases.find(x=>x.id===cid); if(!c)return;
@@ -1396,6 +1366,7 @@ function estGo(cid,what){
   if(!c.estDate&&(what==='submit'||c.estAmt))c.estDate=fmtD(new Date());
   if(what==='submit'){ if(stIdx(c.st)<stIdx('見積提出'))c.st='見積提出'; }
   else { if(stIdx(c.st)<stIdx('受注'))c.st='受注'; if(!(+c.sales>0)&&+c.estAmt>0)c.sales=+c.estAmt; }
+  if(what==='won'){ oMode='発注'; try{ localStorage.setItem('aw-omode','発注'); }catch(e){} }
   save(); render(); toast(what==='submit'?'見積提出にした':'受注にした。下で発注を作る',undo);
 }
 async function estUpload(cid,file){
@@ -1443,7 +1414,9 @@ function orderPanel(c){
         sales?yen(sales-pcost):'—'}</b><small>${sales?Math.round((sales-pcost)/sales*1000)/10+'%':''}</small></span>
     </div>${c.memo?`<p class="note omemo${oMemoOpen?' open':''}" title="${oMemoOpen?'押すとたたむ':'押すと全部見える'}">${esc(c.memo)}</p>`:''}</div>`;
   const tools=`<div class="bar" style="margin:0 0 8px">
-    <h3 style="font-size:14px;margin:0">② 明細と発注</h3>
+    <h3 style="font-size:14px;margin:0">② 明細</h3>
+    <span class="mseg" title="表の形を切り替える">${[['見積','見積を作る（販売と原価の見込み）'],['発注','発注する（原価・区分・発注先）'],['まとめ','まとめ（見るだけ）']].map(([k,t])=>
+      `<button type="button" class="${oMode===k?'on':''}" data-omode="${k}" title="${t}">${k}</button>`).join('')}</span>
     ${po.length?`<button class="btn small ${poLinesOf(c.id).length?'':'primary'}" id="impPO">${poLinesOf(c.id).length?'依頼元の発注書を入れ直す':'依頼元の発注書を取り込む'}（${po.length}行）</button>`:''}
     <button class="btn small" id="impLines">業者見積を貼り付けて取り込む</button>
     <button class="btn small" id="addLine">1行足す</button>
@@ -1453,34 +1426,53 @@ function orderPanel(c){
     ${ls.filter(l=>!l.order).length?'<button class="btn small danger" id="clearLines">明細を全部消す</button>':''}
     ${(n=>n?`<span class="note" style="margin:0;color:var(--warn);flex-basis:100%" title="見積には出したが発注になっていない項目。現場で改めて提案しないこと">取り消し線の${n}行は依頼元が落とした項目。現場で改めて提案しない</span>`:'')(ls.filter(l=>!(+l.qty>0)).length)}</div>`;
   let rowNo=0;
-  const table=ls.length?`<div class="lnw"><table class="ln"><thead><tr>
-      <th class="r" style="width:34px">No</th><th style="width:30px"></th><th style="width:110px">場所</th><th class="nmcol">名称</th>
-      <th style="width:104px">工程区分</th>
-      <th class="r" style="width:62px">数量</th><th style="width:58px">単位</th>
-      <th class="r" style="width:82px" title="販売＝依頼元からもらう">販売単価</th><th class="r" style="width:80px">販売</th>
-      <th class="r" style="width:104px" title="原価＝業者に払う">原価単価</th><th class="r" style="width:80px">原価</th>
-      <th class="r" style="width:74px">粗利</th>
-      <th style="width:130px">備考</th><th style="width:26px"></th></tr></thead><tbody>
-    ${lineGroups(ls).map(g=>groupHead(c,g)+g.rows.map(l=>{const o=l.order?DB.orders.find(x=>x.id===l.order):null;
-      const sv=lineSell(l), cs=lineAmt(l), cut=!(+l.qty>0);   /* 数量0＝発注に出せない行。cut は由来の印 */
-      return `<tr data-l="${l.id}" class="${cut?'cutln':''}${oSel[l.id]&&!l.order?' on':''}">
-      <td class="r rn">${++rowNo}</td>
-      <td class="n">${l.order?'':`<input type="checkbox" class="lchk" ${oSel[l.id]?'checked':''}>`}</td>
-      <td><input type="text" class="li" data-lf="spec" value="${esc(l.spec||'')}"></td>
-      <td class="nmcol" style="white-space:nowrap"><input type="text" class="li" data-lf="name" value="${esc(l.name)}"${cut?' style="width:calc(100% - 78px)"':''}>${
-        cut?`<span class="cl cutbadge" style="margin-left:4px">${l.cut?'依頼元が削除':'数量0'}</span>`:''}</td>
-      <td>${l.order?`<span class="st ${OSTC[o?o.st:'下書き']}" title="${esc(l.who||'')}">${esc(o?o.no:'発注済')}</span>`
-        :`<select class="li" data-lf="kind"${l.kind?'':' style="border-color:var(--warn)"'}>${opts(PKINDS,l.kind,'（区分なし）')}</select>`}</td>
-      <td><input type="number" class="li" data-lf="qty" value="${l.qty}" step="0.1"></td>
-      <td><select class="li" data-lf="unit">${opts(UNITS,l.unit)}</select></td>
-      <td><input type="number" class="li" data-lf="sell" value="${l.sell||0}"></td>
-      <td class="r">${sv?yen(sv):'—'}</td>
-      <td style="white-space:nowrap"><input type="number" class="li" data-lf="price" value="${l.price||0}" style="width:calc(100% - 24px)">${
+  /* 表の形：見積＝販売と原価（予算）を並べて入れる／発注＝原価と区分・発注先／まとめ＝見るだけ。列のまとまりごとに色を分ける */
+  const M=oMode, W={見積:1380,発注:1180,まとめ:940}[M];
+  const pct=(sv,cs)=>sv?Math.round((sv-cs)/sv*1000)/10+'%':'—';
+  const H={
+    見積:`<tr class="gh"><th colspan="5"></th><th colspan="4" class="gs">販売（お客様から）</th><th colspan="4" class="gc">原価（業者へ払う見込み）</th><th colspan="2" class="gp">粗利</th><th colspan="2"></th></tr>
+      <tr><th class="r" style="width:34px">No</th><th style="width:30px"></th><th style="width:100px">場所</th><th class="nmcol">名称</th><th style="width:100px">工程区分</th>
+      <th class="r gs" style="width:62px">数量</th><th class="gs" style="width:58px">単位</th><th class="r gs" style="width:88px">単価</th><th class="r gs" style="width:84px">金額</th>
+      <th class="r gc" style="width:62px">数量</th><th class="gc" style="width:58px">単位</th><th class="r gc" style="width:108px">単価</th><th class="r gc" style="width:84px">金額</th>
+      <th class="r gp" style="width:78px">粗利</th><th class="r gp" style="width:54px">率</th><th style="width:120px">備考</th><th style="width:26px"></th></tr>`,
+    発注:`<tr class="gh"><th colspan="5"></th><th colspan="4" class="gc">原価（業者へ。発注書に出る）</th><th colspan="2" class="gs">販売と粗利（見るだけ）</th><th colspan="2"></th></tr>
+      <tr><th class="r" style="width:34px">No</th><th style="width:30px"></th><th style="width:110px">場所</th><th class="nmcol">名称</th><th style="width:104px">工程区分</th>
+      <th class="r gc" style="width:66px">数量</th><th class="gc" style="width:60px">単位</th><th class="r gc" style="width:110px">単価</th><th class="r gc" style="width:88px">金額</th>
+      <th class="r gs" style="width:88px">販売</th><th class="r gp" style="width:82px">粗利</th><th style="width:140px">備考</th><th style="width:26px"></th></tr>`,
+    まとめ:`<tr><th class="r" style="width:34px">No</th><th style="width:8px"></th><th style="width:110px">場所</th><th class="nmcol">名称</th><th style="width:100px">工程区分</th>
+      <th class="r gs" style="width:96px">販売</th><th class="r gc" style="width:96px">原価</th><th class="r gp" style="width:90px">粗利</th><th class="r gp" style="width:60px">率</th><th style="width:150px">発注</th></tr>`}[M];
+  const ncol={見積:17,発注:13,まとめ:10}[M];
+  const row=l=>{const o=l.order?DB.orders.find(x=>x.id===l.order):null;
+    const sv=lineSell(l), cs=lineAmt(l), cut=!(+l.qty>0);   /* 数量0＝発注に出せない行。cut は由来の印 */
+    const no=`<td class="r rn">${++rowNo}</td>`;
+    const chk=`<td class="n">${l.order||M==='まとめ'?'':`<input type="checkbox" class="lchk" ${oSel[l.id]?'checked':''}>`}</td>`;
+    const spec=`<td><input type="text" class="li" data-lf="spec" value="${esc(l.spec||'')}"></td>`;
+    const name=`<td class="nmcol" style="white-space:nowrap"><input type="text" class="li" data-lf="name" value="${esc(l.name)}"${cut?' style="width:calc(100% - 78px)"':''}>${
+        cut?`<span class="cl cutbadge" style="margin-left:4px">${l.cut?'依頼元が削除':'数量0'}</span>`:''}</td>`;
+    const kind=`<td>${l.order?`<span class="st ${OSTC[o?o.st:'下書き']}" title="${esc(l.who||'')}">${esc(o?o.no:'発注済')}</span>`
+        :`<select class="li" data-lf="kind"${l.kind?'':' style="border-color:var(--warn)"'}>${opts(PKINDS,l.kind,'（区分なし）')}</select>`}</td>`;
+    const sell=`<td class="gs"><input type="number" class="li" data-lf="qty" value="${l.qty}" step="0.1"></td>
+      <td class="gs"><select class="li" data-lf="unit">${opts(UNITS,l.unit)}</select></td>
+      <td class="gs"><input type="number" class="li" data-lf="sell" value="${l.sell||0}"></td>
+      <td class="r gs">${sv?yen(sv):'—'}</td>`;
+    const diffQ=costQty(l)!==(+l.qty||0)||costUnit(l)!==(l.unit||'式');
+    const cost=`<td class="gc"><input type="number" class="li${diffQ?' dq':''}" data-lf="cqty" value="${costQty(l)}" step="0.1" title="原価の数量。販売と違う数量にできる（例：販売は 20㎡、発注は 1式）"></td>
+      <td class="gc"><select class="li${diffQ?' dq':''}" data-lf="cunit">${opts(UNITS,costUnit(l))}</select></td>
+      <td class="gc" style="white-space:nowrap"><input type="number" class="li" data-lf="price" value="${l.price||0}" style="width:calc(100% - 24px)">${
         l.order?'':`<button class="x pk" data-pick="${l.id}" title="単価表から選ぶ／登録する">表</button>`}</td>
-      <td class="r">${cs?yen(cs):'—'}</td>
-      <td class="r" style="color:${sv&&sv-cs<0?'var(--warn)':'var(--sub)'}">${sv?yen(sv-cs):'—'}</td>
-      <td><input type="text" class="li" data-lf="memo" value="${esc(l.memo||'')}"></td>
-      <td>${l.order?'':`<button class="x" data-dell="${l.id}">×</button>`}</td></tr>`;}).join('')).join('')}
+      <td class="r gc">${cs?yen(cs):'—'}</td>`;
+    const prof=`<td class="r gp" style="color:${sv&&sv-cs<0?'var(--warn)':'var(--sub)'}">${sv?yen(sv-cs):'—'}</td>`;
+    const memo=`<td><input type="text" class="li" data-lf="memo" value="${esc(l.memo||'')}"></td>`;
+    const del=`<td>${l.order?'':`<button class="x" data-dell="${l.id}">×</button>`}</td>`;
+    const body=M==='見積'?no+chk+spec+name+kind+sell+cost+prof+`<td class="r gp">${pct(sv,cs)}</td>`+memo+del
+      :M==='発注'?no+chk+spec+name+kind+cost+`<td class="r gs">${sv?yen(sv):'—'}</td>`+prof+memo+del
+      :no+chk+`<td>${esc(l.spec||'')}</td><td class="nmcol">${esc(l.name)}${cut?' <span class="cl cutbadge">'+(l.cut?'依頼元が削除':'数量0')+'</span>':''}</td>
+        <td>${l.kind?`<span class="cl" style="background:${kcol(l.kind)}">${esc(l.kind)}</span>`:'—'}</td>
+        <td class="r gs">${sv?yen(sv):'—'}</td><td class="r gc">${cs?yen(cs):'—'}</td>${prof}<td class="r gp">${pct(sv,cs)}</td>
+        <td>${o?`<span class="ocell" data-osheet="${o.id}"><b>${esc(o.who||'')}</b> <span class="st ${OSTC[o.st]}">${esc(o.st)}</span></span>`:'<span class="note" style="margin:0">未発注</span>'}</td>`;
+    return `<tr data-l="${l.id}" class="${cut?'cutln':''}${oSel[l.id]&&!l.order?' on':''}">${body}</tr>`; };
+  const table=ls.length?`<div class="lnw"><table class="ln m-${M}" style="min-width:${W}px"><thead>${H}</thead><tbody>
+    ${lineGroups(ls).map(g=>groupHead(c,g,ncol)+g.rows.map(row).join('')).join('')}
     </tbody></table></div>`
     :`<div class="card empty">この案件の明細はまだ無い。<br>
         ${poLive(po).length?`依頼元の発注書が ${poLive(po).length}行 届いている。上のボタンで取り込める。`
@@ -1751,7 +1743,7 @@ function orderSheet(oid){
     <table><thead><tr><th style="width:30px">No</th><th>明細名</th><th class="r">数量</th><th>単位</th>
       <th class="r">単価</th><th class="r">金額</th><th>備考</th></tr></thead><tbody>
       ${ls.map((l,i)=>`<tr><td>${i+1}</td><td>${esc(l.name)}${l.spec?'<br><small>'+esc(l.spec)+'</small>':''}</td>
-        <td class="r">${l.qty}</td><td>${esc(l.unit)}</td><td class="r">${yen(l.price)}</td>
+        <td class="r">${costQty(l)}</td><td>${esc(costUnit(l))}</td><td class="r">${yen(l.price)}</td>
         <td class="r">${yen(lineAmt(l))}</td><td>${esc(l.memo||'')}</td></tr>`).join('')}
     </tbody></table>
     <p class="amt">${orderTaxable(o)?`小計 ${yen(amt)}　消費税 ${yen(Math.round(amt*0.1))}　合計 ${yen(inc(amt))}`
@@ -1786,6 +1778,8 @@ let iClient='日本財託', iMonth=addM(THIS_M,-1);   /* 請求は前月分を�
 let cMonth=THIS_M, cWho='すべて', pendStart=null, pHide=false;
 let pCase=null, pFilter='発注前（未）', pQ='', pShift=0, kView='すべて', pSort='起算日が近い順';
 let mTab='発注先', mQ='';
+let oMode=(()=>{ try{ const v=localStorage.getItem('aw-omode'); return ['見積','発注','まとめ'].indexOf(v)>=0?v:'発注'; }catch(e){ return '発注'; } })();   /* 明細の表の形 */
+function setOMode(m){ oMode=m; try{ localStorage.setItem('aw-omode',m); }catch(e){} render(); }
 let oCase=null, oFilter='発注前（未）', oQ='', oSel={}, oView='make', oMonth=THIS_M, oSt='未完了';
 let oMemoOpen=false;   /* 発注画面の案件の備考を全部見せるか */
 let oHide=(()=>{try{return localStorage.getItem('aw-ohide')!=='0';}catch(e){return true;}})();   /* 発注画面で左の案件一覧をたたむ */
@@ -3761,6 +3755,7 @@ document.addEventListener('click',e=>{
   const avk=e.target.closest('[data-avk]'); if(avk){ avOne=avk.dataset.avk; avRedraw(); return; }
   if(e.target.id==='cpBack'){ tab=cpBack||'ledger'; render(); return; }
   const est=e.target.closest('[data-estimate]'); if(est){ showEstimate(est.dataset.estimate); return; }
+  const om=e.target.closest('[data-omode]'); if(om){ setOMode(om.dataset.omode); return; }
   const ed=e.target.closest('[data-ested]'); if(ed){ estEditor(ed.dataset.ested); return; }
   const eg=e.target.closest('[data-estgo]'); if(eg){ const [w,id]=eg.dataset.estgo.split('|'); estGo(id,w); return; }
   const ev=e.target.closest('[data-estview]'); if(ev){ estView(ev.dataset.estview); return; }
@@ -4023,15 +4018,15 @@ document.addEventListener('change',e=>{
     const l=DB.lines.find(x=>x.id===tr.dataset.l); if(!l)return;
     const f=el.dataset.lf;
     const was=l[f];
-    const nv=(f==='qty'||f==='price'||f==='sell')?(+el.value||0):el.value;
+    const nv=(f==='qty'||f==='price'||f==='sell'||f==='cqty')?(+el.value||0):el.value;
     if(String(was)===String(nv))return;
     snap('line:'+l.id+':'+f); l[f]=nv;
-    if(l.order&&(f==='qty'||f==='price'))syncOrderAmt(l.order);   /* 発注済の行を直したら、工程の発注金額（＝原価）も合わせる */
+    if(l.order&&(f==='qty'||f==='price'||f==='cqty'))syncOrderAmt(l.order);   /* 発注済の行を直したら、工程の発注金額（＝原価）も合わせる */
     if(f==='who'&&nv&&!l.kind){const vd=vendorOf(nv); if(vd&&vd.defKind)l.kind=vd.defKind;}   /* 業者を決めたら既定の区分が入る */
     save();renderSoon();
     setTimeout(()=>{const tr2=document.querySelector('tr[data-l="'+l.id+'"]');
       if(tr2){tr2.classList.add('chg'); setTimeout(()=>{tr2.classList.remove('chg');},1600);}},20);
-    const LBL={price:'原価単価',sell:'販売単価',qty:'数量',unit:'単位',kind:'工程区分',who:'発注先'};
+    const LBL={price:'原価単価',sell:'販売単価',qty:'数量',unit:'単位',kind:'工程区分',who:'発注先',cqty:'原価の数量',cunit:'原価の単位'};
     if(LBL[f])toast(`${l.name||'明細'}　${LBL[f]} ${was||0} → ${l[f]||0}　（販売 ${yen(lineSell(l))} ／ 原価 ${yen(lineAmt(l))}）`);
     return;}
   if(el.id==='payMon'){payMon=el.value;render();return;}
