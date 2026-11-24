@@ -49,7 +49,7 @@ const sp=__dirname+'/';
   await p.evaluate(()=>{ oCase='C1302'; tab='order'; oView='make'; oSel={}; linesOf('C1302').filter(l=>!l.order&&!l.cut).forEach(l=>oSel[l.id]=true); render(); }); await p.waitForTimeout(400);
   await p.click('#mkOrder'); await p.waitForTimeout(300);
   await p.click('#askYes'); await p.waitForTimeout(1200);
-  ok('発注を作るとすぐ発注書が開き「まだ下書き」と出る', await p.$eval('.obdraft',x=>x.innerText.includes('まだ下書き')).catch(()=>false));
+  ok('発注を作るとすぐ発注書が開き「まだ下書き」と、住所・鍵情報の未入力の注意が出る', await p.$eval('.ob',x=>x.innerText.includes('まだ下書き')&&x.innerText.includes('鍵情報 が未入力')).catch(()=>false));
   await p.screenshot({path:sp+'fix5-order.png'});
   await p.waitForTimeout(1500);
   const o=(await q("select id,no,st,token from orders order by created_at desc limit 1")).rows[0];
