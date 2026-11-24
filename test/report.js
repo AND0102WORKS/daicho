@@ -116,9 +116,11 @@ const ok=(name,cond,extra)=>{ console.log((cond?'OK  ':'NG  ')+name+(extra!==und
   await L.goto('http://localhost:8787/'); await L.waitForTimeout(1500);
   await L.evaluate(()=>{tab='ledger';render();}); await L.waitForTimeout(300);
   await L.click('a.cplink[data-cpage="C1302"]'); await L.waitForTimeout(1500);
-  const cp=await L.textContent('#main');
-  ok('案件ページが開く（工程と進み具合・見積明細発注・写真・請求支払）',['工程と進み具合','見積・明細・発注','パソコンから入れる','請求・支払'].every(x=>cp.includes(x)));
+  const go=async t=>{ await L.click(`.cptabs [data-cptab="${t}"]`); await L.waitForTimeout(500); return L.textContent('#main'); };
+  const cp=(await L.textContent('#main'))+(await go('完了報告・請求'));
+  ok('案件ページが開く（概要の次にやること・工程と進み具合・請求支払）',['次にやること','工程と進み具合','請求・支払'].every(x=>cp.includes(x)));
   ok('案件ページに業者ごとの完了報告の状態',cp.includes('承認済み'));
+  ok('写真タブにパソコンから入れる欄',(await go('写真')).includes('パソコンから入れる'));
   await L.selectOption('#cpCat','現地調査'); await L.waitForTimeout(300);
   await L.setInputFiles('#cpFiles',[img('s1'),img('s2')]); await L.waitForTimeout(2500);
   const sp=await q("select cat,who,path from photos where path like 'staff/%'");
@@ -126,10 +128,10 @@ const ok=(name,cond,extra)=>{ console.log((cond?'OK  ':'NG  ')+name+(extra!==und
   await L.waitForTimeout(800); await L.evaluate(()=>render()); await L.waitForTimeout(300);
   ok('案件ページの写真に現地調査2枚',(await L.textContent('#main')).includes('現地調査 2枚'));
   await L.screenshot({path:'case-page.png',fullPage:true});
-  await L.click('[data-estimate]'); await L.waitForTimeout(500);
+  await go('見積・発注'); await L.click('[data-estimate]'); await L.waitForTimeout(500);
   const est=await L.textContent('.ask');
   ok('見積書（販売単価から。12,000＋消費税＝13,200）',est.includes('見積書')&&est.includes('13,200'));
-  await L.click('.ask #askNo');
+  await L.click('.ask #askNo'); await go('写真');
   await L.click('[data-phcat="C1302|現地調査"]'); await L.waitForTimeout(800);
   await L.click('#phg [data-phdel]'); await L.waitForTimeout(1500);
   ok('スタッフが写真を外せる',(await q("select count(*)::int n from photos where path like 'staff/%'"))[0].n===1);

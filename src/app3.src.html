@@ -312,6 +312,21 @@ table.ln .li.dq{border-color:#D99A2B;background:#FFF8E8}
 label.estup{cursor:pointer}
 .hidebar{display:flex;align-items:center;gap:10px;margin:0 0 8px;font-size:12.5px}.hidebar.off{justify-content:flex-end;margin-bottom:-4px}
 .hidebar.on{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:6px 12px}
+.cpcrumb{color:var(--sub);font-size:12.5px;margin:2px 0 8px}.cpcrumb a{color:var(--acc);font-weight:700;cursor:pointer}
+.cphead{background:var(--card);border:1px solid var(--line);border-radius:12px 12px 0 0;padding:14px 18px 0}
+.cphead h2{display:inline-block;margin:0 8px 0 0;font-size:20px}.cphead .cl,.cphead .st,.cphead .flag{margin-right:6px;vertical-align:3px}
+.cpsub{color:var(--sub);font-size:12.5px;margin:6px 0 10px}
+.cptabs{display:flex;gap:2px;flex-wrap:wrap}.cptabs button{all:unset;cursor:pointer;padding:9px 16px;font-weight:700;font-size:13.5px;color:var(--sub);border-bottom:3px solid transparent}
+.cptabs button:hover{color:var(--ink)}.cptabs button.on{color:var(--acc);border-bottom-color:var(--acc)}
+.cptabs i{font-style:normal;background:var(--warn);color:#fff;border-radius:9px;font-size:10.5px;padding:0 6px;margin-left:5px}
+.cpbody{border:1px solid var(--line);border-top:0;border-radius:0 0 12px 12px;padding:14px;background:var(--card2);margin-bottom:16px}
+.cpbody>.card,.cpgrid4{margin-bottom:10px}.cpgrid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.cpgrid4 .card{padding:12px 14px;margin:0}.cpgrid4 small{display:block;color:var(--sub);font-size:11.5px}.cpgrid4 b{font-size:20px}
+.cptodo{all:unset;cursor:pointer;display:flex;justify-content:space-between;gap:10px;box-sizing:border-box;width:100%;border-left:4px solid var(--line);background:var(--card2);border-radius:8px;padding:9px 14px;margin-top:6px;font-weight:700;font-size:13.5px}
+.cptodo.warn{border-color:var(--warn);background:var(--warn-bg)}.cptodo.todo{border-color:#E0A21B;background:#FBEFD0}.cptodo.wait{font-weight:400;color:var(--sub)}
+.cptodo em{font-style:normal;font-weight:700;color:var(--acc);white-space:nowrap;font-size:12.5px}.cptodo:hover em{text-decoration:underline}
+.cpform{grid-template-columns:repeat(4,1fr)}.cpform .full{grid-column:1/-1}
+@media(max-width:900px){.cpgrid4,.cpform{grid-template-columns:repeat(2,1fr)}}
 .siteinfo{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px;font-size:12.5px;color:var(--sub)}
 .siteinfo label{display:inline-flex;align-items:center;gap:6px;flex:1 1 300px}.siteinfo input{flex:1;height:30px;min-width:0}
 .siteinfo input.ng{border-color:var(--warn);background:var(--warn-bg)}
@@ -1841,7 +1856,7 @@ function renderTabs(){
   issues().forEach(i=>{const c=B[i.c]; if(c&&c.live)seen.add(i.k+'|'+i.c);});
   const n=seen.size;
   document.getElementById('tabs').innerHTML=TABS.map(([k,l])=>
-    `<button class="${tab===k?'on':''}" data-t="${k}">${l}${k==='check'&&n?` <span style="opacity:.75">${n}</span>`:''}</button>`).join('');
+    `<button class="${tab===k||(tab==='case'&&k==='ledger')?'on':''}" data-t="${k}">${l}${k==='check'&&n?` <span style="opacity:.75">${n}</span>`:''}</button>`).join('');
   document.getElementById('src').innerHTML=
     `元データ：${esc(M.asof)}<br>運用中 ${DB.cases.filter(c=>c.live).length} 件／過去 ${DB.cases.filter(c=>!c.live).length} 件／工程 ${DB.procs.length} 件`+
     `<br>（この画面の編集は元シートに書き戻しません）<br><span id="dbState">${esc(dbState||(LDB?'':'共有保存：未接続（この端末のみ）'))}</span>`;
@@ -2977,43 +2992,73 @@ function vBill(){
 
 /* ================= 支払 ================= */
 /* ================= 案件ページ（物件名から開く。案件の全部を1画面に） ================= */
-let cpCase=null, cpBack='ledger';
+let cpCase=null, cpBack='ledger', cpTab='概要';
 /* 見ていた画面（タブ・開いていた案件）を覚えておき、再読み込みしても同じ画面に戻す（このブラウザのタブの中だけ） */
 (()=>{ try{ const v=JSON.parse(sessionStorage.getItem('aw-view')||'null'); if(!v)return;
   if(typeof v.tab==='string')tab=v.tab; selCase=v.selCase||null; pCase=v.pCase||null; oCase=v.oCase||null;
-  if(v.oView)oView=v.oView; cpCase=v.cpCase||null; if(v.cpBack)cpBack=v.cpBack; }catch(e){} })();
-function keepView(){ try{ sessionStorage.setItem('aw-view',JSON.stringify({tab,selCase,pCase,oCase,oView,cpCase,cpBack})); }catch(e){} }
-function openCasePage(id){ if(tab!=='case')cpBack=tab; cpCase=id; tab='case'; render(); window.scrollTo(0,0); }
+  if(v.oView)oView=v.oView; cpCase=v.cpCase||null; if(v.cpBack)cpBack=v.cpBack; if(v.cpTab)cpTab=v.cpTab; }catch(e){} })();
+function keepView(){ try{ sessionStorage.setItem('aw-view',JSON.stringify({tab,selCase,pCase,oCase,oView,cpCase,cpBack,cpTab})); }catch(e){} }
+function openCasePage(id,t){ if(tab!=='case')cpBack=tab; if(cpCase!==id||t)cpTab=t||'概要'; cpCase=id; oSel={}; tab='case'; render(); window.scrollTo(0,0); }
 const RST={'報告済':['確認待ち','wip'],'承認':['承認済み','done'],'差し戻し':['差し戻し','']};
+/* ---- 案件ページ：物件が主役。物件の下にタブ（概要／案件情報／見積・発注／工程／写真／完了報告・請求）。
+   見積・発注と工程は、上の大きなタブと同じ部品（orderPanel・procPanel）をそのまま出す（同じデータ・同じ操作） ---- */
+const CPTABS=['概要','案件情報','見積・発注','工程','写真','完了報告・請求'];
+const inOrder=()=>tab==='order'||(tab==='case'&&cpTab==='見積・発注');
+const inProc=()=>tab==='proc'||(tab==='case'&&cpTab==='工程');
+/* 次にやること：この案件で、いま止まっている所。t＝直しに行くタブ、lv＝warn（急ぎ）／wait（待ち）／todo */
+function caseTodos(c){
+  const out=[], add=(t,lv,m)=>out.push({t,lv,m});
+  const ps=procsOf(c.id), ls=linesOf(c.id), ods=ordersOf(c.id), reps=(DB.reports||[]).filter(r=>r.case===c.id);
+  if(c.done&&c.bill)return out;   /* 完工して請求月も入っていれば、やることなし */
+  const miss=[!c.addr&&'住所',!c.keyInfo&&'鍵情報'].filter(Boolean);
+  if(miss.length&&!c.done)add('案件情報','todo',`${miss.join('・')}が未入力。業者に現場の場所や入り方が伝わらない`);
+  if(!c.done){
+    if(stIdx(c.st)<stIdx('見積提出')&&stIdx(c.st)>=0)add('見積・発注','todo','見積を作って、提出したら「見積を提出した」を押す');
+    else if(c.st==='見積提出')add('見積・発注','wait','見積の返事待ち。受注が決まったら「受注にする」');
+    const nok=ls.filter(l=>!l.kind&&+l.qty>0&&!l.cut).length; if(nok)add('見積・発注','todo',`区分の付いていない明細が ${nok}行。区分を付けると、工程と打診に内容が出る`);
+    if(stIdx(c.st)>=stIdx('受注')){
+      if(!ps.length)add('工程','todo','工程がまだ無い。区分のボタンで工程を足す');
+      ps.forEach(p=>{
+        if(p.ask==='打診中')add('工程','wait',`${p.kind}：${p.who} さんに ${p.date?md(p.date):''} を打診中。返事待ち`);
+        else if(String(p.ask||'').startsWith('辞退'))add('工程','warn',`${p.kind}：${p.ask.slice(3)} さんは都合が悪い。別の業者に打診する`);
+        else if(!p.who)add('工程','todo',`${p.kind}の業者が決まっていない`);
+        else if(!p.date)add('工程','todo',`${p.kind}（${p.who}）の日程が決まっていない`);
+        else if(!p.order&&!isStaffJob(p.kind)&&p.prog!=='完了')add('見積・発注','todo',`${p.kind}（${p.who}）の発注書を作る`);
+      });
+      ods.forEach(o=>{ if(o.st==='下書き')add('見積・発注','warn',`発注書 ${o.no}（${o.who||'業者未定'}）がまだ下書き。送ったら「送付済にする」`);
+        else if(o.st==='送付済')add('見積・発注','wait',`発注書 ${o.no}：${o.who} さんの承諾待ち`); });
+    }
+    reps.filter(r=>r.st==='報告済').forEach(r=>add('完了報告・請求','warn',`${r.who} さんの完了報告が届いている。確かめて承認する`));
+    if(ps.length&&ps.every(p=>p.prog==='完了'))add('案件情報','todo','全部の工程が終わっている。完了日を入れる');
+  } else if(!c.bill)add('案件情報','todo','完了している。請求月を入れる');
+  return out;
+}
 function vCase(){
   const c=DB.cases.find(x=>x.id===cpCase);
   if(!c)return `<div class="bar"><button class="btn small" id="cpBack">← 戻る</button></div><div class="card">案件が見つからない。</div>`;
+  if(CPTABS.indexOf(cpTab)<0)cpTab='概要';
   const ps=procsOf(c.id).slice().sort((a,b)=>(a.date||'9').localeCompare(b.date||'9')), ls=linesOf(c.id), ods=ordersOf(c.id);
   const sales=salesEx(c), cost=costOf(c.id), costI=costIncOf(c.id);
-  const sellSum=ls.reduce((a,l)=>a+lineSell(l),0), lineCost=ls.reduce((a,l)=>a+lineAmt(l),0);
+  const sellSum=ls.reduce((a,l)=>a+lineSell(l),0), freeCost=Math.round(ls.filter(l=>!l.order).reduce((a,l)=>a+lineAmt(l),0));
   const ph=loadCasePhotos(c.id), phN={}; (ph||[]).forEach(r=>{ phN[r.cat]=(phN[r.cat]||0)+1; });
   const phByProc={}; (ph||[]).forEach(r=>{ if(r.proc_id)phByProc[r.proc_id]=(phByProc[r.proc_id]||0)+1; });
   const reps=(DB.reports||[]).filter(r=>r.case===c.id);
   const invs=(DB.invoices||[]).filter(v=>(v.items||[]).some(x=>reps.some(r=>r.id===x.report_id)));
   const kv=(k,v)=>`<div class="cpkv"><small>${k}</small><div>${v||'—'}</div></div>`;
-  const head=`<div class="bar" style="margin-top:4px"><button class="btn small" id="cpBack">← ${esc((TABS.find(t=>t[0]===cpBack)||['','戻る'])[1])}に戻る</button>
-      <h2 style="margin:0 0 0 6px">${esc(c.prop||'（物件未入力）')}</h2>
-      <span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span><span class="st ${stCls(c.st)}">${esc(c.st)}</span>
+  const todos=caseTodos(c), tn={}; todos.forEach(t=>{ if(t.lv!=='wait')tn[t.t]=(tn[t.t]||0)+1; });
+  const mad=madoriOf(c);
+  const head=`<div class="cpcrumb"><a id="cpBack">← ${esc((TABS.find(t=>t[0]===cpBack)||['','案件台帳'])[1])}にもどる</a>　／　${esc(c.client||'顧客未設定')}　／　${esc(c.prop||'（物件未入力）')}</div>
+    <div class="cphead">
+      <h2>${esc(c.prop||'（物件未入力）')}</h2><span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span><span class="st ${stCls(c.st)}">${esc(c.st)}</span>
       ${(c.ord||'未')==='未'?'<span class="flag">発注 未</span>':'<span class="st done">発注済</span>'}
-      <span class="grow"></span>
-      <button class="btn small" data-open="${c.id}">案件台帳で直す</button><button class="btn small" data-pcopen="${c.id}">工程を組む</button><button class="btn small" data-ocopen="${c.id}">発注</button></div>`;
-  const sum=`<div class="cpgrid">
-    <div class="card"><h3 class="cph">概要</h3><div class="cpkvs">
-      ${kv('区分',esc(c.kind))}${kv('起算日（次回入居）',md(c.kisan))}${kv('完了希望日（依頼元）',md(c.want))}${kv('完了予定日（弊社）',md(c.plan))}
-      ${kv('完了日',md(c.done))}${kv('請求月',c.bill?mlabel(c.bill):'')}${kv('住所',esc(c.addr||''))}${kv('鍵情報',esc(c.keyInfo||''))}
-      ${kv('受注受付',esc(c.caseNo||c.recv||''))}</div>
-      ${c.memo?`<p class="note omemo${oMemoOpen?' open':''}" style="margin-top:8px">${esc(c.memo)}</p>`:''}</div>
-    <div class="card"><h3 class="cph">お金 <small style="font-weight:400;color:var(--sub)">税抜（下に税込）</small></h3><div class="cpkvs">
-      ${kv('売上',dual(sales))}${kv('原価（工程の発注金額）',dual(cost,costI))}${kv('粗利',`${yen(sales-cost)}　${sales?Math.round((sales-cost)/sales*1000)/10+'%':''}<small class="tx">税込 ${yen(inc(sales)-costI)}</small>`)}
-      ${kv('明細の販売計',sellSum?yen(sellSum):'')}${kv('明細の原価計',lineCost?yen(lineCost):'')}</div></div></div>`;
+      <div class="cpsub">${[c.addr?esc(c.addr):'<span style="color:var(--warn)">住所 未入力</span>',mad.v?esc(mad.v)+(mad.guess?'（推測）':''):'',esc(c.kind||''),c.done?'完了 '+md(c.done):c.plan?'完了予定 '+md(c.plan):''].filter(Boolean).join('　／　')}</div>
+      <div class="cptabs">${CPTABS.map(t=>`<button class="${t===cpTab?'on':''}" data-cptab="${t}">${t}${tn[t]?`<i>${tn[t]}</i>`:''}</button>`).join('')}</div></div>`;
+  let body='';
+  if(cpTab==='概要'){
+    const sb_=sales||sellSum, ct=cost+freeCost;
   /* 工程と業者ごとの進み具合 */
   const procT=`<div class="card"><div class="bar" style="margin:0 0 6px"><h3 class="cph" style="margin:0">工程と進み具合</h3>
-      <span class="note" style="margin:0">業者ごとに：発注の状態 → 完了報告 → 承認</span><span class="grow"></span><button class="btn small" data-pcopen="${c.id}">工程を組む</button></div>
+      <span class="note" style="margin:0">業者ごとに：発注の状態 → 完了報告 → 承認</span><span class="grow"></span><button class="btn small" data-cptab="工程">工程を組む</button></div>
     ${ps.length?`<div class="tw"><table><thead><tr><th>区分</th><th>業者</th><th>期間</th><th class="r">発注金額（税抜）</th><th>発注</th><th>完了報告</th><th class="r">写真</th><th></th></tr></thead><tbody>
       ${ps.map(p=>{ const o=p.order?DB.orders.find(x=>x.id===p.order):null, r=reps.find(x=>x.proc===p.id), [rl,rc]=r?RST[r.st]||[r.st,'']:['',''];
         return `<tr><td><span class="cl" style="background:${kcol(p.kind)}">${esc(p.kind)}</span></td><td>${esc(p.who||'業者未定')}</td><td>${p.date?spanLabel(p):'未定'}</td>
@@ -3023,14 +3068,38 @@ function vCase(){
           <td class="r">${phByProc[p.id]||'—'}</td>
           <td style="white-space:nowrap">${r&&r.st==='報告済'?`<button class="btn small primary" data-rok="${esc(r.id)}">承認</button> <button class="btn small danger" data-rng="${esc(r.id)}">差し戻し</button>`:''}</td></tr>`; }).join('')}
     </tbody></table></div>`:'<p class="note">工程がまだ無い。「工程を組む」から足す。</p>'}</div>`;
-  /* 見積・明細・発注 */
-  const ordT=`<div class="card"><div class="bar" style="margin:0 0 6px"><h3 class="cph" style="margin:0">見積・明細・発注</h3>
-      <span class="note" style="margin:0">明細 ${ls.length}行　販売 ${yen(sellSum)}　原価 ${yen(lineCost)}（税抜）</span><span class="grow"></span>
-      ${ls.some(l=>+l.qty>0&&lineSell(l))?`<button class="btn small" data-estimate="${c.id}">見積書</button>`:''}<button class="btn small" data-ocopen="${c.id}">明細・発注を開く</button></div>
-    ${ods.length?`<div class="tw"><table><thead><tr><th>発注No</th><th>区分</th><th>業者</th><th>工期</th><th class="r">税抜</th><th>状態</th><th></th></tr></thead><tbody>
-      ${ods.map(o=>`<tr><td>${esc(o.no)}</td><td><span class="cl" style="background:${kcol(o.kind)}">${esc(o.kind)}</span></td><td>${esc(o.who||'業者未定')}</td>
-        <td>${o.start?spanLabel({date:o.start,end:o.end}):'—'}</td><td class="r">${yen(orderAmt(o))}</td><td><span class="st ${OSTC[o.st]}">${esc(o.st)}</span></td>
-        <td><button class="btn small" data-osheet="${o.id}">発注書</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="note">発注はまだ無い。</p>'}</div>`;
+    body=`<div class="cpgrid4">
+        <div class="card"><small>売上（税抜）</small><b>${yen(sb_)}</b><small>${sales?'税込 '+yen(inc(sales)):'明細の販売計（売上は未入力）'}</small></div>
+        <div class="card"><small>原価（発注済み${freeCost?'＋見込み':''}）</small><b>${yen(ct)}</b><small>発注済み ${yen(cost)}${freeCost?'　未発注の明細 '+yen(freeCost):''}</small></div>
+        <div class="card"><small>粗利${freeCost||!sales?'（見込み）':''}</small><b style="color:${sb_-ct<0?'var(--warn)':'var(--ok)'}">${sb_?yen(sb_-ct):'—'}</b></div>
+        <div class="card"><small>粗利率</small><b>${sb_?Math.round((sb_-ct)/sb_*1000)/10+'%':'—'}</b></div></div>
+      <div class="card"><h3 class="cph">次にやること</h3>
+        ${todos.length?todos.map(t=>`<button class="cptodo ${t.lv}" data-cptab="${t.t}"><span>${esc(t.m)}</span><em>${t.t} →</em></button>`).join('')
+          :`<p class="note" style="margin:0">${c.done?'完了しています。':'いま止まっている所はありません。'}</p>`}</div>
+      ${procT}
+      <div class="card"><h3 class="cph">日付</h3><div class="cpkvs">${kv('起算日（次回入居）',md(c.kisan))}${kv('完了希望日（依頼元）',md(c.want))}${kv('完了予定日（弊社）',md(c.plan))}${kv('完了日',md(c.done))}${kv('請求月',c.bill?mlabel(c.bill):'')}</div>
+        ${c.memo?`<p class="note" style="margin:8px 0 0">${esc(c.memo)}</p>`:''}</div>`;
+  } else if(cpTab==='案件情報'){
+    const F=(l,h,full)=>`<div${full?' class="full"':''}><label class="fl">${l}</label>${h}</div>`, T=(f,ph)=>`<input type="text" data-cf="${f}" value="${esc(c[f]||'')}" placeholder="${ph||''}">`, D=f=>`<input type="date" data-cf="${f}" value="${esc(c[f]||'')}">`;
+    body=`<div class="card"><h3 class="cph">物件</h3><div class="fg cpform">
+        ${F('物件名・号室',T('prop'),1)}${F('住所'+(c.addr?'':' <span style="color:var(--warn)">未入力</span>'),T('addr','業者ページ・発注書に出る'),1)}
+        ${F('鍵情報'+(c.keyInfo?'':' <span style="color:var(--warn)">未入力</span>'),T('keyInfo','キーボックスの場所・番号など。発注書と、作業日が近い業者のページに出る'),1)}
+        ${F('顧客',`<select data-cf="client">${opts(CLIENTS(),c.client,'（未設定）')}${c.client&&!isClient(c.client)?`<option selected>${esc(c.client)}</option>`:''}</select>`)}
+        ${F('区分',`<select data-cf="kind">${opts(KINDS,c.kind)}</select>`)}
+        ${F('間取り',`<select data-cf="madori"><option value="">${mad.guess?'（推測を使う：'+esc(mad.v)+'）':'（未設定）'}</option>${MADORI.map(x=>`<option${x===c.madori?' selected':''}>${x}</option>`).join('')}</select>`)}
+        ${F('ステータス',`<select data-cf="st">${opts(STATUS,c.st)}</select>`)}
+        ${F('鍵交換',`<select data-cf="keyx">${opts(['','有'],c.keyx||'')}</select>`)}${F('設備保証',`<select data-cf="warr">${opts(['','有'],c.warr||'')}</select>`)}
+        ${F('メモ（発注内容）',T('memo'),1)}</div></div>
+      <div class="card"><h3 class="cph">日付とお金</h3><div class="fg cpform">
+        ${F('起算日（次回入居日）',D('kisan'))}${F('完了希望日（依頼元）',D('want'))}${F('完了予定日（弊社）'+(c.planManual?' 手入力':' 工程の最終日から自動'),D('plan'))}${F('完了日',D('done'))}
+        ${F('売上（税抜）',`<input type="number" data-cf="sales" value="${c.sales||0}" step="100">`)}${F('追加受注（税抜）',`<input type="number" data-cf="add" value="${c.add||0}" step="100">`)}
+        ${F('請求月',`<input type="month" data-cf="bill" value="${esc(ym(c.bill))}">`)}${F('報告日',D('report'))}</div>
+        <p class="note" style="margin:10px 0 0">案件の番号 ${esc(c.id)}${c.caseNo||c.recv?'　受注受付 '+esc(c.caseNo||c.recv):''}　変えた瞬間に保存される。</p></div>`;
+  } else if(cpTab==='見積・発注'){
+    oCase=c.id; oView='make'; body=`<div class="cpembed">${orderPanel(c)}</div>`;
+  } else if(cpTab==='工程'){
+    if(pCase!==c.id){ pCase=c.id; pShift=0; } body=`<div class="cpembed">${procPanel(c)}</div>`;
+  } else if(cpTab==='写真'){
   /* 写真（見る・まとめてダウンロード・パソコンから入れる） */
   const phT=`<div class="card"><div class="bar" style="margin:0 0 6px"><h3 class="cph" style="margin:0">写真</h3>
       ${ph?`<span class="note" style="margin:0">${ph.length}枚</span>`:'<span class="note" style="margin:0">読み込み中…</span>'}</div>
@@ -3047,7 +3116,39 @@ function vCase(){
     ${invs.length?`<div class="tw" style="margin-top:8px"><table><thead><tr><th>業者</th><th>種類</th><th>締め</th><th class="r">合計</th><th>状態</th><th></th></tr></thead><tbody>
       ${invs.map(v=>`<tr><td>${esc(v.who)}</td><td>${esc(v.kind)}</td><td>${esc(v.month)}</td><td class="r">${yen(v.total)}</td><td>${esc(v.st)}</td><td><button class="btn small" data-invdoc="${esc(v.id)}">見る</button></td></tr>`).join('')}
     </tbody></table></div>`:'<p class="note">この案件が載った業者の請求書・支払明細書はまだ無い。</p>'}</div>`;
-  return head+sum+procT+ordT+phT+billT;
+    body=phT;
+  } else {
+  /* 工程と業者ごとの進み具合 */
+  const procT=`<div class="card"><div class="bar" style="margin:0 0 6px"><h3 class="cph" style="margin:0">工程と進み具合</h3>
+      <span class="note" style="margin:0">業者ごとに：発注の状態 → 完了報告 → 承認</span><span class="grow"></span><button class="btn small" data-cptab="工程">工程を組む</button></div>
+    ${ps.length?`<div class="tw"><table><thead><tr><th>区分</th><th>業者</th><th>期間</th><th class="r">発注金額（税抜）</th><th>発注</th><th>完了報告</th><th class="r">写真</th><th></th></tr></thead><tbody>
+      ${ps.map(p=>{ const o=p.order?DB.orders.find(x=>x.id===p.order):null, r=reps.find(x=>x.proc===p.id), [rl,rc]=r?RST[r.st]||[r.st,'']:['',''];
+        return `<tr><td><span class="cl" style="background:${kcol(p.kind)}">${esc(p.kind)}</span></td><td>${esc(p.who||'業者未定')}</td><td>${p.date?spanLabel(p):'未定'}</td>
+          <td class="r">${p.amt?yen(p.amt):'—'}</td>
+          <td>${o?`<button class="btn small" data-osheet="${o.id}" title="発注書を開く">${esc(o.no)}</button> <span class="st ${OSTC[o.st]}">${esc(o.st)}</span>`:isStaffJob(p.kind)?'<span class="note" style="margin:0">社内</span>':'<span class="flag">未</span>'}</td>
+          <td>${r?`<span class="st ${rc}">${rl}</span> ${md(r.done)}${+r.extra?`<small class="tx">追加 ${yen(r.extra)}：${esc(r.extraNote||'')}</small>`:''}${r.st==='差し戻し'&&r.reply?`<small class="tx">${esc(r.reply)}</small>`:''}`:p.prog==='完了'?'<span class="st done">完了</span>':'<span class="note" style="margin:0">まだ</span>'}</td>
+          <td class="r">${phByProc[p.id]||'—'}</td>
+          <td style="white-space:nowrap">${r&&r.st==='報告済'?`<button class="btn small primary" data-rok="${esc(r.id)}">承認</button> <button class="btn small danger" data-rng="${esc(r.id)}">差し戻し</button>`:''}</td></tr>`; }).join('')}
+    </tbody></table></div>`:'<p class="note">工程がまだ無い。「工程を組む」から足す。</p>'}</div>`;
+  /* 写真（見る・まとめてダウンロード・パソコンから入れる） */
+  const phT=`<div class="card"><div class="bar" style="margin:0 0 6px"><h3 class="cph" style="margin:0">写真</h3>
+      ${ph?`<span class="note" style="margin:0">${ph.length}枚</span>`:'<span class="note" style="margin:0">読み込み中…</span>'}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${PCATS.filter(k=>phN[k]).map(k=>`<button class="btn small" data-phcat="${esc(c.id)}|${esc(k)}">${esc(k)} ${phN[k]}枚</button>`).join('')||'<span class="note" style="margin:0">まだありません</span>'}</div>
+    <div class="cpup" id="cpDrop">
+      <div class="bar" style="margin:0;gap:6px"><b style="font-size:13px">パソコンから入れる</b>
+        <select id="cpCat">${PCATS.map(k=>`<option${k===cpUpCat?' selected':''}>${k}</option>`).join('')}</select>
+        ${PHASED.indexOf(cpUpCat)>=0?`<select id="cpPh">${['前','後'].map(x=>`<option value="${x}"${x===cpUpPh?' selected':''}>${phLabel(cpUpCat,x)}</option>`).join('')}</select>`:''}
+        <label class="btn small primary" style="cursor:pointer">写真を選ぶ<input type="file" id="cpFiles" accept="image/*" multiple hidden></label>
+        <span class="note" style="margin:0">またはここに写真をドラッグ＆ドロップ</span><span class="note" style="margin:0" id="cpUpMsg">${cpUpMsg()}</span></div></div></div>`;
+  /* 請求・支払 */
+  const billT=`<div class="card"><h3 class="cph">請求・支払</h3><div class="cpkvs">
+      ${kv('依頼元への請求（税込）',yen(salesOf(c)))}${kv('請求月',c.bill?mlabel(c.bill):'')}${kv('完了日',md(c.done))}</div>
+    ${invs.length?`<div class="tw" style="margin-top:8px"><table><thead><tr><th>業者</th><th>種類</th><th>締め</th><th class="r">合計</th><th>状態</th><th></th></tr></thead><tbody>
+      ${invs.map(v=>`<tr><td>${esc(v.who)}</td><td>${esc(v.kind)}</td><td>${esc(v.month)}</td><td class="r">${yen(v.total)}</td><td>${esc(v.st)}</td><td><button class="btn small" data-invdoc="${esc(v.id)}">見る</button></td></tr>`).join('')}
+    </tbody></table></div>`:'<p class="note">この案件が載った業者の請求書・支払明細書はまだ無い。</p>'}</div>`;
+    body=procT+billT;
+  }
+  return head+`<div class="cpbody">${body}</div>`;
 }
 /* パソコンから写真を入れる（スタッフ）：選ぶ／ドラッグ＆ドロップ → 縮めて 3枚ずつ並行で送る */
 const PHASED=['清掃','クロス貼替','リペア','水道設備','電気設備','是正'];
@@ -3478,18 +3579,18 @@ function fitProc(){
   const D=+t.dataset.days||31, col=Math.max(52,Math.min(86,Math.floor((w.clientWidth-114)/D)));
   [t,document.querySelector('#main .avwrap table.bd')].forEach(x=>{ if(x){ x.style.setProperty('--col',col+'px'); x.style.width=(112+col*D)+'px'; x.classList.toggle('narrow',col<76); } });
 }
-window.addEventListener('resize',()=>{ if(tab==='order')fitLnw(); if(tab==='proc')fitProc(); });
+window.addEventListener('resize',()=>{ if(inOrder())fitLnw(); if(inProc())fitProc(); });
 function render(){
   tipHide(); keepView();
   const mem=memView();
   withHidden(()=>{ renderTabs(); paint(); });
-  if(tab==='order')fitLnw();
-  if(tab==='proc')fitProc();
+  if(inOrder())fitLnw();
+  if(inProc())fitProc();
   const hitBoard=restoreView(mem);
-  if(tab==='proc'){
+  if(inProc()){
     /* 工程表は、案件か月が変わったときだけ最初のチップに寄せる（同じ表を触っている間は位置を保つ） */
     const key=pCase+'|'+pShift;
-    const wrap=document.querySelector('.layout .boardwrap');
+    const wrap=document.querySelector('#main .boardwrap.pcw');
     const ch=wrap&&wrap.querySelector('.chip.pc');
     if(wrap&&ch&&(key!==lastProcView||!hitBoard)&&key!==lastProcView){const td=ch.closest('td');
       wrap.scrollLeft=Math.max(0,td.offsetLeft-wrap.clientWidth/2+td.offsetWidth/2);}
@@ -3825,7 +3926,8 @@ document.addEventListener('click',e=>{
   const ov=e.target.closest('[data-ov]'); if(ov){oView=ov.dataset.ov;render();return;}
   const oc=e.target.closest('[data-oc]'); if(oc){oCase=oc.dataset.oc;oSel={};render();return;}
   const oco=e.target.closest('[data-ocopen]');
-  if(oco){oCase=oco.dataset.ocopen;oView='make';oSel={};tab='order';render();return;}
+  if(oco){ if(tab==='case'&&oco.dataset.ocopen===cpCase){ cpTab='見積・発注'; oSel={}; render(); window.scrollTo(0,0); return; }
+    oCase=oco.dataset.ocopen;oView='make';oSel={};tab='order';render();return;}
   const lc=e.target.closest('.lchk');
   if(lc){const tr=lc.closest('[data-l]'); if(tr){oSel[tr.dataset.l]=lc.checked;render();} return;}
   const gc=e.target.classList.contains('gchk')?e.target:null;
@@ -3936,9 +4038,11 @@ document.addEventListener('click',e=>{
     if(pendStart&&pendStart.pid===pch.dataset.p){const td=pch.closest('td'); clickDay(pch.dataset.p,td.dataset.day);return;}
     selProc=selProc===pch.dataset.p?null:pch.dataset.p;render();return;}
   const po=e.target.closest('[data-pcopen]');
-  if(po){pCase=po.dataset.pcopen;pShift=0;tab='proc';render();return;}
+  if(po){ if(tab==='case'&&po.dataset.pcopen===cpCase){ cpTab='工程'; render(); window.scrollTo(0,0); return; }
+    pCase=po.dataset.pcopen;pShift=0;tab='proc';render();return;}
   const ai=e.target.closest('[data-addins]'); if(ai){addInspection(ai.dataset.addins);return;}
-  const op=e.target.closest('[data-open]'); if(op){openCase(op.dataset.open);return;}
+  const op=e.target.closest('[data-open]'); if(op){ if(tab==='case'&&op.dataset.open===cpCase){ cpTab='案件情報'; render(); window.scrollTo(0,0); return; } openCase(op.dataset.open);return;}
+  const ct=e.target.closest('[data-cptab]'); if(ct&&tab==='case'){ cpTab=ct.dataset.cptab; render(); return; }
   const dn=e.target.closest('[data-done]'); if(dn){
     const c=DB.cases.find(x=>x.id===dn.dataset.done);
     if(c){snap(); if(c.done)setDone(c,''); else setDone(c,planOf(c)||fmtD(new Date()));
@@ -4123,6 +4227,7 @@ document.addEventListener('change',e=>{
     const f=el.dataset.f; snap('price:'+pr.id+':'+f);
     pr[f]=(f==='price')?(+el.value||0):el.value;
     save();renderSoon();return;}
+  if(el.dataset&&el.dataset.cf&&tab==='case'&&cpCase){ setField(cpCase,el.dataset.cf,el.value); renderSoon(); return; }
   if(el.dataset&&el.dataset.cinfo){ const c=DB.cases.find(x=>x.id===el.dataset.c); if(c){ snap('cinfo:'+c.id+':'+el.dataset.cinfo); c[el.dataset.cinfo]=el.value.trim(); save(); renderSoon(); } return; }
   if(el.id==='estFile'){ if(el.files&&el.files[0]&&oCase)estUpload(oCase,el.files[0]); return; }
   if(el.dataset&&el.dataset.est&&oCase){ const c=DB.cases.find(x=>x.id===oCase); if(c){ snap('est:'+oCase+':'+el.dataset.est);

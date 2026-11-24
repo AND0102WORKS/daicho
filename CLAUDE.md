@@ -21,7 +21,7 @@
 ## 直し方
 1. `src/app3.src.html` または `src/store4.js` を直す
 2. `python3 src/build4.py` で `docs/index.html` を作り直す
-3. `cd test && ./reset.sh && node run.js`（台帳）／`node pages.js`（業者ページ・発注書）／`node report.js`（完了報告〜請求）／`node ask.js`（日程の打診）／`node fix5.js`（新しい案件・発注書の確認・業者ページの発注書リンク・再読み込み）／`node hide.js`（今までの案件を隠す）／`node est.js`（見積の段）／`node modes.js`（明細の表の切り替え・原価の数量と単位）／`node drag.js`（明細の行の並べ替え）／`node kfocus.js`（区分のボタンで工程を足す）／`node site.js`（住所・鍵情報）／`node info.js`（業者ページの案件の詳細・写真）が通ること。テストごとに `./reset.sh` からやり直す
+3. `cd test && ./reset.sh && node run.js`（台帳）／`node pages.js`（業者ページ・発注書）／`node report.js`（完了報告〜請求）／`node ask.js`（日程の打診）／`node fix5.js`（新しい案件・発注書の確認・業者ページの発注書リンク・再読み込み）／`node hide.js`（今までの案件を隠す）／`node est.js`（見積の段）／`node modes.js`（明細の表の切り替え・原価の数量と単位）／`node drag.js`（明細の行の並べ替え）／`node kfocus.js`（区分のボタンで工程を足す）／`node site.js`（住所・鍵情報）／`node info.js`（業者ページの案件の詳細・写真）／`node cpage.js`（案件ページのタブ）が通ること。テストごとに `./reset.sh` からやり直す。まとめて流すなら `./all.sh`
 4. commit → push。GitHub Pages（`docs/`）が数十秒で更新される
 5. DB の表を変えるときは `src/schema.sql` を直し、同じ SQL を Supabase の migration として適用（Claude の Supabase コネクタ `apply_migration`、または SQL Editor）
 
