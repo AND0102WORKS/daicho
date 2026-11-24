@@ -299,6 +299,7 @@ td.av[data-ask]{cursor:pointer}td.av.free[data-ask]:hover{background:var(--ok-bg
 td.av.free[data-ask]:hover::after{content:'＋打診';font-size:11px;font-weight:700;color:var(--ok)}
 td.av.busy[data-ask]:hover{filter:brightness(.96)}
 td.av .avj.q{color:#8A5A00}td.av .avj.q i{background:#F2C14E;color:#1E2A32;border-radius:3px;padding:0 2px}
+input.avq{height:30px;width:150px;border-radius:8px;border:1px solid #8A9792;background:#fff;color:var(--ink);padding:0 10px;font-size:13px}
 .hidebar{display:flex;align-items:center;gap:10px;margin:0 0 8px;font-size:12.5px}.hidebar.off{justify-content:flex-end;margin-bottom:-4px}
 .hidebar.on{background:#FBEFD0;border:1px solid #E0A21B;border-radius:8px;padding:6px 12px}
 .askline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 8px;padding:6px 10px;border-radius:8px;font-size:12.5px;line-height:1.5}
@@ -1926,7 +1927,7 @@ function flagLine(c,m){
 const KABBR={'清掃':'清','AW検査':'検','検査':'検','内装':'内','リペア補修':'リ','水道設備':'水','電気設備':'電','現地調査':'調','自社施工':'自','鍵交換':'鍵'};
 /* 帯の中の区分のボタンで、その区分の業者だけ出す（1つ選ぶ。「全部」もある）。区分は発注先マスタの「既定の工程区分」から自動で並ぶ。
    最初は、この案件で業者が決まっていない工程の区分。下の工程の行の業者欄を押すと、その行の区分に自動で切り替わる */
-let avOne=null, avLast=null, avCur='';
+let avOne=null, avLast=null, avCur='', avQ='';   /* avQ：予定表の名前の検索（入っている間は区分に関係なく全員から探す） */
 const AV_SKIP=['現地調査','自社施工'];
 function avKinds(){
   const act=DB.vendors.filter(v=>v.active!==false);
@@ -2037,6 +2038,8 @@ function availBlock(c,ps,m,D,y,mo){
   const r=availRows(c,ps,m,D,y,mo); if(!r)return '';
   return `<div class="avblock">${r.head}<div class="boardwrap avwrap"><table class="bd" style="width:${112+86*D}px"><colgroup><col style="width:112px">${'<col style="width:var(--col)">'.repeat(D)}</colgroup><tbody>${r.rows}</tbody></table></div></div>`;
 }
+document.addEventListener('input',e=>{ if(e.target.id!=='avQ')return; avQ=e.target.value;
+  const tb=document.querySelector('.avwrap tbody'); if(!tb||!avLast)return; const r=availRows(...avLast); if(r){ tb.innerHTML=r.rows; tb.closest('.avwrap').scrollTop=0; } });
 /* 予定表と上の工程の表は、横スクロールを合わせる */
 document.addEventListener('scroll',e=>{ const t=e.target; if(!t.classList)return;
   const o=t.classList.contains('pcw')?document.querySelector('.avwrap'):t.classList.contains('avwrap')?document.querySelector('.pcw'):null;
@@ -2048,7 +2051,8 @@ function availRows(c,ps,m,D,y,mo){
   const chip=k=>isInsp(k)?'AW検査':k, ok=k=>k==='全部'||all.indexOf(k)>=0;
   const one=avCur=(avOne&&ok(avOne))?avOne:(ps.filter(p=>!p.who).map(p=>chip(p.kind)).find(ok)||ps.map(p=>chip(p.kind)).find(ok)||all[0]);
   const sel=one==='全部'?all:[one];
-  const people=DB.vendors.filter(v=>v.active!==false&&sel.some(k=>avMatch(v,k))).map(v=>v.name);
+  const qk=nkey(avQ);
+  const people=DB.vendors.filter(v=>v.active!==false&&(qk?all.some(k=>avMatch(v,k))&&nkey(v.name+' '+(v.full||'')).indexOf(qk)>=0:sel.some(k=>avMatch(v,k)))).map(v=>v.name);
   const B=byId();
   const cell=(who,d)=>{ const ds=iso(y,mo,d), js=DB.procs.filter(p=>p.who===who&&p.date&&onDay(p,ds));
     if(isOff(who,ds))return `<td class="av off" title="休み">休</td>`;
@@ -2063,8 +2067,9 @@ function availRows(c,ps,m,D,y,mo){
   const days=Array.from({length:D},(_,i)=>i+1);
   return {head:`<div class="avhead"><b>職人の予定表</b>
     <span class="seg">${[...all,'全部'].map(k=>`<button type="button" class="${k===one?'on':''}" data-avk="${esc(k)}">${esc(k)}</button>`).join('')}</span>
+    <input type="search" id="avQ" class="avq" placeholder="名前で探す" value="${esc(avQ)}" title="業者・職人の名前で探す。入れている間は区分に関係なく全員から探す">
     <span class="avhelp">日付のマスを押すと下の工程に入る（打診も送れる）。札に乗せると作業量。名前に乗せるとその月の量</span></div>`,
-    rows:(people.length?'':`<tr class="avrow"><th class="nm"></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">この区分の業者は発注先マスタにいません</td></tr>`)+
+    rows:(people.length?'':`<tr class="avrow"><th class="nm"></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">${qk?'その名前の業者・職人はいません':'この区分の業者は発注先マスタにいません'}</td></tr>`)+
     people.map(n=>{ const v=vendorOf(n), off=offDays(n,m), kd=[v.defKind,canInspect(v)&&!isInsp(v.defKind)?'検査も':''].filter(Boolean).join('・');
       return `<tr class="avrow"><th class="nm" data-tw="${esc(n)}|${m}">${esc(n)}<small>${v.type==='専属'?`<button class="lnk" data-avoff="${esc(n)}|${m}" title="この月の休みを入れる">休み${off.length}日 ✎</button>`:esc(kd||'外注')}</small></th>${days.map(d=>cell(n,d)).join('')}</tr>`; }).join('')};
 }
