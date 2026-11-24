@@ -11,7 +11,7 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
     let rows,ocr=false; if(/\.pdf$/i.test(name)){ const r=await pdfRows(file); rows=r.rows; ocr=r.ocr; } else if(type){ rows=await ocrRows(file); ocr=true; } else rows=await sheetRows(file);
     const r=pdfToLines(rows); return {ocr,header:r.header,n:rows.length,lines:r.lines,meta:r.meta,raw:rows.map(x=>x.map(c=>Math.round(c.x)+':'+c.t).join('  '))}; },{b64,name});
   console.log(`行 ${out.n}　OCR ${out.ocr}　見出し ${out.header}　明細 ${out.lines.length}行　合計 ${out.lines.reduce((a,l)=>a+Math.round(l.qty*l.price),0)}`);
-  out.lines.forEach((l,i)=>console.log(`${i+1}\t${l.spec}\t${l.name}\t${l.qty}\t${l.unit}\t${l.price}\t${l.amt}\t${l.memo}`));
+  out.lines.forEach((l,i)=>console.log(`${i+1}\t${l.spec}\t${l.name}\t${l.qty}\t${l.unit}\t${l.price}\t${l.amt}\t${l.cprice==null?"":"原価"+l.cprice}\t${l.memo}`));
   console.log('案件の情報 '+JSON.stringify(out.meta));
   if(raw)console.log('--- raw ---\n'+out.raw.join('\n'));
   await b.close(); srv.kill(); })();

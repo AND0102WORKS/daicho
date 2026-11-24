@@ -1,5 +1,6 @@
 // 発注書の読み取りのテスト用の見本（架空の内容）。実際の依頼元の書類と同じ「形」だけをまねる。 node mksamples.js
 //   list-sample.pdf  … 箇条書き（・項目　¥金額。品番と金額が次の行）＋ 上に物件所在地・鍵の所在・受渡期日
+//   est-sample.xlsx … 自社の見積の表（№／工事項目／部位１・２／数量／単位／単価／総額／貸主負担／借主負担／原価単価／原価／品番／備考／エラーチェック）。途中に空の行
 //   table2-sample.pdf … 表（材・手／工事区分／工事内容／数量／単位／単価／金額／備考）、備考の折り返し、2ページ目に表の無い案内
 const {chromium}=require('playwright');
 const list=`<html><body style="font-family:sans-serif;font-size:12px;padding:40px;line-height:1.9"><h2 style="text-align:center;letter-spacing:1em">工事依頼書</h2>
@@ -20,6 +21,17 @@ ${row(['材工','修繕工事','キッチンガスコンロ電池交換（単1×
 ${row(['材工','修繕工事','洗面室クロス壁涙目取付','1.0','個','60','60',''])}
 ${row(['材工','修繕工事','浴室入口右縦コーキング打ち直し','4.0','式','1,000','4,000','白'])}</table>
 <div style="page-break-before:always"></div><h3>工事発注書 (内訳書) 2 ページ目　　　発注書番号 20261029-00000-N</h3><p>物件名　サンプルレジデンス １２０７</p><p>営業　見本 太郎　※曜日指定なし</p><p>現調　※時間指定 8：00～ 19：00(目安)</p><p>施工管理　※退出時ダイヤル錠にそろえてご退出ください。</p><p>株式会社サンプルプランニング　TEL :03-0000-0000</p></body></html>`;
+{ const X=require('../docs/vendor/xlsx/xlsx.full.min.js'); const E='';
+  const aoa=[['①','作成日','2026/11/24',E,E,E,'④','物件名称','サンプルコーポ',E,E,'⑦','専有面積','39.60㎡'],['②','作成会社名','サンプル工務店',E,E,E,'⑤','部屋番号','202'],['連絡事項'],
+    ['№','工事項目','部位１','部位２','数量','単位','単価','総額','貸主負担','借主負担','原価単価','原価','メーカー/品番','備考',E,'エラーチェック'],
+    [1,'キッチン水栓交換','キッチン',E,1,'式',55000,55000,55000,0,45000,45000,'TK-0000','提案','既存水漏れあり','ok'],
+    [2,'エアコン洗浄','LDK','洋室',2,'台',15000,30000,0,30000,10000,20000,E,'必要','ファンカビ','ok'],
+    [3,'クロス貼替','廊下','壁',17,'㎡',1600,27200,27200,0,1150,19550,E,'必要','SP0000','ok'],
+    [4],[5],[6],[7],[8],
+    [9,'ルームクリーニング',E,E,1,'式',50000,50000,E,50000,26000,26000,E,E,E,'ok'],
+    [10,'立会経費',E,E,1,'式',0,0,0,0,5000,5000,E,E,E,'ok'],
+    ['小計',E,E,E,E,E,E,162200,82200,80000,E,115550,E,E,E,'ok'],['消費税',E,E,E,E,E,E,16220],['合計',E,E,E,E,E,E,178420]];
+  const wb=X.utils.book_new(); X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet(aoa),'見積'); require('fs').writeFileSync(__dirname+'/samples/est-sample.xlsx',X.write(wb,{type:'buffer',bookType:'xlsx'})); }
 (async()=>{ const b=await chromium.launch(); const p=await b.newPage();
   for(const [h,f,o] of [[list,'list-sample.pdf',{format:'A4'}],[table2,'table2-sample.pdf',{format:'A4',landscape:true}]]){ await p.setContent(h); await p.pdf(Object.assign({path:__dirname+'/samples/'+f},o)); }
   await b.close(); })();

@@ -1338,13 +1338,15 @@ async function sheetRows(file){
   return (best?best.aoa:[]).map((r,ri)=>{ const o=r.map((c,i)=>({x:i*100,w:90,h:10,t:String(c==null?'':c).trim()})).filter(c=>c.t); o.y=-ri*20; return o; }).filter(r=>r.length);
 }
 const pnum=t=>{ const v=String(t).replace(/[,，¥￥円\s]/g,'').replace(/[０-９．－]/g,d=>'0123456789.-'['０１２３４５６７８９．－'.indexOf(d)]); return /^-?\d+(\.\d+)?$/.test(v)?+v:NaN; };
-const PCOL={no:/^(No\.?|NO\.?|番号|項番?|#)$/,mat:/^材[・･]?[手工]|^材工$/,kindx:/工事区分|^区分$|工種|分類/,name:/名称|品名|品目|項目|内容|工事名|摘要|作業|^名$|^品$/,spec:/場所|部位|箇所|室名|部屋/,qty:/数\s*[量重里]/,unit:/単\s*位/,price:/単\s*[価佃]/,amt:/金\s*[額頷]|小計|価格/,memo:/備考|仕様|メモ/};
+const PCOL={no:/^(No\.?|NO\.?|№|番号|項番?|#)$/,skip:/負担|チェック|エラー/,cprice:/原価\s*単価|仕入\s*単価/,camt:/^原価$|原価\s*(金額|計)|仕入\s*(金額|額)/,mat:/^材[・･]?[手工]|^材工$/,kindx:/工事区分|^区分$|工種|分類/,name:/名称|品名|品目|項目|内容|工事名|摘要|作業|^名$|^品$/,spec:/場所|部位|箇所|室名|部屋/,qty:/数\s*[量重里]/,unit:/単\s*位/,price:/単\s*[価佃]/,amt:/金\s*[額頷]|小計|価格|総額/,memo:/備考|仕様|メモ|品番|型番|メーカー/};
 /* 行の配列 → 明細。書類の形は3通り：
    (1) 表（見出しの行に 名称・数量・単価 など）→ 列の位置で読む。折り返した名称・備考は、近い方の行につなぐ
    (2) 箇条書き（・項目　¥金額）→ ¥ の付いた行を明細にする。金額が次の行にあるときは、前の項目名とつなぐ
    (3) どちらでもない → 文字と数字が並ぶ行として読む */
 function pdfToLines(rows){
-  const isHead=r=>{ const hit={}; r.forEach(c=>{ for(const k in PCOL){ if(!hit[k]&&PCOL[k].test(c.t)&&c.t.length<=10){ hit[k]={a:c.x,b:c.x+c.w}; break; } } });
+  const isHead=r=>{ const hit={}; let n=0; r.forEach(c=>{ let kk=''; if(c.t.length<=10)for(const k in PCOL){ if(PCOL[k].test(c.t)){ kk=k; break; } }
+      if(!kk){ if(c.t.length>10||!isNaN(pnum(c.t)))return; kk='other'; }
+      const one=['spec','memo','other','skip'].indexOf(kk)<0; if(one&&hit[kk])return; hit[one?kk:kk+'#'+(n++)]={k:kk,a:c.x,b:c.x+c.w}; });
     return hit.name!=null&&(hit.qty!=null||hit.price!=null||hit.amt!=null)?hit:null; };
   let hi=-1, cols=null;
   rows.forEach((r,i)=>{ if(hi>=0)return; const h=isHead(r); if(h){ hi=i; cols=h; } });
@@ -1371,18 +1373,21 @@ function pdfToLines(rows){
       const first=r.map(c=>c.t).join('').replace(/\s/g,'');
       if(STOP.test(first)){ if(out.length){ flush(null); dead=true; } continue; }
       if(dead)continue;
-      const o={name:'',spec:'',qty:'',unit:'',price:'',amt:'',memo:''}; let h=10;
+      const o={name:'',spec:'',qty:'',unit:'',price:'',amt:'',memo:'',cprice:'',camt:''}; let h=10, any=false;
       r.forEach(c=>{ h=c.h||h; let best=null,bo=-1e9; keys.forEach(k=>{ const o2=ov(c,cols[k]); if(o2>bo){bo=o2;best=k;} });   /* いちばん重なる列（重ならなければ、いちばん近い列） */
-        if(best==='no'||best==='mat'||best==='kindx')return;   /* 番号・材工・工事区分の列は明細に入れない */
+        best=cols[best].k; if(best==='no'||best==='mat'||best==='kindx'||best==='skip')return;   /* 番号・材工・工事区分などの列は明細に入れない */
+        if(best==='other'){ if(!isNaN(pnum(c.t))||/^\(?[\d,]+\)?$/.test(c.t))return; best='memo'; }   /* 知らない列：数字は捨て、文字は備考へ */
+        any=true; if((best==='cprice'||best==='camt')&&isNaN(pnum(c.t)))return;
         if(['qty','price','amt'].indexOf(best)>=0&&isNaN(pnum(c.t))){ const m=/^([\d,.]+)\s*(\D{1,3})$/.exec(c.t); if(m&&best==='qty'){ o.qty=m[1]; o.unit=o.unit||m[2]; return; } best=o.name?'memo':'name'; }
         o[best]=o[best]?o[best]+(best==='name'||best==='memo'||best==='spec'?' ':'')+c.t:c.t; });
       const q=pnum(o.qty), p=pnum(o.price), a=pnum(o.amt);
+      if(!any)continue;   /* 番号だけの空の行（Excel の空いた行）は飛ばす */
       if(isNaN(p)&&isNaN(a)&&isNaN(q)){   /* 数字の無い行：折り返した名称・備考の続き。3行続いたら表は終わり */
         if(++miss>=3){ flush(null); dead=true; continue; }
         if(o.name||o.memo||o.spec)pend.push({o,y:r.y,h}); continue; }
       if(!o.name){ continue; }
       miss=0; const qty=isNaN(q)?1:q, price=!isNaN(p)?p:(!isNaN(a)&&qty?Math.round(a/qty):0);
-      mk(o,qty,price,a,r.y); flush(out[out.length-1]);
+      mk(o,qty,price,a,r.y); { const l=out[out.length-1], cp=pnum(o.cprice), ca=pnum(o.camt); if(!isNaN(cp)||!isNaN(ca))l.cprice=!isNaN(cp)?cp:(qty?Math.round(ca/qty):0); } flush(out[out.length-1]);
     }
     flush(null);
   } else {
@@ -1414,7 +1419,7 @@ function pdfToLines(rows){
 }
 /* 書類の上の方に書いてある案件の情報：住所・鍵の場所・間取り・日付。ラベル（物件所在地：など）の右の文字を読む */
 function docMeta(rows){
-  const m={}, LAB=[['addr',/^(物件)?(所在地|住所)$/],['key',/^鍵(の)?(所在|場所|保管|情報)?$/],['madori',/^間取り?$/],['want',/^(完成|完了|受渡)(予定|期)日$/],['kisan',/^次?起算日$/],['prop',/^物件名$/],['room',/^号室$/]];
+  const m={}, LAB=[['addr',/^(物件)?(所在地|住所)$/],['key',/^鍵(の)?(所在|場所|保管|情報)?$/],['madori',/^間取り?$/],['want',/^(完成|完了|受渡)(予定|期)日$/],['kisan',/^次?起算日$/],['prop',/^物件名称?$/],['room',/^(号室|部屋番号)$/]];
   const day=t=>{ const x=/(20\d\d)[年\/\-.](\d{1,2})[月\/\-.](\d{1,2})/.exec(t); return x?`${x[1]}-${String(x[2]).padStart(2,'0')}-${String(x[3]).padStart(2,'0')}`:''; };
   rows.forEach(r=>{ for(let i=0;i<r.length;i++){ let lab='', j=i;
       /* ラベルは1文字ずつ分かれていることがある（鍵 の 所 在）。いちばん長く当てはまる所までをラベルにする */
@@ -1450,7 +1455,7 @@ async function readPdfFile(cid,file){
 }
 /* 確認の画面：読み取った行を直して、取り込む行にチェック。販売（依頼元の発注書・見積書）として入れるか、原価（業者の見積）として入れるか */
 function pdfConfirm(cid,fname,lines,warn,meta){
-  const el=document.createElement('div'); el.className='ask'; let as='sell';
+  const el=document.createElement('div'); el.className='ask'; let as='sell'; const both=lines.some(l=>l.cprice!=null);
   /* 書類から読んだ案件の情報。案件の欄が空のものだけ、最初からチェックを入れる */
   const cs=DB.cases.find(x=>x.id===cid)||{}, ML=[['addr','住所','addr'],['key','鍵情報','keyInfo'],['madori','間取り','madori'],['want','完了希望日','want'],['kisan','起算日','kisan']];
   const mrows=ML.filter(([k])=>meta&&meta[k]).map(([k,l,f])=>({k,l,f,v:meta[k],on:!cs[f]&&meta[k]!==cs[f],cur:cs[f]||''}));
@@ -1460,24 +1465,24 @@ function pdfConfirm(cid,fname,lines,warn,meta){
       :warn==='ocr'?`<p class="note" style="color:var(--warn);margin:0 0 8px">写真・スキャンから文字を読んだ（OCR）。読み違いが出やすいので、名称・数量・単価を元の書類と見比べて、直してから取り込んでください。</p>`
       :warn==='nohead'?`<p class="note" style="color:var(--warn);margin:0 0 8px">表の見出し（名称・数量・単価 など）が見つからなかったので、文字と数字の並びから読んだ。違う所を直してから取り込んでください。</p>`
       :`<p class="note" style="margin:0 0 8px">読み違いが無いか確かめて、直してから取り込む。要らない行はチェックを外す。</p>`}
-    ${lines.length?`<div class="estw"><table class="ln"><thead><tr><th style="width:30px"></th><th style="width:110px">場所</th><th>名称</th><th class="r" style="width:70px">数量</th><th style="width:66px">単位</th><th class="r" style="width:100px">単価</th><th class="r" style="width:96px">金額</th><th style="width:140px">備考</th></tr></thead><tbody>
+    ${lines.length?`<div class="estw"><table class="ln"><thead><tr><th style="width:30px"></th><th style="width:110px">場所</th><th>名称</th><th class="r" style="width:70px">数量</th><th style="width:66px">単位</th><th class="r" style="width:100px">${both?'販売の単価':'単価'}</th><th class="r" style="width:96px">金額</th>${both?'<th class="r" style="width:100px">原価の単価</th>':''}<th style="width:140px">備考</th></tr></thead><tbody>
       ${lines.map((l,i)=>`<tr data-i="${i}" class="${l.off?'cutln':''}"><td class="n"><input type="checkbox" data-pf="on" ${l.off?'':'checked'}></td>
         <td><input type="text" class="li" data-pf="spec" value="${esc(l.spec||'')}"></td><td><input type="text" class="li" data-pf="name" value="${esc(l.name)}"></td>
         <td><input type="number" class="li" data-pf="qty" value="${l.qty}" step="0.1"></td><td><select class="li" data-pf="unit">${opts(UNITS,UNITS.indexOf(l.unit)>=0?l.unit:'式')}</select></td>
-        <td><input type="number" class="li" data-pf="price" value="${l.price}"></td><td class="r">${yen(Math.round((+l.qty||0)*(+l.price||0)))}</td>
+        <td><input type="number" class="li" data-pf="price" value="${l.price}"></td><td class="r">${yen(Math.round((+l.qty||0)*(+l.price||0)))}</td>${both?`<td><input type="number" class="li" data-pf="cprice" value="${l.cprice||0}"></td>`:''}
         <td><input type="text" class="li" data-pf="memo" value="${esc(l.memo||'')}"></td></tr>`).join('')}</tbody></table></div>
       <div class="bar" style="margin:10px 0 0;gap:10px"><span class="note" style="margin:0">取り込む ${lines.filter(l=>!l.off).length}行　合計 <b>${yen(sum())}</b>（税抜）</span><span class="grow"></span>
-        <label style="font-size:12.5px"><input type="radio" name="pdfas" value="sell" ${as==='sell'?'checked':''}> 販売の単価として（依頼元の発注書・見積書）</label>
-        <label style="font-size:12.5px"><input type="radio" name="pdfas" value="price" ${as==='price'?'checked':''}> 原価の単価として（業者の見積）</label></div>`:''}
+        ${both?`<span class="note" style="margin:0">原価の合計 <b>${yen(lines.filter(l=>!l.off).reduce((a,l)=>a+Math.round((+l.qty||0)*(+l.cprice||0)),0))}</b>　販売と原価の両方を入れる</span>`:`<label style="font-size:12.5px"><input type="radio" name="pdfas" value="sell" ${as==='sell'?'checked':''}> 販売の単価として（依頼元の発注書・見積書）</label>
+        <label style="font-size:12.5px"><input type="radio" name="pdfas" value="price" ${as==='price'?'checked':''}> 原価の単価として（業者の見積）</label>`}</div>`:''}
     ${mrows.length?`<div class="pdfmeta"><b>書類から読み取った案件の情報</b>${meta.prop?`<span class="note" style="margin:0 0 0 8px">書類の物件名：${esc(meta.prop)}</span>`:''}
       ${mrows.map((x,i)=>`<label><input type="checkbox" data-mi="${i}" ${x.on?'checked':''}> ${x.l}：<input type="text" class="li" data-mv="${i}" value="${esc(x.v)}">${x.cur?`<small>今の値：${esc(x.cur)}</small>`:'<small>今は未入力</small>'}</label>`).join('')}</div>`:''}
     <div class="askbtn" style="margin-top:12px"><button class="btn small" id="askNo">やめる</button>${lines.length||mrows.length?`<button class="btn small primary" id="askYes">この内容で取り込む</button>`:''}</div></div>`; };
   el.addEventListener('change',e=>{ const t=e.target; if(t.name==='pdfas'){ as=t.value; return; }
     if(t.dataset.mi!=null){ mrows[+t.dataset.mi].on=t.checked; return; } if(t.dataset.mv!=null){ mrows[+t.dataset.mv].v=t.value.trim(); return; }
     const tr=t.closest('[data-i]'); if(!tr||!t.dataset.pf)return; const l=lines[+tr.dataset.i], f=t.dataset.pf;
-    if(f==='on')l.off=!t.checked; else l[f]=(f==='qty'||f==='price')?(+t.value||0):t.value; if(f==='on'||f==='qty'||f==='price')draw(); });
+    if(f==='on')l.off=!t.checked; else l[f]=(f==='qty'||f==='price'||f==='cprice')?(+t.value||0):t.value; if(f==='on'||f==='qty'||f==='price'||f==='cprice')draw(); });
   el.addEventListener('click',e=>{ if(e.target.id==='askNo'){ el.remove(); return; }
-    if(e.target.id==='askYes'){ const rows=lines.filter(l=>!l.off&&l.name).map(l=>({name:l.name,spec:l.spec,qty:l.qty,unit:l.unit,memo:l.memo,src:'PDF',[as]:l.price}));
+    if(e.target.id==='askYes'){ const rows=lines.filter(l=>!l.off&&l.name).map(l=>Object.assign({name:l.name,spec:l.spec,qty:l.qty,unit:l.unit,memo:l.memo,src:'PDF'},both?{sell:l.price,price:+l.cprice||0}:{[as]:l.price}));
       const ms=mrows.filter(x=>x.on&&x.v);
       el.remove(); if(!rows.length&&!ms.length){ toast('取り込むものが無い'); return; }
       snap('pdfimp:'+cid); ms.forEach(x=>{ cs[x.f]=x.v; }); if(rows.length)addLines(cid,rows,true); else save(); render();

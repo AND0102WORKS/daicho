@@ -51,6 +51,15 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   ok('表2：折り返した備考は、その行だけに付く', /^\|仕上り調整費\|1\|式\|3000\|建具.*ぐ\s?らつき.*写真撮影.*清掃後/.test(rows[2])&&rows[1].endsWith('|')&&rows[3].endsWith('|'), rows[2]);
   ok('表2：合計 23,560（2ページ目の案内は行にならない）', (await p.textContent('.dlg.ested')).includes('23,560'));
   await p.click('#askNo');
+  // 自社の見積の Excel：販売と原価の両方の列、負担の列、空の行
+  await p.waitForTimeout(300); rows=await read('est-sample.xlsx');
+  ok('見積Excel：5行（空の行を飛ばして、下のルームクリーニング・立会経費まで読む）', rows.length===5&&rows[0].startsWith('キッチン|キッチン水栓交換|1|式|55000|')&&rows[1].startsWith('LDK 洋室|エアコン洗浄|2|台|15000|')&&rows[3].startsWith('|ルームクリーニング|1|式|50000|'), rows);
+  ok('見積Excel：負担の列の数字やチェックの列は備考に混ざらない', rows[0].endsWith('|TK-0000 提案 既存水漏れあり'), rows[0]);
+  const cps=await p.$$eval('.dlg.ested [data-pf="cprice"]',a=>a.map(x=>+x.value));
+  ok('見積Excel：原価の単価も読む。販売の合計 162,200・原価の合計 115,550', JSON.stringify(cps)==='[45000,10000,1150,26000,5000]'&&(await p.textContent('.dlg.ested')).includes('162,200')&&(await p.textContent('.dlg.ested')).includes('115,550'), cps);
+  await p.click('#askYes'); await p.waitForTimeout(1800);
+  const dbe=await q("select name,sell,price from lines where case_id='C1302' and name in ('エアコン洗浄','立会経費') and src='PDF' order by name");
+  ok('見積Excel：取り込むと販売と原価の両方が入る', dbe.length===2&&dbe[0].sell===15000&&dbe[0].price===10000&&dbe[1].sell===0&&dbe[1].price===5000, dbe);
   ok('ページのエラーなし', errs.length===0, errs);
   console.log(res.every(Boolean)?'ALL OK':'SOME NG');
   await c.end(); await b.close(); srv.kill();
