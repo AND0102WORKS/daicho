@@ -11,4 +11,4 @@ const html=`<html><body style="font-family:sans-serif;font-size:12px;padding:30p
 <tr><td>6</td><td></td><td>諸経費</td><td align="right">1</td><td>式</td><td align="right">35,990</td><td align="right">35,990</td><td></td></tr>
 <tr><td colspan="6" align="right">小計</td><td align="right">225,740</td><td></td></tr><tr><td colspan="6" align="right">消費税（10%）</td><td align="right">22,574</td><td></td></tr><tr><td colspan="6" align="right">合計</td><td align="right">248,314</td><td></td></tr></table>
 <p>備考：鍵はキーボックスにて。</p></body></html>`;
-(async()=>{ const b=await chromium.launch(); const p=await b.newPage(); await p.setContent(html); await p.pdf({path:process.argv[2],format:'A4'}); await b.close(); })();
+(async()=>{ const b=await chromium.launch(); const p=await b.newPage(); await p.setContent(html); if(/\.png$/.test(process.argv[2])){ await p.setViewportSize({width:1000,height:700}); await p.screenshot({path:process.argv[2],fullPage:true}); } else await p.pdf({path:process.argv[2],format:'A4'}); await b.close(); })();

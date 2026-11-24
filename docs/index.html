@@ -1262,24 +1262,81 @@ function loadPdfJs(){
 }
 const siteBaseRoot=()=>location.origin+location.pathname.replace(/[^/]*$/,'');
 /* PDF → 行の配列。行＝[{x,w,t}]（左から）。文字が1つも取れなければ空（画像の PDF） */
-async function pdfRows(file){
+/* 文字の集まり（位置つき。y は上ほど大きい）→ 行の配列。同じ高さを1行に、すぐ隣の文字は1つの欄につなぐ */
+function itemsToRows(its,gap){
+  its=its.slice().sort((a,b)=>b.y-a.y||a.x-b.x); const rows=[]; let cur=null;
+  its.forEach(i=>{ if(cur&&Math.abs(cur.y-i.y)<=Math.max(3,i.h*0.45))cur.cells.push(i); else { cur={y:i.y,cells:[i]}; rows.push(cur); } });
+  return rows.map(r=>{ r.cells.sort((a,b)=>a.x-b.x);
+    const out=[]; r.cells.forEach(c=>{ const p=out[out.length-1]; if(p&&c.x-(p.x+p.w)<Math.max(2.5,c.h*(gap||0.28))){ p.t+=c.t; p.w=c.x+c.w-p.x; } else out.push({x:c.x,w:c.w,h:c.h,t:c.t}); });
+    return out; });
+}
+/* PDF → 行の配列。文字が取れないページ（スキャン）は、画像にして OCR で読む */
+async function pdfRows(file,onMsg){
   const {L,base}=await loadPdfJs();
   const doc=await L.getDocument({data:new Uint8Array(await file.arrayBuffer()),cMapUrl:base+'cmaps/',cMapPacked:true}).promise;
-  const rows=[];
+  let rows=[], ocr=false;
   for(let n=1;n<=Math.min(doc.numPages,20);n++){
     const pg=await doc.getPage(n), tc=await pg.getTextContent();
     const its=tc.items.filter(i=>String(i.str).trim()).map(i=>({x:i.transform[4],y:i.transform[5],w:i.width||0,h:i.height||Math.abs(i.transform[3])||10,t:String(i.str).trim()}));
-    its.sort((a,b)=>b.y-a.y||a.x-b.x);
-    let cur=null;
-    its.forEach(i=>{ if(cur&&Math.abs(cur.y-i.y)<=Math.max(3,i.h*0.45))cur.cells.push(i); else { cur={y:i.y,cells:[i]}; rows.push(cur); } });
+    if(its.length>=8){ rows=rows.concat(itemsToRows(its)); continue; }
+    if(n>5)continue;   /* スキャンは時間がかかるので5ページまで */
+    ocr=true; if(onMsg)onMsg(`${n}ページ目を画像として読み取っている…（少し時間がかかる）`);
+    const vp=pg.getViewport({scale:2.2}), cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
+    await pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+    rows=rows.concat(await ocrRows(cv));
   }
-  return rows.map(r=>{ r.cells.sort((a,b)=>a.x-b.x);
-    /* すぐ隣の文字は1つの欄につなぐ（1文字ずつ分かれている PDF がある） */
-    const out=[]; r.cells.forEach(c=>{ const p=out[out.length-1]; if(p&&c.x-(p.x+p.w)<Math.max(2.5,c.h*0.28)){ p.t+=c.t; p.w=c.x+c.w-p.x; } else out.push({x:c.x,w:c.w,h:c.h,t:c.t}); });
-    return out; });
+  return {rows,ocr};
+}
+/* 写真・画像 → 行の配列（OCR。ブラウザの中で動く Tesseract。日本語）。外には送らない */
+let TESS=null;
+function loadTess(){
+  if(TESS)return TESS;
+  const base=siteBaseRoot()+'vendor/tesseract/';
+  TESS=new Promise((ok,ng)=>{ const sc=document.createElement('script'); sc.src=base+'tesseract.min.js';
+    sc.onload=async()=>{ try{ ok(await window.Tesseract.createWorker('jpn',1,{workerPath:base+'worker.min.js',corePath:base,langPath:base,gzip:true})); }catch(e){ TESS=null; ng(e); } };
+    sc.onerror=()=>{ TESS=null; ng(new Error('読み取りの部品を読み込めなかった')); }; document.head.appendChild(sc); });
+  return TESS;
+}
+let OCR_PSM='11';   /* 11＝ばらばらの文字を探す（表に向く）。文字の並びは位置から組み直す */
+/* 読む前の下ごしらえ：白黒にして、表のけい線（長い横線・縦線）を消す。けい線があると、表の中の文字を絵と間違えて読まない */
+function ocrClean(cv){
+  const g=cv.getContext('2d'), W=cv.width, H=cv.height, im=g.getImageData(0,0,W,H), d=im.data, n=W*H, dark=new Uint8Array(n);
+  let sum=0; const gray=new Uint8Array(n); for(let i=0;i<n;i++){ const v=(d[i*4]*299+d[i*4+1]*587+d[i*4+2]*114)/1000; gray[i]=v; sum+=v; }
+  const th=Math.min(170,Math.max(90,(sum/n)*0.72));   /* 紙の明るさに合わせたしきい値 */
+  for(let i=0;i<n;i++)dark[i]=gray[i]<th?1:0;
+  const L=Math.max(60,Math.round(W/22)), kill=new Uint8Array(n);
+  for(let y=0;y<H;y++){ let run=0; for(let x=0;x<=W;x++){ if(x<W&&dark[y*W+x])run++; else { if(run>=L)for(let k=x-run;k<x;k++)kill[y*W+k]=1; run=0; } } }
+  for(let x=0;x<W;x++){ let run=0; for(let y=0;y<=H;y++){ if(y<H&&dark[y*W+x])run++; else { if(run>=L)for(let k=y-run;k<y;k++)kill[k*W+x]=1; run=0; } } }
+  for(let i=0;i<n;i++){ const v=dark[i]&&!kill[i]?0:255; d[i*4]=d[i*4+1]=d[i*4+2]=v; d[i*4+3]=255; }
+  g.putImageData(im,0,0);
+}
+async function ocrRows(src){
+  /* 大きすぎる写真は縮める（横 2400px まで）。小さい画像は少し拡大した方が読みやすい */
+  let cv=src;
+  if(src instanceof HTMLCanvasElement){ cv=document.createElement('canvas'); cv.width=src.width; cv.height=src.height; cv.getContext('2d').drawImage(src,0,0); }
+  else { const bmp=await createImageBitmap(src); const k=Math.min(2400/bmp.width,Math.max(1,1600/bmp.width));
+    cv=document.createElement('canvas'); cv.width=Math.round(bmp.width*k); cv.height=Math.round(bmp.height*k); cv.getContext('2d').drawImage(bmp,0,0,cv.width,cv.height); }
+  ocrClean(cv);
+  const w=await loadTess(); await w.setParameters({tessedit_pageseg_mode:OCR_PSM,preserve_interword_spaces:'1'}); const {data}=await w.recognize(cv);
+  const its=(data.words||[]).filter(x=>String(x.text).trim()&&x.confidence>25).map(x=>({x:x.bbox.x0,y:-(x.bbox.y0+x.bbox.y1)/2,w:x.bbox.x1-x.bbox.x0,h:x.bbox.y1-x.bbox.y0,t:String(x.text).trim()}));
+  /* OCR の癖を直す：桁区切りのカンマを点と読む（1.500／45,.000 → 1500／45000。小数の 42.5 はそのまま）、円記号を \ と読む */
+  const fix=t=>t.replace(/[\\¥￥](?=\d)/g,'').replace(/(\d)[.,、，]{1,2}(?=\d{3}(?!\d))/g,'$1');
+  return itemsToRows(its,0.55).map(r=>r.map(c=>Object.assign(c,{t:fix(c.t)})));
+}
+/* Excel・CSV → 行の配列。セルの列の位置を、そのまま横の位置として使う */
+let XLSXP=null;
+function loadXlsx(){ if(XLSXP)return XLSXP; XLSXP=new Promise((ok,ng)=>{ const sc=document.createElement('script'); sc.src=siteBaseRoot()+'vendor/xlsx/xlsx.full.min.js';
+  sc.onload=()=>ok(window.XLSX); sc.onerror=()=>{ XLSXP=null; ng(new Error('読み取りの部品を読み込めなかった')); }; document.head.appendChild(sc); }); return XLSXP; }
+async function sheetRows(file){
+  const X=await loadXlsx(), wb=X.read(new Uint8Array(await file.arrayBuffer()),{type:'array'});
+  /* 明細がありそうなシート：見出し（数量・単価 など）がある最初のシート。無ければ最初のシート */
+  let best=null;
+  wb.SheetNames.forEach(n=>{ const aoa=X.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,defval:''}); const sc=aoa.some(r=>r.some(c=>PCOL.qty.test(String(c)))&&r.some(c=>PCOL.price.test(String(c))||PCOL.amt.test(String(c))))?2:aoa.length?1:0;
+    if(!best||sc>best.sc)best={sc,aoa}; });
+  return (best?best.aoa:[]).map(r=>r.map((c,i)=>({x:i*100,w:90,h:10,t:String(c==null?'':c).trim()})).filter(c=>c.t)).filter(r=>r.length);
 }
 const pnum=t=>{ const v=String(t).replace(/[,，¥￥円\s]/g,'').replace(/[０-９．－]/g,d=>'0123456789.-'['０１２３４５６７８９．－'.indexOf(d)]); return /^-?\d+(\.\d+)?$/.test(v)?+v:NaN; };
-const PCOL={no:/^(No\.?|NO\.?|番号|項番?|#)$/,name:/名称|品名|品目|項目|内容|工事名|摘要|作業/,spec:/場所|部位|箇所|室名|部屋/,qty:/数量|数\s*量/,unit:/単位/,price:/単価/,amt:/金額|小計|価格/,memo:/備考|仕様|メモ/};
+const PCOL={no:/^(No\.?|NO\.?|番号|項番?|#)$/,name:/名称|品名|品目|項目|内容|工事名|摘要|作業|^名$|^品$/,spec:/場所|部位|箇所|室名|部屋/,qty:/数\s*[量重里]/,unit:/単\s*位/,price:/単\s*[価佃]/,amt:/金\s*[額頷]|小計|価格/,memo:/備考|仕様|メモ/};
 /* 行の配列 → 明細。見出しの行があれば列の位置で読む。無ければ「文字＋数字が並ぶ行」として読む */
 function pdfToLines(rows){
   let hi=-1, cols=null;
@@ -1317,20 +1374,30 @@ function pdfToLines(rows){
   }
   return {lines:out.filter(l=>l.name),header:hi>=0};
 }
+/* 発注書・見積書のファイルを読む：PDF（文字入り／スキャン）・写真・Excel・CSV */
 async function readPdfFile(cid,file){
   if(!file)return;
-  toast('PDF を読み取っている…');
-  let rows=[];
-  try{ rows=await pdfRows(file); }catch(e){ toast('PDF を開けなかった：'+(e&&e.message||e)); return; }
+  const nm=(file.name||'').toLowerCase(), isPdf=/\.pdf$/.test(nm)||file.type==='application/pdf', isSheet=/\.(xlsx|xlsm|xls|csv)$/.test(nm), isImg=/^image\//.test(file.type)||/\.(jpe?g|png|webp|heic|bmp|gif)$/.test(nm);
+  if(!isPdf&&!isSheet&&!isImg){ toast('読めるのは PDF・写真・Excel（xlsx・xls・csv）'); return; }
+  const box=document.createElement('div'); box.className='ask'; box.innerHTML=`<div class="askbox" style="max-width:380px;text-align:center"><h4>読み取っている…</h4><p class="note" id="rdMsg" style="margin:6px 0 0">${isImg?'写真の文字を読んでいる（初回は準備に少し時間がかかる）':''}</p></div>`;
+  document.body.appendChild(box); const msg=t=>{ const m=box.querySelector('#rdMsg'); if(m)m.textContent=t; };
+  let rows=[], ocr=false;
+  try{
+    if(isSheet)rows=await sheetRows(file);
+    else if(isImg){ rows=await ocrRows(file); ocr=true; }
+    else { const r=await pdfRows(file,msg); rows=r.rows; ocr=r.ocr; }
+  }catch(e){ box.remove(); toast('読み取れなかった：'+(e&&e.message||e)); return; }
+  box.remove();
   if(!rows.length){ pdfConfirm(cid,file.name,[],'scan'); return; }
-  const r=pdfToLines(rows); pdfConfirm(cid,file.name,r.lines,r.header?'':'nohead',rows);
+  const r=pdfToLines(rows); pdfConfirm(cid,file.name,r.lines,!r.lines.length?'none':ocr?'ocr':r.header?'':'nohead',rows);
 }
 /* 確認の画面：読み取った行を直して、取り込む行にチェック。販売（依頼元の発注書・見積書）として入れるか、原価（業者の見積）として入れるか */
 function pdfConfirm(cid,fname,lines,warn,raw){
   const el=document.createElement('div'); el.className='ask'; let as='sell';
   const sum=()=>lines.filter(l=>!l.off).reduce((a,l)=>a+Math.round((+l.qty||0)*(+l.price||0)),0);
-  const draw=()=>{ el.innerHTML=`<div class="dlg ested"><h4>PDF から読み取った明細　<span class="note" style="margin:0;font-weight:400">${esc(fname)}</span></h4>
-    ${warn==='scan'?`<p class="note" style="color:var(--warn);margin:0 0 8px">この PDF からは文字を取り出せなかった（紙をスキャンした画像の PDF）。画像からの読み取りは、まだ用意できていない。下の「貼り付けて取り込む」か、1行ずつ入れてください。</p>`
+  const draw=()=>{ el.innerHTML=`<div class="dlg ested"><h4>読み取った明細　<span class="note" style="margin:0;font-weight:400">${esc(fname)}</span></h4>
+    ${warn==='scan'||warn==='none'?`<p class="note" style="color:var(--warn);margin:0 0 8px">${warn==='scan'?'文字を読み取れなかった。':'文字は読めたが、明細の行（名称と数量・金額が並ぶ行）を見つけられなかった。'}写真のときは、明るい所で、表をまっすぐ大きく写すと読みやすい。「貼り付けて取り込む」か、1行ずつ入れることもできる。</p>`
+      :warn==='ocr'?`<p class="note" style="color:var(--warn);margin:0 0 8px">写真・スキャンから文字を読んだ（OCR）。読み違いが出やすいので、名称・数量・単価を元の書類と見比べて、直してから取り込んでください。</p>`
       :warn==='nohead'?`<p class="note" style="color:var(--warn);margin:0 0 8px">表の見出し（名称・数量・単価 など）が見つからなかったので、文字と数字の並びから読んだ。違う所を直してから取り込んでください。</p>`
       :`<p class="note" style="margin:0 0 8px">読み違いが無いか確かめて、直してから取り込む。要らない行はチェックを外す。</p>`}
     ${lines.length?`<div class="estw"><table class="ln"><thead><tr><th style="width:30px"></th><th style="width:110px">場所</th><th>名称</th><th class="r" style="width:70px">数量</th><th style="width:66px">単位</th><th class="r" style="width:100px">単価</th><th class="r" style="width:96px">金額</th><th style="width:140px">備考</th></tr></thead><tbody>
@@ -1348,7 +1415,7 @@ function pdfConfirm(cid,fname,lines,warn,raw){
     if(f==='on')l.off=!t.checked; else l[f]=(f==='qty'||f==='price')?(+t.value||0):t.value; if(f==='on'||f==='qty'||f==='price')draw(); });
   el.addEventListener('click',e=>{ if(e.target.id==='askNo'){ el.remove(); return; }
     if(e.target.id==='askYes'){ const rows=lines.filter(l=>!l.off&&l.name).map(l=>({name:l.name,spec:l.spec,qty:l.qty,unit:l.unit,memo:l.memo,src:'PDF',[as]:l.price}));
-      el.remove(); if(!rows.length){ toast('取り込む行が無い'); return; } addLines(cid,rows); render(); toast(`PDF から ${rows.length}行 取り込んだ。工程区分を付ける`,undo); } });
+      el.remove(); if(!rows.length){ toast('取り込む行が無い'); return; } addLines(cid,rows); render(); toast(`${rows.length}行 取り込んだ。工程区分を付ける`,undo); } });
   document.body.appendChild(el); draw();
 }
 /* 依頼元の発注書（kintoneの見積テーブル／ANDPADの発注書）の明細を入れる。販売価格として入る */
@@ -1585,7 +1652,7 @@ function orderPanel(c){
     <span class="mseg" title="表の形を切り替える">${[['見積','見積を作る（販売と原価の見込み）'],['発注','発注する（原価・区分・発注先）'],['まとめ','まとめ（見るだけ）']].map(([k,t])=>
       `<button type="button" class="${oMode===k?'on':''}" data-omode="${k}" title="${t}">${k}</button>`).join('')}</span>
     ${po.length?`<button class="btn small ${poLinesOf(c.id).length?'':'primary'}" id="impPO">${poLinesOf(c.id).length?'依頼元の発注書を入れ直す':'依頼元の発注書を取り込む'}（${po.length}行）</button>`:''}
-    <label class="btn small primary" style="cursor:pointer" title="依頼元の発注書・見積書、業者の見積の PDF から、明細を読み取る。読んだ内容は確認の画面で直してから取り込む。外には送らない">PDF を読み取る<input type="file" id="pdfFile" accept="application/pdf" hidden></label>
+    <label class="btn small primary" style="cursor:pointer" title="依頼元の発注書・見積書、業者の見積から、明細を読み取る。PDF・写真・Excel（xlsx・xls・csv）。読んだ内容は確認の画面で直してから取り込む。外には送らない">発注書を読み取る<small style="font-weight:400;margin-left:5px">PDF・写真・Excel</small><input type="file" id="pdfFile" accept="application/pdf,image/*,.xlsx,.xlsm,.xls,.csv" hidden></label>
     <button class="btn small" id="impLines">貼り付けて取り込む</button>
     <button class="btn small" id="addLine">1行足す</button>
     ${ls.length?'':'<button class="btn small" id="sampleLines">例を入れる</button>'}
