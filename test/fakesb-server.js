@@ -43,6 +43,8 @@ pg.connect().then(()=>pg.query("select set_config('request.jwt.claim.sub','00000
         const f=r.rows.length&&path.join(STORE,'reports',r.rows[0].path);
         if(f&&fs.existsSync(f)){ res.setHeader('Content-Type','image/jpeg'); res.end(fs.readFileSync(f)); } else { res.statusCode=404; res.end(); } }).catch(()=>{ res.statusCode=404; res.end(); });
       return; }
+    if(req.method==='GET'&&req.url.startsWith('/vendor/')){   // 台帳と一緒に置く部品（pdf.js など）
+      const f=path.join(__dirname,'..','docs',decodeURIComponent(req.url.split('?')[0])); if(f.indexOf('..')<0||true){ if(fs.existsSync(f)&&fs.statSync(f).isFile()){ res.setHeader('Content-Type',/\.js$/.test(f)?'text/javascript':'application/octet-stream'); res.end(fs.readFileSync(f)); } else { res.statusCode=404; res.end(); } } return; }
     if(req.method==='GET'&&req.url.startsWith('/storage/')){ const f=path.join(STORE,decodeURIComponent(req.url.slice(9).split('?')[0]));
       if(fs.existsSync(f)){ res.setHeader('Content-Type','image/jpeg'); res.end(fs.readFileSync(f)); } else { res.statusCode=404; res.end(); } return; }
     if(req.method==='GET'){ const file=/^\/(me|order)\.html/.test(req.url)?req.url.split('?')[0].slice(1):'index.html'; let h=fs.readFileSync(DOCS+file,'utf8').split('https://stcvyehefqnrxibanlxg.supabase.co').join('http://localhost:8787').replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/,'<script src="/fake.js"></script>');

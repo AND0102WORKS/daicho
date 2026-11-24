@@ -1280,6 +1280,108 @@ function addLines(cid,rows,noSnap){
       cut:r.cut?1:0,src:r.src||'',order:''});});
   save();
 }
+/* ---- 発注書・見積書の PDF を読み取って明細にする（ブラウザの中だけで読む。外には送らない） ----
+   1) pdf.js で、文字とその位置を取り出す  2) 同じ高さの文字を1行にまとめる
+   3) 見出しの行（名称・数量・単価 など）を探して、列の位置を決める  4) 明細の行を取り出す → 確認の画面で直してから取り込む */
+let PDFJS=null;
+function loadPdfJs(){
+  if(PDFJS)return PDFJS;
+  PDFJS=new Promise((ok,ng)=>{ const base=siteBaseRoot()+'vendor/pdfjs/', sc=document.createElement('script'); sc.src=base+'pdf.min.js';
+    sc.onload=()=>{ const L=window.pdfjsLib; if(!L){ng(new Error('pdf.js'));return;} L.GlobalWorkerOptions.workerSrc=base+'pdf.worker.min.js'; ok({L,base}); };
+    sc.onerror=()=>{ PDFJS=null; ng(new Error('読み取りの部品を読み込めなかった')); }; document.head.appendChild(sc); });
+  return PDFJS;
+}
+const siteBaseRoot=()=>location.origin+location.pathname.replace(/[^/]*$/,'');
+/* PDF → 行の配列。行＝[{x,w,t}]（左から）。文字が1つも取れなければ空（画像の PDF） */
+async function pdfRows(file){
+  const {L,base}=await loadPdfJs();
+  const doc=await L.getDocument({data:new Uint8Array(await file.arrayBuffer()),cMapUrl:base+'cmaps/',cMapPacked:true}).promise;
+  const rows=[];
+  for(let n=1;n<=Math.min(doc.numPages,20);n++){
+    const pg=await doc.getPage(n), tc=await pg.getTextContent();
+    const its=tc.items.filter(i=>String(i.str).trim()).map(i=>({x:i.transform[4],y:i.transform[5],w:i.width||0,h:i.height||Math.abs(i.transform[3])||10,t:String(i.str).trim()}));
+    its.sort((a,b)=>b.y-a.y||a.x-b.x);
+    let cur=null;
+    its.forEach(i=>{ if(cur&&Math.abs(cur.y-i.y)<=Math.max(3,i.h*0.45))cur.cells.push(i); else { cur={y:i.y,cells:[i]}; rows.push(cur); } });
+  }
+  return rows.map(r=>{ r.cells.sort((a,b)=>a.x-b.x);
+    /* すぐ隣の文字は1つの欄につなぐ（1文字ずつ分かれている PDF がある） */
+    const out=[]; r.cells.forEach(c=>{ const p=out[out.length-1]; if(p&&c.x-(p.x+p.w)<Math.max(2.5,c.h*0.28)){ p.t+=c.t; p.w=c.x+c.w-p.x; } else out.push({x:c.x,w:c.w,h:c.h,t:c.t}); });
+    return out; });
+}
+const pnum=t=>{ const v=String(t).replace(/[,，¥￥円\s]/g,'').replace(/[０-９．－]/g,d=>'0123456789.-'['０１２３４５６７８９．－'.indexOf(d)]); return /^-?\d+(\.\d+)?$/.test(v)?+v:NaN; };
+const PCOL={no:/^(No\.?|NO\.?|番号|項番?|#)$/,name:/名称|品名|品目|項目|内容|工事名|摘要|作業/,spec:/場所|部位|箇所|室名|部屋/,qty:/数量|数\s*量/,unit:/単位/,price:/単価/,amt:/金額|小計|価格/,memo:/備考|仕様|メモ/};
+/* 行の配列 → 明細。見出しの行があれば列の位置で読む。無ければ「文字＋数字が並ぶ行」として読む */
+function pdfToLines(rows){
+  let hi=-1, cols=null;
+  rows.forEach((r,i)=>{ if(hi>=0)return; const hit={}; r.forEach(c=>{ for(const k in PCOL){ if(!hit[k]&&PCOL[k].test(c.t)&&c.t.length<=10){ hit[k]={a:c.x,b:c.x+c.w}; break; } } });
+    if(hit.name!=null&&(hit.qty!=null||hit.price!=null||hit.amt!=null)){ hi=i; cols=hit; } });
+  /* 列の幅：見出しの文字の幅から始めて、その下の行の文字（見出しと重なるもの）で広げる。左寄せ・右寄せのどちらの表でも列が分かる */
+  const ov=(c,g)=>Math.min(c.x+c.w,g.b)-Math.max(c.x,g.a);
+  if(cols){ for(let pass=0;pass<2;pass++)rows.slice(hi+1).forEach(r=>r.forEach(c=>{ const ks=Object.keys(cols).filter(k=>ov(c,cols[k])>0);
+    if(ks.length===1){ const g=cols[ks[0]]; g.a=Math.min(g.a,c.x); g.b=Math.max(g.b,c.x+c.w); } })); }
+  const STOP=/^(小\s*計|合\s*計|消費税|税込|総\s*額|値引|御?請求|お?支払|振込|備\s*考\s*[:：]?$)/;
+  const out=[];
+  const body=hi>=0?rows.slice(hi+1):rows;
+  for(const r of body){
+    const txt=r.map(c=>c.t).join(' ');
+    if(STOP.test(r[0].t.replace(/\s/g,''))||/^(小計|合計|消費税)/.test(txt.replace(/\s/g,''))){ if(out.length)break; else continue; }
+    let o={name:'',spec:'',qty:'',unit:'',price:'',amt:'',memo:''};
+    if(cols){
+      const keys=Object.keys(cols);
+      r.forEach(c=>{ let best=null,bo=-1e9; keys.forEach(k=>{ const o2=ov(c,cols[k]); if(o2>bo){bo=o2;best=k;} });   /* いちばん重なる列（重ならなければ、いちばん近い列） */
+        if(best==='no')return;
+        if(['qty','price','amt'].indexOf(best)>=0&&isNaN(pnum(c.t))){ const m=/^([\d,.]+)\s*(\D{1,3})$/.exec(c.t); if(m&&best==='qty'){ o.qty=m[1]; o.unit=o.unit||m[2]; return; } best=o.name?'memo':'name'; }
+        o[best]=o[best]?o[best]+(best==='name'||best==='memo'?' ':'')+c.t:c.t; });
+    } else {
+      const nums=[], tx=[]; r.forEach(c=>{ const v=pnum(c.t); if(!isNaN(v))nums.push(v); else tx.push(c.t); });
+      if(!tx.length||!nums.length)continue;
+      const u=tx.find(x=>UNITS.indexOf(x)>=0); o.name=tx.filter(x=>x!==u)[0]||''; o.unit=u||''; o.memo=tx.filter(x=>x!==u).slice(1).join(' ');
+      if(nums.length>=3){ o.qty=nums[nums.length-3]; o.price=nums[nums.length-2]; o.amt=nums[nums.length-1]; }
+      else if(nums.length===2){ o.qty=nums[0]; o.price=nums[1]; } else o.price=nums[0];
+    }
+    const q=pnum(o.qty), p=pnum(o.price), a=pnum(o.amt);
+    if(!o.name||/^(No\.?|番号)$/i.test(o.name))continue;
+    if(isNaN(p)&&isNaN(a)&&isNaN(q)){ if(out.length&&cols){ out[out.length-1].name+=' '+o.name; } continue; }   /* 金額の無い行は、前の行の名称の続き */
+    const qty=isNaN(q)?1:q, price=!isNaN(p)?p:(!isNaN(a)&&qty?Math.round(a/qty):0);
+    out.push({name:o.name.replace(/^\d+[\s.．、]+/,'').trim(),spec:o.spec,qty,unit:UNITS.indexOf(o.unit)>=0?o.unit:(o.unit||'式'),price,amt:!isNaN(a)?a:Math.round(qty*price),memo:o.memo});
+  }
+  return {lines:out.filter(l=>l.name),header:hi>=0};
+}
+async function readPdfFile(cid,file){
+  if(!file)return;
+  toast('PDF を読み取っている…');
+  let rows=[];
+  try{ rows=await pdfRows(file); }catch(e){ toast('PDF を開けなかった：'+(e&&e.message||e)); return; }
+  if(!rows.length){ pdfConfirm(cid,file.name,[],'scan'); return; }
+  const r=pdfToLines(rows); pdfConfirm(cid,file.name,r.lines,r.header?'':'nohead',rows);
+}
+/* 確認の画面：読み取った行を直して、取り込む行にチェック。販売（依頼元の発注書・見積書）として入れるか、原価（業者の見積）として入れるか */
+function pdfConfirm(cid,fname,lines,warn,raw){
+  const el=document.createElement('div'); el.className='ask'; let as='sell';
+  const sum=()=>lines.filter(l=>!l.off).reduce((a,l)=>a+Math.round((+l.qty||0)*(+l.price||0)),0);
+  const draw=()=>{ el.innerHTML=`<div class="dlg ested"><h4>PDF から読み取った明細　<span class="note" style="margin:0;font-weight:400">${esc(fname)}</span></h4>
+    ${warn==='scan'?`<p class="note" style="color:var(--warn);margin:0 0 8px">この PDF からは文字を取り出せなかった（紙をスキャンした画像の PDF）。画像からの読み取りは、まだ用意できていない。下の「貼り付けて取り込む」か、1行ずつ入れてください。</p>`
+      :warn==='nohead'?`<p class="note" style="color:var(--warn);margin:0 0 8px">表の見出し（名称・数量・単価 など）が見つからなかったので、文字と数字の並びから読んだ。違う所を直してから取り込んでください。</p>`
+      :`<p class="note" style="margin:0 0 8px">読み違いが無いか確かめて、直してから取り込む。要らない行はチェックを外す。</p>`}
+    ${lines.length?`<div class="estw"><table class="ln"><thead><tr><th style="width:30px"></th><th style="width:110px">場所</th><th>名称</th><th class="r" style="width:70px">数量</th><th style="width:66px">単位</th><th class="r" style="width:100px">単価</th><th class="r" style="width:96px">金額</th><th style="width:140px">備考</th></tr></thead><tbody>
+      ${lines.map((l,i)=>`<tr data-i="${i}" class="${l.off?'cutln':''}"><td class="n"><input type="checkbox" data-pf="on" ${l.off?'':'checked'}></td>
+        <td><input type="text" class="li" data-pf="spec" value="${esc(l.spec||'')}"></td><td><input type="text" class="li" data-pf="name" value="${esc(l.name)}"></td>
+        <td><input type="number" class="li" data-pf="qty" value="${l.qty}" step="0.1"></td><td><select class="li" data-pf="unit">${opts(UNITS,UNITS.indexOf(l.unit)>=0?l.unit:'式')}</select></td>
+        <td><input type="number" class="li" data-pf="price" value="${l.price}"></td><td class="r">${yen(Math.round((+l.qty||0)*(+l.price||0)))}</td>
+        <td><input type="text" class="li" data-pf="memo" value="${esc(l.memo||'')}"></td></tr>`).join('')}</tbody></table></div>
+      <div class="bar" style="margin:10px 0 0;gap:10px"><span class="note" style="margin:0">取り込む ${lines.filter(l=>!l.off).length}行　合計 <b>${yen(sum())}</b>（税抜）</span><span class="grow"></span>
+        <label style="font-size:12.5px"><input type="radio" name="pdfas" value="sell" ${as==='sell'?'checked':''}> 販売の単価として（依頼元の発注書・見積書）</label>
+        <label style="font-size:12.5px"><input type="radio" name="pdfas" value="price" ${as==='price'?'checked':''}> 原価の単価として（業者の見積）</label></div>`:''}
+    <div class="askbtn" style="margin-top:12px"><button class="btn small" id="askNo">やめる</button>${lines.length?`<button class="btn small primary" id="askYes">この内容で取り込む</button>`:''}</div></div>`; };
+  el.addEventListener('change',e=>{ const t=e.target; if(t.name==='pdfas'){ as=t.value; return; }
+    const tr=t.closest('[data-i]'); if(!tr||!t.dataset.pf)return; const l=lines[+tr.dataset.i], f=t.dataset.pf;
+    if(f==='on')l.off=!t.checked; else l[f]=(f==='qty'||f==='price')?(+t.value||0):t.value; if(f==='on'||f==='qty'||f==='price')draw(); });
+  el.addEventListener('click',e=>{ if(e.target.id==='askNo'){ el.remove(); return; }
+    if(e.target.id==='askYes'){ const rows=lines.filter(l=>!l.off&&l.name).map(l=>({name:l.name,spec:l.spec,qty:l.qty,unit:l.unit,memo:l.memo,src:'PDF',[as]:l.price}));
+      el.remove(); if(!rows.length){ toast('取り込む行が無い'); return; } addLines(cid,rows); render(); toast(`PDF から ${rows.length}行 取り込んだ。工程区分を付ける`,undo); } });
+  document.body.appendChild(el); draw();
+}
 /* 依頼元の発注書（kintoneの見積テーブル／ANDPADの発注書）の明細を入れる。販売価格として入る */
 function poRowsOf(cid){
   const c=DB.cases.find(x=>x.id===cid); if(!c||!c.recv||!INBOX)return [];
@@ -1514,7 +1616,8 @@ function orderPanel(c){
     <span class="mseg" title="表の形を切り替える">${[['見積','見積を作る（販売と原価の見込み）'],['発注','発注する（原価・区分・発注先）'],['まとめ','まとめ（見るだけ）']].map(([k,t])=>
       `<button type="button" class="${oMode===k?'on':''}" data-omode="${k}" title="${t}">${k}</button>`).join('')}</span>
     ${po.length?`<button class="btn small ${poLinesOf(c.id).length?'':'primary'}" id="impPO">${poLinesOf(c.id).length?'依頼元の発注書を入れ直す':'依頼元の発注書を取り込む'}（${po.length}行）</button>`:''}
-    <button class="btn small" id="impLines">業者見積を貼り付けて取り込む</button>
+    <label class="btn small primary" style="cursor:pointer" title="依頼元の発注書・見積書、業者の見積の PDF から、明細を読み取る。読んだ内容は確認の画面で直してから取り込む。外には送らない">PDF を読み取る<input type="file" id="pdfFile" accept="application/pdf" hidden></label>
+    <button class="btn small" id="impLines">貼り付けて取り込む</button>
     <button class="btn small" id="addLine">1行足す</button>
     ${ls.length?'':'<button class="btn small" id="sampleLines">例を入れる</button>'}
     ${ls.filter(l=>!l.order&&!l.price&&+l.qty>0).length?`<button class="btn small" id="applyPrice">単価表から原価を入れる（${ls.filter(l=>!l.order&&!l.price&&+l.qty>0).length}行）</button>`:''}
@@ -4229,6 +4332,7 @@ document.addEventListener('change',e=>{
     save();renderSoon();return;}
   if(el.dataset&&el.dataset.cf&&tab==='case'&&cpCase){ setField(cpCase,el.dataset.cf,el.value); renderSoon(); return; }
   if(el.dataset&&el.dataset.cinfo){ const c=DB.cases.find(x=>x.id===el.dataset.c); if(c){ snap('cinfo:'+c.id+':'+el.dataset.cinfo); c[el.dataset.cinfo]=el.value.trim(); save(); renderSoon(); } return; }
+  if(el.id==='pdfFile'){ const f=el.files&&el.files[0]; el.value=''; if(f&&oCase)readPdfFile(oCase,f); return; }
   if(el.id==='estFile'){ if(el.files&&el.files[0]&&oCase)estUpload(oCase,el.files[0]); return; }
   if(el.dataset&&el.dataset.est&&oCase){ const c=DB.cases.find(x=>x.id===oCase); if(c){ snap('est:'+oCase+':'+el.dataset.est);
     c[el.dataset.est]=el.dataset.est==='estAmt'?(Math.round(+el.value)||0):el.value; save(); renderSoon(); } return; }
