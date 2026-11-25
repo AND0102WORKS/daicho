@@ -2162,12 +2162,23 @@ function nextOrderSt(oid,seen){
 /* 他の端末・業者ページから発注の状態が変わった時（store4.js の Realtime から呼ばれる）。
    送付前のリンクで業者が承諾した場合も、案件側の「発注」を済にする */
 function onOrderRemote(o){ if(markOrdered(o)) save(); }
+/* 承諾済みの発注書の中身（明細）を変えたとき：業者が承諾したのは前の内容なので、承諾を取り消して「送付済」に戻す。
+   承諾の日時は DB が消す（orders の st が 送付済 に戻ったとき）。業者にはもう一度承諾してもらう */
+function unacceptOrder(oid){
+  const o=DB.orders.find(x=>x.id===oid); if(!o||o.st!=='承諾')return false;
+  o.st='送付済'; setTimeout(()=>toast(`${o.no} の中身を変えたので、${o.who||'業者'} さんの承諾を取り消した（送付済に戻した）。変えた内容を伝えて、もう一度承諾してもらってください`),50); return true;
+}
 function delOrder(oid){
   const o=DB.orders.find(x=>x.id===oid); if(!o)return;
+  /* 取り消しの歯止め：完了報告が出ている発注は取り消せない。送ったあとの発注は、確かめてから */
+  const pids=DB.procs.filter(p=>p.order===oid).map(p=>p.id), reps=(DB.reports||[]).filter(r=>pids.indexOf(r.proc)>=0);
+  if(reps.length||o.st==='完了'||o.st==='請求済'){ toast(`${o.no} は取り消せない：${reps.length?'完了報告が出ている':'状態が「'+o.st+'」になっている'}。取り消すと、報告と支払いの記録が宙に浮く`); return; }
+  if(!confirm(o.st==='下書き'?`${o.no}（${o.who||'業者未定'}）を取り消しますか？\n明細は未発注に戻ります。`
+    :`${o.no} は ${o.who||'業者'} さんに送ってあります（${o.st}）。\n取り消すと、業者ページからこの発注書が消えます。${o.st==='承諾'?'\n承諾済みです。':''}取り消したことを業者に伝えてください。\n\n取り消しますか？`))return;
   snap();
   DB.lines.forEach(l=>{ if(l.order===oid)l.order=''; });
   let kept=0;
-  DB.procs=DB.procs.filter(p=>{ if(p.order!==oid)return true; if(p.auto)return false; p.order=''; kept++; return true; });
+  DB.procs=DB.procs.filter(p=>{ if(p.order!==oid)return true; if(p.auto)return false; p.order=''; p.amt=0; kept++; return true; });   /* 残す工程の発注金額は消す（明細が未発注に戻るので、二重に数えない） */
   DB.orders=DB.orders.filter(x=>x.id!==oid);
   const c=DB.cases.find(x=>x.id===o.case); recalcOrd(c); recalcPlan(c);
   save(); render(); toast(`${o.no} を取り消した（明細は未発注に戻した${kept?'。工程を組むで作った工程は残してある':''}）`, undo);
@@ -4731,6 +4742,7 @@ document.addEventListener('change',e=>{
     if(String(was)===String(nv))return;
     snap('line:'+l.id+':'+f); l[f]=nv;
     if(l.order&&(f==='qty'||f==='price'||f==='cqty'))syncOrderAmt(l.order);   /* 発注済の行を直したら、工程の発注金額（＝原価）も合わせる */
+    if(l.order&&['qty','price','cqty','cunit','unit','name','spec'].indexOf(f)>=0)unacceptOrder(l.order);   /* 承諾したあとに発注書の中身が変わった：承諾を取り消す */
     if(f==='who'&&nv&&!l.kind){const vd=vendorOf(nv); if(vd&&vd.defKind)l.kind=vd.defKind;}   /* 業者を決めたら既定の区分が入る */
     save();renderSoon();
     setTimeout(()=>{const tr2=document.querySelector('tr[data-l="'+l.id+'"]');
