@@ -108,6 +108,12 @@ table.plt .ptot{font-weight:700;border-left:2px solid #8E9AA0;min-width:100px}
 table.plt tr.cnt td{color:var(--sub);font-size:11.5px;border-bottom:none}
 .kpi .k.warnk{border-color:#E7BCB0;background:var(--warn-bg)}.kpi .k.warnk b{font-size:14px;color:var(--warn)}.kpi .k.warnk a{cursor:pointer;text-decoration:underline}
 .pldrill{margin-top:10px;border-left:4px solid var(--acc)}
+.pllow{margin-top:10px}
+.pledw{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:700px){.pledw{grid-template-columns:1fr}}
+.pled h5{margin:0 0 6px;font-size:13px}.pled h5 small{font-weight:500;color:var(--sub);margin-left:8px;font-size:11px}
+.plrow{display:flex;gap:4px;align-items:center;margin-bottom:4px}.plrow .li{flex:1;height:30px}.plrow .btn{padding:0 8px;min-height:30px}
+.plrow .x{border:none;background:none;color:var(--warn);font-weight:900;font-size:16px;cursor:pointer;padding:0 6px}
+.plrow.fix{background:var(--card2);border:1px dashed var(--line);border-radius:8px;padding:5px 9px;flex-wrap:wrap}.plrow.fix .nm{font-weight:700;font-size:12.5px}.plrow.fix small{color:var(--sub);font-size:11px}
 /* 明細の表のいちばん下：合計の行（列の真下にそろえる。スクロールしても下に残る） */
 .ln tfoot td{position:sticky;bottom:0;z-index:3;background:var(--card);border-top:2px solid var(--acc);padding:6px 8px;font-size:14px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
 .ln tfoot td.lab{text-align:left}.ln tfoot td.lab small{font-weight:500;font-size:11.5px;color:var(--sub);margin-left:12px}.ln tfoot td.lab small.w{color:var(--warn);font-weight:700}
@@ -562,12 +568,12 @@ const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1,report
 function rememberAll(){ recLast={}; Object.keys(COLS).forEach(t=>(DB[t]||[]).forEach(r=>{ if(r.id)recLast[t+':'+r.id]=sig(r); })); kvSaved=kvFlat(); }
 /* 入金・支払済・休み・計上基準・見送り：最後に保存した値（キーごと）。
    全件をまとめて書くと、古い画面の人が他の人の入力を古い値で上書きしてしまうので、変わったキーだけ書く */
-let kvSaved={recv:{},paid:{},off:{},skip:{},basis:'完工'};
+let kvSaved={recv:{},paid:{},off:{},skip:{},basis:'完工',pl:'null'};
 function kvFlat(){
   const num=o=>{ const r={}; Object.entries(o||{}).forEach(([k,v])=>{ const n=Math.round(+v||0); if(n)r[k]=n; }); return r; };
   const off={}; Object.entries(DB.off||{}).forEach(([who,m])=>Object.entries(m||{}).forEach(([month,days])=>{ const d=(days||[]).map(Number).join(','); if(d)off[who+'|'+month]=d; }));
   const skip={}; Object.keys(DB.skip||{}).forEach(k=>{ if(DB.skip[k])skip[k]=1; });
-  return {recv:num(DB.recv),paid:num(DB.paid),off,skip,basis:DB.basis||'完工'};
+  return {recv:num(DB.recv),paid:num(DB.paid),off,skip,basis:DB.basis||'完工',pl:JSON.stringify(DB.plItems||null)};
 }
 const kvChanged=(cur,old)=>[...new Set([...Object.keys(cur),...Object.keys(old)])].filter(k=>cur[k]!==old[k]);
 const kvSplit=k=>{ const i=k.lastIndexOf('|'); return [k.slice(0,i),k.slice(i+1)]; };
@@ -593,7 +599,8 @@ async function dbLoad(){
   paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
   off.forEach(r=>{ if((r.days||[]).length)(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice(); });
   settings.forEach(r=>{ if(r.key==='basis')DB.basis=r.value;
-    else if(r.key==='cfg'&&r.value&&typeof r.value==='object')DB.cfg=r.value;   /* 会社ごとの設定（ボリュームの点数など）。無ければ画面の既定 */
+    else if(r.key==='cfg'&&r.value&&typeof r.value==='object')DB.cfg=r.value;
+    else if(r.key==='pl_items'&&r.value&&typeof r.value==='object')DB.plItems=r.value;   /* 月次の科目（売上原価の内訳・販管費）。無ければ画面の既定 */   /* 会社ごとの設定（ボリュームの点数など）。無ければ画面の既定 */
     else if(String(r.key).indexOf(SKIP_KEY)===0&&r.value===true)DB.skip[String(r.key).slice(SKIP_KEY.length)]=1; });   /* 見送った受注受付 */
   /* 案件は新しいものが上。採番は既存の最大＋1 から */
   DB.cases.sort((a,b)=>String(b.id).localeCompare(String(a.id)));
@@ -648,10 +655,11 @@ async function dbSaveNow(){
     const off=kvChanged(cur.off,kvSaved.off).map(k=>{const [who,month]=kvSplit(k); return {org:ORG,who,month,days:cur.off[k]?cur.off[k].split(',').map(Number):[]};});
     const sets=kvChanged(cur.skip,kvSaved.skip).map(k=>({org:ORG,key:SKIP_KEY+k,value:!!cur.skip[k]}));
     if(cur.basis!==kvSaved.basis)sets.push({org:ORG,key:'basis',value:cur.basis});
+    if(cur.pl!==kvSaved.pl&&DB.plItems)sets.push({org:ORG,key:'pl_items',value:DB.plItems});
     if(recv.length){const {error}=await sb.from('receipts').upsert(recv); if(error)throw error; kvSaved.recv=cur.recv;}
     if(paid.length){const {error}=await sb.from('payments').upsert(paid); if(error)throw error; kvSaved.paid=cur.paid;}
     if(off.length){const {error}=await sb.from('days_off').upsert(off); if(error)throw error; kvSaved.off=cur.off;}
-    if(sets.length){const {error}=await sb.from('settings').upsert(sets); if(error)throw error; kvSaved.skip=cur.skip; kvSaved.basis=cur.basis;}
+    if(sets.length){const {error}=await sb.from('settings').upsert(sets); if(error)throw error; kvSaved.skip=cur.skip; kvSaved.basis=cur.basis; kvSaved.pl=cur.pl;}
     dbState='保存した '+new Date().toTimeString().slice(0,5);
   }catch(e){
     dbDirty=true; dbState='保存できていない：'+String((e&&e.message)||e); alog('save ERR',(e&&e.message)||e);
@@ -3861,7 +3869,39 @@ function vPay0(){
 const PL_FY_START=5;
 const PL_COGS=['材料費（現場）','駐車場代（現場）'];
 const PL_SGA=['人件費（社内）','旅費交通費','燃料費','パーキング代','設備投資費','材料費（社内）','消耗品費','接待交際費','通信費','宣伝広告費','地代/家賃','保険','雇用保険・労災・所得税','福利厚生','減価償却費','その他'];
-let plFy=null, plSga=false, plMonth='';
+let plFy=null, plSga=false, plMonth='', plAll=false;
+/* 月次の科目：売上原価の内訳（人件費・外注は台帳から出すので固定）と販管費。設定（settings の pl_items）に保存。無ければ既定 */
+function plItems(){
+  const d=DB.plItems, mk=(a,p)=>a.map((n,i)=>({id:p+i,name:n}));
+  return {cogs:(d&&Array.isArray(d.cogs))?d.cogs:mk(PL_COGS,'c'), sga:(d&&Array.isArray(d.sga))?d.sga:mk(PL_SGA,'s')};
+}
+function plEdit(){
+  const it=plItems(), W={cogs:it.cogs.map(x=>({...x})), sga:it.sga.map(x=>({...x}))};
+  const el=document.createElement('div'); el.className='ask';
+  const list=(k,t,note)=>`<div class="pled"><h5>${t}<small>${note}</small></h5>
+    ${k==='cogs'?'<div class="plrow fix"><span class="nm">人件費（外注）</span><small>台帳の発注金額から自動で出る（変えられない）</small></div>':''}
+    ${W[k].map((x,i)=>`<div class="plrow" data-k="${k}" data-i="${i}"><input type="text" class="li" value="${esc(x.name)}" placeholder="科目の名前">
+      <button class="btn small" data-plmv="-1" ${i===0?'disabled':''} title="上へ">↑</button><button class="btn small" data-plmv="1" ${i===W[k].length-1?'disabled':''} title="下へ">↓</button>
+      <button class="x" data-pldel="1" title="この科目を消す">×</button></div>`).join('')}
+    <button class="btn small" data-pladd="${k}">＋ 科目を足す</button></div>`;
+  const draw=()=>{ el.innerHTML=`<div class="dlg" style="max-width:760px;width:94vw"><h4>月次の科目</h4>
+    <p class="note" style="margin:0 0 10px">月次の表に出す科目を、足す・名前を変える・並べ替える・消すことができる。全員の画面に反映される。</p>
+    <div class="pledw">${list('cogs','売上原価の内訳','現場にかかる費用')}${list('sga','販売費及び一般管理費','会社を回す費用')}</div>
+    <div class="askbtn" style="margin-top:14px"><button class="btn small" id="plDef" title="最初の科目の並びに戻す">既定に戻す</button><span class="grow"></span><button class="btn small" id="askNo">やめる</button><button class="btn small primary" id="askYes">保存する</button></div></div>`; };
+  const pull=()=>el.querySelectorAll('.plrow[data-k]').forEach(r=>{ W[r.dataset.k][+r.dataset.i].name=r.querySelector('input').value.trim(); });
+  el.addEventListener('click',e=>{ const t=e.target;
+    if(t.id==='askNo'){ el.remove(); return; }
+    if(t.id==='plDef'){ W.cogs=PL_COGS.map((n,i)=>({id:'c'+i,name:n})); W.sga=PL_SGA.map((n,i)=>({id:'s'+i,name:n})); draw(); return; }
+    if(t.dataset.pladd){ pull(); W[t.dataset.pladd].push({id:'p'+Math.random().toString(36).slice(2,8),name:''}); draw(); const ins=el.querySelectorAll(`.plrow[data-k="${t.dataset.pladd}"] input`); if(ins.length)ins[ins.length-1].focus(); return; }
+    const r=t.closest('.plrow[data-k]');
+    if(r&&t.dataset.pldel){ pull(); W[r.dataset.k].splice(+r.dataset.i,1); draw(); return; }
+    if(r&&t.dataset.plmv){ pull(); const a=W[r.dataset.k], i=+r.dataset.i, j=i+(+t.dataset.plmv); if(j<0||j>=a.length)return; [a[i],a[j]]=[a[j],a[i]]; draw(); return; }
+    if(t.id==='askYes'){ pull(); const clean=a=>a.filter(x=>x.name).map(x=>({id:x.id,name:x.name}));
+      const names=clean(W.cogs).concat(clean(W.sga)).map(x=>x.name); const dup=names.find((n,i)=>names.indexOf(n)!==i);
+      if(dup){ toast(`「${dup}」が2つある。名前を変えてください`); return; }
+      DB.plItems={cogs:clean(W.cogs),sga:clean(W.sga)}; el.remove(); save(); render(); toast('月次の科目を保存した'); } });
+  document.body.appendChild(el); draw();
+}
 const PL_LOW=30;   /* 粗利率がこれ未満の月は赤で知らせる（％） */
 function vPl(){
   const now=fmtD(new Date()), cy=+now.slice(0,4), cm=+now.slice(5,7), nowM=ym(now);
@@ -3881,6 +3921,19 @@ function vPl(){
       o.ratio?`<small class="${low?'low':''}"${low?` title="粗利率が ${PL_LOW}% 未満"`:''}>${r==null?'&nbsp;':r.toFixed(1)+'%'}</small>`:''}</td>`; };
   const row=(f,o)=>MS.map(m=>cell(m,f(agg[m]),agg[m].s,o)).join('')+cell('',f(T),T.s,o);
   const none=()=>MS.map(m=>`<td class="r na${mc(m)}" data-plm="${m}">—</td>`).join('')+`<td class="r na ptot">—</td>`;
+  const IT=plItems();
+  /* 年度の中で粗利率の低い案件（低い順）。月を押さなくても、問題のある現場が分かるように常に出す */
+  const lowList=()=>{ const all=DB.cases.filter(c=>agg[mOf(c)]&&salesEx(c)>0&&costOf(c.id)>0).map(c=>({c,s:salesEx(c),k:costOf(c.id)})).map(x=>({...x,r:(x.s-x.k)/x.s*100})).filter(x=>x.r<PL_LOW).sort((a,b)=>a.r-b.r);
+    const show=plAll?all:all.slice(0,10), loss=all.filter(x=>x.r<0).length;
+    return `<div class="card pllow"><div class="bar" style="margin:0 0 8px"><h3 style="font-size:14px;margin:0">粗利率の低い案件　${plFy}年度</h3>
+        <span class="note" style="margin:0">粗利率 ${PL_LOW}% 未満が ${all.length}件${loss?`（うち赤字 <b style="color:var(--warn)">${loss}件</b>）`:''}　低い順</span><span class="grow"></span>
+        ${all.length>10?`<button class="btn small" data-plall="${plAll?0:1}">${plAll?'上位10件だけにする':`全部見る（${all.length}件）`}</button>`:''}</div>
+      ${show.length?`<div class="tw" style="max-height:${plAll?520:420}px"><table><thead><tr><th>月</th><th>物件</th><th>依頼元</th><th>状態</th><th class="r">売上</th><th class="r">原価</th><th class="r">粗利</th><th class="r">粗利率</th></tr></thead><tbody>
+        ${show.map(({c,s,k,r})=>`<tr><td>${+mOf(c).slice(5,7)}月</td><td><a class="cplink" data-cpage="${c.id}" title="案件ページを開く">${esc(c.prop||'（物件未入力）')}</a></td>
+          <td><span class="cl" style="background:${col(c.client)}">${esc(c.client||'—')}</span></td><td><span class="st ${stCls(c.st)}">${esc(c.st)}</span></td>
+          <td class="r">${yen(s)}</td><td class="r">${yen(k)}</td><td class="r" style="color:${s-k<0?'var(--warn)':'inherit'}">${yen(s-k)}</td>
+          <td class="r" style="font-weight:700;color:var(--warn)">${r.toFixed(1)}%</td></tr>`).join('')}</tbody></table></div>`
+      :`<p class="note" style="margin:0">この年度に、粗利率が ${PL_LOW}% 未満の案件は無い。</p>`}</div>`; };
   const z=DB.cases.filter(c=>salesEx(c)>0&&costOf(c.id)===0&&agg[mOf(c)]);
   const lows=MS.filter(m=>agg[m].s>0&&(agg[m].s-agg[m].c)/agg[m].s*100<PL_LOW);
   /* 月を押すと、その月の案件（粗利率の低い順） */
@@ -3908,20 +3961,22 @@ function vPl(){
     <div class="plw"><table class="plt"><thead>
       <tr><th class="g" colspan="2">（税抜・円）</th>${MS.map(m=>`<th class="r${mc(m)}" data-plm="${m}" title="押すと、この月の案件が下に出る">${m.slice(5,7)==='01'||m===MS[0]?`<small>${m.slice(0,4)}年</small>`:''}${+m.slice(5,7)}月</th>`).join('')}<th class="r ptot">年度合計</th></tr></thead><tbody>
       <tr class="band sales"><td class="g" colspan="2">売上高</td>${row(x=>x.s,{bar:1})}</tr>
-      ${plSga?`<tr class="sum cogs"><td class="g vert" rowspan="${2+PL_COGS.length}"><span>原価</span></td><td class="g2 rt">売上原価 合計</td>${row(x=>x.c,{ratio:1})}</tr>
+      ${plSga?`<tr class="sum cogs"><td class="g vert" rowspan="${2+IT.cogs.length}"><span>原価</span></td><td class="g2 rt">売上原価 合計</td>${row(x=>x.c,{ratio:1})}</tr>
       <tr class="dt"><td class="g2">人件費（外注）</td>${row(x=>x.c,{ratio:1})}</tr>
-      ${PL_COGS.map(n=>`<tr class="dt"><td class="g2">${n}</td>${none()}</tr>`).join('')}`
+      ${IT.cogs.map(x=>`<tr class="dt"><td class="g2">${esc(x.name)}</td>${none()}</tr>`).join('')}`
       :`<tr class="sum cogs"><td class="g" colspan="2">売上原価</td>${row(x=>x.c,{ratio:1})}</tr>`}
       <tr class="band gross"><td class="g" colspan="2">売上総利益<small>粗利率</small></td>${row(x=>x.s-x.c,{ratio:1,flag:1})}</tr>
-      ${plSga?`<tr class="sum sga"><td class="g vert" rowspan="${1+PL_SGA.length}"><span>販管費</span></td><td class="g2 rt">販管費 合計</td>${none()}</tr>
-      ${PL_SGA.map(n=>`<tr class="dt"><td class="g2">${n}</td>${none()}</tr>`).join('')}`
+      ${plSga?`<tr class="sum sga"><td class="g vert" rowspan="${1+IT.sga.length}"><span>販管費</span></td><td class="g2 rt">販管費 合計</td>${none()}</tr>
+      ${IT.sga.map(x=>`<tr class="dt"><td class="g2">${esc(x.name)}</td>${none()}</tr>`).join('')}`
       :`<tr class="sum sga"><td class="g" colspan="2">販売費及び一般管理費</td>${none()}</tr>`}
       <tr class="band op"><td class="g" colspan="2">営業利益<small>販管費 未取込</small></td>${row(x=>x.s-x.c,{ratio:1})}</tr>
       <tr class="cnt"><td class="g" colspan="2">案件数</td>${MS.map(m=>`<td class="r${mc(m)}" data-plm="${m}">${agg[m].n||''}</td>`).join('')}<td class="r ptot">${T.n}</td></tr>
     </tbody></table></div>
-    <div class="bar" style="margin:8px 0 0"><button class="btn small" data-plsga="${plSga?0:1}">${plSga?'内訳をたたむ':`内訳をひらく（原価 ${1+PL_COGS.length}科目・販管費 ${PL_SGA.length}科目）`}</button>
+    <div class="bar" style="margin:8px 0 0"><button class="btn small" data-plsga="${plSga?0:1}">${plSga?'内訳をたたむ':`内訳をひらく（原価 ${1+IT.cogs.length}科目・販管費 ${IT.sga.length}科目）`}</button>
+      <button class="btn small" id="plEdit" title="月次の表に出す科目を、足す・名前を変える・並べ替える・消す">科目を編集</button>
       <span class="note" style="margin:0">月を押すと、その月の案件が下に出る。金額の下の小さい数字は売上高に対する比率。粗利率が ${PL_LOW}% 未満の月は赤。</span></div>
     ${drill()}
+    ${lowList()}
     <p class="note">売上高と売上原価（人件費・外注）は台帳の数字（案件の受注額と、業者への発注金額）。「—」の行（材料費・駐車場代・販管費）はまだ取り込んでいない。会計ソフトから取り込めるようにする予定で、それまで営業利益は売上総利益と同じ値になる。${
       z.length?`<br><span style="color:var(--warn)">この年度に、売上はあるのに発注が1件も入っていない案件が ${z.length}件・${yen(z.reduce((a,c)=>a+salesEx(c),0))} ある。その分、原価が抜けて粗利が大きく出ている（要確認の「原価なし」）。</span>`:''}</p>`;
 }
@@ -4384,6 +4439,8 @@ document.addEventListener('click',e=>{
     const v=Math.round(linesOf(c.id).reduce((a,l)=>a+lineSell(l),0)); if(!v)return; snap(); c.sales=v; save(); render(); toast(`受注額を ${yen(v)} にした`,undo); return; }
   { const pm=tab==='pl'&&e.target.closest&&e.target.closest('[data-plm]'); if(pm){ plMonth=plMonth===pm.dataset.plm?'':pm.dataset.plm; render();
       if(plMonth){ const d=document.querySelector('.pldrill'); if(d&&d.scrollIntoView)d.scrollIntoView({block:'nearest',behavior:'smooth'}); } return; } }
+  if(e.target.id==='plEdit'){ plEdit(); return; }
+  if(e.target.dataset&&e.target.dataset.plall){ plAll=e.target.dataset.plall==='1'; render(); return; }
   if(e.target.dataset&&e.target.dataset.plsga){ plSga=e.target.dataset.plsga==='1'; render(); return; }
   if(e.target.dataset&&e.target.dataset.plfy){ plFy=(plFy||+THIS_M.slice(0,4))+(+e.target.dataset.plfy); render(); return; }
   if(e.target.id==='menuFold'){ const on=document.body.classList.toggle('slim'); try{ localStorage.setItem('aw-slim',on?'1':''); }catch(x){} render(); return; }

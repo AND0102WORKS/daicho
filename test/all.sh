@@ -1,7 +1,7 @@
 #!/bin/bash
 # 全部のテストを、1つずつ reset してから流す。最後に結果の一覧を出す（cd test && ./all.sh）
 cd "$(dirname "$0")"
-for t in run pages report ask fix5 hide est modes drag kfocus site info cpage e2e pdf fix6; do
+for t in run pages report ask fix5 hide est modes drag kfocus site info cpage e2e pdf fix6 pl; do
   ./reset.sh >/dev/null 2>&1
   out=$(timeout 200 node $t.js 2>&1); code=$?
   ng=$(echo "$out" | grep -c "^NG")

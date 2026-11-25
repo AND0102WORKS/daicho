@@ -80,12 +80,12 @@ const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1,report
 function rememberAll(){ recLast={}; Object.keys(COLS).forEach(t=>(DB[t]||[]).forEach(r=>{ if(r.id)recLast[t+':'+r.id]=sig(r); })); kvSaved=kvFlat(); }
 /* 入金・支払済・休み・計上基準・見送り：最後に保存した値（キーごと）。
    全件をまとめて書くと、古い画面の人が他の人の入力を古い値で上書きしてしまうので、変わったキーだけ書く */
-let kvSaved={recv:{},paid:{},off:{},skip:{},basis:'完工'};
+let kvSaved={recv:{},paid:{},off:{},skip:{},basis:'完工',pl:'null'};
 function kvFlat(){
   const num=o=>{ const r={}; Object.entries(o||{}).forEach(([k,v])=>{ const n=Math.round(+v||0); if(n)r[k]=n; }); return r; };
   const off={}; Object.entries(DB.off||{}).forEach(([who,m])=>Object.entries(m||{}).forEach(([month,days])=>{ const d=(days||[]).map(Number).join(','); if(d)off[who+'|'+month]=d; }));
   const skip={}; Object.keys(DB.skip||{}).forEach(k=>{ if(DB.skip[k])skip[k]=1; });
-  return {recv:num(DB.recv),paid:num(DB.paid),off,skip,basis:DB.basis||'完工'};
+  return {recv:num(DB.recv),paid:num(DB.paid),off,skip,basis:DB.basis||'完工',pl:JSON.stringify(DB.plItems||null)};
 }
 const kvChanged=(cur,old)=>[...new Set([...Object.keys(cur),...Object.keys(old)])].filter(k=>cur[k]!==old[k]);
 const kvSplit=k=>{ const i=k.lastIndexOf('|'); return [k.slice(0,i),k.slice(i+1)]; };
@@ -111,7 +111,8 @@ async function dbLoad(){
   paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
   off.forEach(r=>{ if((r.days||[]).length)(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice(); });
   settings.forEach(r=>{ if(r.key==='basis')DB.basis=r.value;
-    else if(r.key==='cfg'&&r.value&&typeof r.value==='object')DB.cfg=r.value;   /* 会社ごとの設定（ボリュームの点数など）。無ければ画面の既定 */
+    else if(r.key==='cfg'&&r.value&&typeof r.value==='object')DB.cfg=r.value;
+    else if(r.key==='pl_items'&&r.value&&typeof r.value==='object')DB.plItems=r.value;   /* 月次の科目（売上原価の内訳・販管費）。無ければ画面の既定 */   /* 会社ごとの設定（ボリュームの点数など）。無ければ画面の既定 */
     else if(String(r.key).indexOf(SKIP_KEY)===0&&r.value===true)DB.skip[String(r.key).slice(SKIP_KEY.length)]=1; });   /* 見送った受注受付 */
   /* 案件は新しいものが上。採番は既存の最大＋1 から */
   DB.cases.sort((a,b)=>String(b.id).localeCompare(String(a.id)));
@@ -166,10 +167,11 @@ async function dbSaveNow(){
     const off=kvChanged(cur.off,kvSaved.off).map(k=>{const [who,month]=kvSplit(k); return {org:ORG,who,month,days:cur.off[k]?cur.off[k].split(',').map(Number):[]};});
     const sets=kvChanged(cur.skip,kvSaved.skip).map(k=>({org:ORG,key:SKIP_KEY+k,value:!!cur.skip[k]}));
     if(cur.basis!==kvSaved.basis)sets.push({org:ORG,key:'basis',value:cur.basis});
+    if(cur.pl!==kvSaved.pl&&DB.plItems)sets.push({org:ORG,key:'pl_items',value:DB.plItems});
     if(recv.length){const {error}=await sb.from('receipts').upsert(recv); if(error)throw error; kvSaved.recv=cur.recv;}
     if(paid.length){const {error}=await sb.from('payments').upsert(paid); if(error)throw error; kvSaved.paid=cur.paid;}
     if(off.length){const {error}=await sb.from('days_off').upsert(off); if(error)throw error; kvSaved.off=cur.off;}
-    if(sets.length){const {error}=await sb.from('settings').upsert(sets); if(error)throw error; kvSaved.skip=cur.skip; kvSaved.basis=cur.basis;}
+    if(sets.length){const {error}=await sb.from('settings').upsert(sets); if(error)throw error; kvSaved.skip=cur.skip; kvSaved.basis=cur.basis; kvSaved.pl=cur.pl;}
     dbState='保存した '+new Date().toTimeString().slice(0,5);
   }catch(e){
     dbDirty=true; dbState='保存できていない：'+String((e&&e.message)||e); alog('save ERR',(e&&e.message)||e);
