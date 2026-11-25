@@ -559,6 +559,7 @@ async function dbLoad(){
   const mx=(arr,re)=>arr.reduce((m,r)=>{const k=re.exec(String(r.id)); return k?Math.max(m,+k[1]):m;},0);
   DB.seq=mx(DB.cases,/^[CRN](\d+)/); DB.pseq=mx(DB.procs,/^[PQ](\d+)/); DB.lseq=mx(DB.lines,/^L(\d+)/); DB.prseq=mx(DB.prices,/^PR(\d+)/);
   migrate(); rememberAll();
+  if(typeof undoStack!=='undefined')undoStack.length=0; remoteLog.length=0;   /* 読み直す前の控えに戻すと、その間の他の人の変更を消してしまう */
   M.senzoku.length=0; DB.vendors.filter(v=>v.type==='専属').forEach(v=>M.senzoku.push(v.name));
   M.kensa=(DB.vendors.find(v=>v.defKind==='AW検査')||{}).name||'';
   dbState='読み込んだ '+new Date().toTimeString().slice(0,5);
@@ -574,7 +575,7 @@ function reset(){ toast('v4 では「元データに戻す」は無い（デー�
 function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],reports:[],invoices:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
 
 /* ---- 保存：変わった行だけ ---- */
-function save(){ dbSaveSoon(); }
+function save(){ if(typeof syncOrdersFromProcs==='function'){ try{ syncOrdersFromProcs(); }catch(e){} } dbSaveSoon(); }
 function dbSaveSoon(){ dbDirty=true; clearTimeout(dbSaveTimer); dbSaveTimer=setTimeout(dbSaveNow,400); }
 async function dbSaveNow(){
   if(!sb||!dbDirty)return; if(dbBusy){dbSaveSoon();return;}
@@ -667,8 +668,45 @@ function dbSubscribe(){
       renderIdle();
     });
   });
-  rtChan.subscribe(st=>{ alog('realtime',st); });
+  rtChan.subscribe(st=>{ alog('realtime',st);
+    if(st==='SUBSCRIBED'){ if(rtDown)dbResync('つなぎ直し'); rtDown=false; }
+    else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED')rtDown=true; });
 }
+/* ---- 取り直し：Realtime が切れていた間（スリープ・回線切れ）の他の人・業者の変更を受け取る ----
+   これが無いと、切れていた間の変更を知らないまま行を直したとき、行ごと古い値で上書きしてしまう（承諾・完了が元に戻る）。
+   手元で直してまだ保存していない行は触らない。手元で消してまだ保存していない行は戻さない。 */
+let rtDown=false, resyncBusy=false, hiddenAt=0;
+async function dbResync(why){
+  if(!sb||!ME||resyncBusy)return;
+  if(dbBusy||dbDirty){ setTimeout(()=>dbResync(why),1500); return; }
+  resyncBusy=true;
+  try{
+    const ts=Object.keys(COLS), got=await Promise.all(ts.map(t=>fetchAll(t).catch(()=>null)));
+    const same=(t,a,b)=>JSON.stringify(recToRow(t,a))===JSON.stringify(recToRow(t,b));
+    let n=0;
+    ts.forEach((t,ix)=>{ const rows=got[ix]; if(!rows)return; const arr=DB[t]||(DB[t]=[]), seen=new Set();
+      rows.forEach(row=>{ const rec=rowToRec(t,row), k=t+':'+rec.id; seen.add(rec.id);
+        const i=arr.findIndex(r=>r.id===rec.id);
+        if(i<0){ if(recLast[k]!==undefined)return;                       /* 手元で消して、まだ保存していない */
+          logRemote({t,rec:JSON.parse(JSON.stringify(rec))}); if(t==='cases')arr.unshift(rec); else arr.push(rec); recLast[k]=sig(rec); n++; return; }
+        const l=arr[i];
+        if(recLast[k]===undefined||sig(l)!==recLast[k])return;           /* 手元で作った・直した行で、まだ保存していない */
+        if(same(t,l,rec))return;
+        logRemote({t,rec:JSON.parse(JSON.stringify(rec))});
+        Object.keys(l).forEach(x=>delete l[x]); Object.assign(l,rec); recLast[k]=sig(l); n++;
+        if(t==='orders'&&typeof onOrderRemote==='function'){ try{ onOrderRemote(l); }catch(e){} } });
+      for(let i=arr.length-1;i>=0;i--){ const r=arr[i], k=t+':'+r.id;     /* 向こうで消えた行 */
+        if(!r.id||seen.has(r.id)||recLast[k]===undefined||sig(r)!==recLast[k])continue;
+        logRemote({t,del:r.id}); arr.splice(i,1); delete recLast[k]; n++; } });
+    alog('resync',why+' '+n);
+    if(n){ M.senzoku.length=0; DB.vendors.filter(v=>v.type==='専属').forEach(v=>M.senzoku.push(v.name)); renderIdle(); }
+  }catch(e){ alog('resync ERR',(e&&e.message)||e); }
+  finally{ resyncBusy=false; }
+}
+document.addEventListener('visibilitychange',()=>{ if(document.hidden){ hiddenAt=Date.now(); return; }
+  if(hiddenAt&&Date.now()-hiddenAt>60000)dbResync('画面に戻った'); hiddenAt=0; });
+window.addEventListener('online',()=>dbResync('回線が戻った'));
+setInterval(()=>{ if(!document.hidden)dbResync('定期'); },600000);
 let idleTimer=null;
 function renderIdle(){
   clearTimeout(idleTimer);
@@ -692,7 +730,8 @@ async function initAuth(){
 }
 function onAuth(ev,s){
   const had=!!SESSION; SESSION=s;
-  if(!s){ if(had||ME){ ME=null; dbState='ログインが切れました。もう一度ログインしてください'; alog('auth',ev+' signed out'); render(); } return; }
+  if(!s){ if(denied){ dbState=denied; denied=''; render(); return; }
+    if(had||ME){ ME=null; dbState='ログインが切れました。もう一度ログインしてください'; alog('auth',ev+' signed out'); render(); } return; }
   if(ev==='TOKEN_REFRESHED')checkClock(s);
   if(!ME)boot();
 }
@@ -707,14 +746,19 @@ function checkClock(s){
 }
 /* 読み込みは同時に1本だけ。以前はログイン直後の通知（INITIAL_SESSION・SIGNED_IN・TOKEN_REFRESHED）ごとに
    読み込みが重ねて走り、そのたびにトークン更新が起きて、更新の回数制限に当たってログインが切れていた */
-let bootP=null, bootFails=0;
+let bootP=null, bootFails=0, denied='';
 function boot(){ if(!bootP)bootP=boot1().finally(()=>{ bootP=null; }); return bootP; }
 async function boot1(){
   if(!SESSION||ME)return;
   if(bootFails>=3)return;     /* 続けて失敗したら自動では繰り返さない（再読み込みでやり直す） */
   try{
-    const {data:me}=await sb.from('profiles').select('*').eq('id',SESSION.user.id).single();
-    ME=me||{role:'staff',org:'hq'}; ORG=ME.org||'hq';
+    let {data:me}=await sb.from('profiles').select('*').eq('id',SESSION.user.id).maybeSingle();
+    if(!me){   /* 初回ログインの後で登録された人：登録（role_presets）があれば、ここで利用者として作る */
+      try{ await sb.rpc('ensure_profile'); const r=await sb.from('profiles').select('*').eq('id',SESSION.user.id).maybeSingle(); me=r.data; }catch(e){ alog('ensure_profile',(e&&e.message)||e); } }
+    if(!me||['hq','staff','viewer'].indexOf(me.role)<0){   /* 登録の無いメールアドレス：何も読み込まない */
+      denied='このメールアドレスは台帳に登録されていません。管理者に登録を頼んでください（'+((SESSION.user&&SESSION.user.email)||'')+'）';
+      alog('auth','not registered'); dbState=denied; toast(denied); try{ await sb.auth.signOut(); }catch(e){} SESSION=null; ME=null; dbState=denied; render(); return; }
+    ME=me; ORG=ME.org||'hq';
     await dbLoad(); dbSubscribe(); bootFails=0; render();
     await reloadInbox();
   }catch(e){ bootFails++; ME=null; dbState='読み込めなかった：'+String((e&&e.message)||e)+'。ページを再読み込みしてください'; alog('boot ERR',(e&&e.message)||e); toast(dbState); render(); }
@@ -732,6 +776,7 @@ function snap(key){
   lastSnapKey=key||null;
   undoStack.push(JSON.stringify({c:DB.cases,p:DB.procs,l:DB.lines||[],o:DB.orders||[],
     pr:DB.prices||[],v:DB.vendors||[],cl:DB.clients||[],rv:DB.recv||{},pd:DB.paid||{},of:DB.off||{},sk:DB.skip||{},
+    r:DB.reports||[],iv:DB.invoices||[],   /* 完了報告・請求書も控える（承認・支払明細・支払済を元に戻せるように） */
     rs:typeof remoteSeq==='number'?remoteSeq:0}));   /* rs＝この控えを取った時点までに受け取った「他の人の変更」の番号 */
   if(undoStack.length>40)undoStack.shift();}
 function undo(){if(!undoStack.length)return; const o=JSON.parse(undoStack[undoStack.length-1]); lastSnapKey=null;
@@ -740,7 +785,7 @@ function undo(){if(!undoStack.length)return; const o=JSON.parse(undoStack[undoSt
   undoStack.pop();
   DB.cases=o.c; DB.procs=o.p; if(o.l)DB.lines=o.l; if(o.o)DB.orders=o.o;
   if(o.pr)DB.prices=o.pr; if(o.v)DB.vendors=o.v; if(o.cl)DB.clients=o.cl; if(o.rv)DB.recv=o.rv; if(o.pd)DB.paid=o.pd;
-  if(o.of)DB.off=o.of; if(o.sk)DB.skip=o.sk;
+  if(o.of)DB.off=o.of; if(o.sk)DB.skip=o.sk; if(o.r)DB.reports=o.r; if(o.iv)DB.invoices=o.iv;
   if(rt)remoteReplay(o.rs);   /* 控えを取った後に入った他の人・職人・業者の変更は残す（巻き戻さない） */
   save(); render(); toast('元に戻した');}
 load();   /* 空の DB。ログイン後に dbLoad() で埋まる */
@@ -1027,6 +1072,10 @@ function issues(){
   const out=[]; const B=byId(); const seen={};
   DB.cases.forEach(c=>{
     const cost=costOf(c.id), sales=salesEx(c), ps=procsOf(c.id);
+    if(!sales&&c.live&&stIdx(c.st)>=stIdx('受注')){ const ss=Math.round(linesOf(c.id).reduce((a,l)=>a+lineSell(l),0));
+      if(ss>0) out.push({k:'売上なし',c:c.id,t:`${c.prop}`,d:`明細の販売の合計は ${yen(ss)} あるのに、受注額が未入力。請求・月次が ¥0 になる`}); }
+    ps.forEach(p=>{ const o=p.order?(DB.orders||[]).find(x=>x.id===p.order):null;
+      if(o&&o.who&&p.who!==o.who) out.push({k:'発注先のずれ',c:c.id,t:`${c.prop}`,d:`発注書 ${o.no} は ${o.who} 宛てなのに、工程の業者は ${p.who||'未定'}。発注を取り消して作り直す`}); });
     if(sales>0&&cost===0) out.push({k:'原価なし',c:c.id,t:`${c.prop}`,d:`売上 ${yen(sales)} に対して発注が1件も入っていない。粗利が過大に出る`});
     if(sales>0&&cost>sales) out.push({k:'赤字',c:c.id,t:`${c.prop}`,d:`売上 ${yen(sales)} ＜ 原価 ${yen(cost)}（${yen(cost-sales)} の持ち出し）`});
     if(sales>0&&!c.bill) out.push({k:'請求月なし',c:c.id,t:`${c.prop}`,d:`売上 ${yen(sales)} が請求一覧に出てこない`});
@@ -1848,7 +1897,8 @@ function orderPanel(c){
     ${lineGroups(ls).map(g=>groupHead(c,g,ncol)+g.rows.map(row).join('')).join('')}
     </tbody><tfoot>${(()=>{   /* 合計の行。販売・原価・粗利を、それぞれの列の真下に */
       const sb_=sales||sellSum, ct=pcost+freeCost, caseP=sb_-ct, rowP=sellSum-cost;
-      const lab=`<td colspan="5" class="lab">合計（税抜）　${ls.length}行${diff?`<small class="w" title="受注受付の売上（税抜）${yen(c.sales)} と、明細の販売の合計が違う">受注額 ${yen(c.sales)} と ${yen(Math.abs(sellSum-(+c.sales)))} 違う</small>`:''}${
+      const nosales=!(+c.sales)&&sellSum>0&&stIdx(c.st)>=stIdx('受注');
+      const lab=`<td colspan="5" class="lab">合計（税抜）　${ls.length}行${nosales?`<small class="w" title="請求・月次・案件台帳の売上は「受注額」を使う。明細の販売の合計は自動では入らない">受注額が未入力（このままだと請求は ¥0）</small><button class="btn small" data-setsales="${c.id}" style="margin-left:8px">明細の合計 ${yen(sellSum)} を受注額に入れる</button>`:''}${diff?`<small class="w" title="受注受付の売上（税抜）${yen(c.sales)} と、明細の販売の合計が違う">受注額 ${yen(c.sales)} と ${yen(Math.abs(sellSum-(+c.sales)))} 違う</small>`:''}${
         sb_&&caseP!==rowP?`<small class="cprof" title="${sales?'売上':'明細の販売計'} ${yen(sb_)} −（発注済みの原価 ${yen(pcost)} ＋ 未発注の明細の原価 ${yen(freeCost)}）">案件の粗利（見込み） <b style="color:${caseP<0?'var(--warn)':'var(--ok)'}">${yen(caseP)}</b> ${Math.round(caseP/sb_*1000)/10}%</small>`:''}</td>`;
       const sv=`<td class="r gs" title="税込 ${yen(inc(sellSum))}">${sellSum?yen(sellSum):'—'}</td>`, cv=`<td class="r gc" title="明細の原価の合計">${cost?yen(Math.round(cost)):'—'}</td>`;
       const pv=`<td class="r gp" style="color:${rowP<0?'var(--warn)':'var(--ok)'}">${sellSum?yen(Math.round(rowP)):'—'}</td><td class="r gp">${pct(sellSum,cost)}</td>`;
@@ -2034,9 +2084,11 @@ function recalcPlan(c){
   const d=lastDayOf(procsOf(c.id)); if(d)c.plan=d;
 }
 /* 発注に載っている明細の合計（税抜）を、その発注の工程の発注金額に入れ直す。原価＝工程の発注金額の合計なので、明細を直すと原価も変わる */
+const approvedExtra=pid=>(DB.reports||[]).filter(r=>r.proc===pid&&r.st==='承認').reduce((a,r)=>a+(+r.extra||0),0);
 function syncOrderAmt(oid){
   const amt=Math.round(DB.lines.filter(l=>l.order===oid).reduce((a,l)=>a+lineAmt(l),0));
-  DB.procs.filter(p=>p.order===oid).forEach(p=>{ p.amt=amt; });
+  /* 承認済みの完了報告の追加金額は、発注金額に足したまま残す（明細を直しても消さない） */
+  DB.procs.filter(p=>p.order===oid).forEach(p=>{ p.amt=amt+approvedExtra(p.id); });
 }
 /* 発注の送付で '済' にした案件は、送付済以上の発注が1つも無くなったら '未' に戻す。手で '済' にしたものは触らない */
 function recalcOrd(c){
@@ -3344,6 +3396,7 @@ function caseTodos(c){
   if(!c.done){
     if(stIdx(c.st)<stIdx('見積提出')&&stIdx(c.st)>=0)add('見積・発注','todo','見積を作って、提出したら「見積を提出した」を押す');
     else if(c.st==='見積提出')add('見積・発注','wait','見積の返事待ち。受注が決まったら「受注にする」');
+    if(!(+c.sales)&&stIdx(c.st)>=stIdx('受注')&&ls.some(l=>lineSell(l)>0))add('見積・発注','warn','受注額が未入力。このままだと請求・月次が ¥0 になる（明細の表の下のボタンで入れられる）');
     const nok=ls.filter(l=>!l.kind&&+l.qty>0&&!l.cut).length; if(nok)add('見積・発注','todo',`区分の付いていない明細が ${nok}行。区分を付けると、工程と打診に内容が出る`);
     if(stIdx(c.st)>=stIdx('受注')){
       if(!ps.length)add('工程','todo','工程がまだ無い。区分のボタンで工程を足す');
@@ -3703,7 +3756,10 @@ function approveReport(id){
   const r=(DB.reports||[]).find(x=>x.id===id); if(!r||r.st!=='報告済')return;
   const p=DB.procs.find(x=>x.id===r.proc);
   snap(); r.st='承認'; r.approvedAt=new Date().toISOString(); r.reply='';
-  if(p){ if(+r.extra)p.amt=(+p.amt||0)+(+r.extra||0); p.prog='完了'; }
+  if(p){ p.prog='完了';
+    if(p.order){   /* 発注書のある工程：発注金額＝明細の合計＋承認した追加。報告の時点の金額（base）も、いまの発注金額に合わせる */
+      r.base=Math.round(DB.lines.filter(l=>l.order===p.order).reduce((a,l)=>a+lineAmt(l),0)); syncOrderAmt(p.order); }
+    else if(+r.extra)p.amt=(+p.amt||0)+(+r.extra||0); }
   save(); render(); toast(`${r.who} の完了報告を承認した${+r.extra?`（追加 ${yen(r.extra)} を発注金額に足した）`:''}`, undo);
 }
 function rejectReport(id){
@@ -4012,8 +4068,21 @@ function setField(id,f,v){
   if(f==='plan'){ if(v)c.planManual=1; else {delete c.planManual; recalcPlan(c);} }   /* 空にすると工程からの自動に戻る */
   save();
 }
+/* 発注済みの工程：送ったあとの発注書は業者を付け替えられない（前の業者宛ての発注書が、新しい業者に見えてしまう） */
+function procOrderGuard(p,who){
+  const o=p&&p.order?DB.orders.find(x=>x.id===p.order):null; if(!o||who===p.who||o.st==='下書き')return true;
+  toast(`${o.no} は ${o.who||'業者未定'} さん宛てに送ってある（${o.st}）。業者を変えるときは、先に発注を取り消してください`); return false;
+}
+/* 工程が正：発注書の工期は工程の日付に合わせる。下書きの発注書は業者も合わせる（保存のたびに掛ける） */
+function syncOrdersFromProcs(){
+  const seen={};
+  (DB.procs||[]).forEach(p=>{ if(!p.order||seen[p.order])return; seen[p.order]=1; const o=(DB.orders||[]).find(x=>x.id===p.order); if(!o)return;
+    if(p.date&&(o.start!==p.date||(o.end||'')!==(p.end||''))){ o.start=p.date; o.end=p.end||''; }
+    if(o.st==='下書き'&&p.who&&o.who!==p.who){ o.who=p.who; o.taxable=vendorTaxable(p.who); (DB.lines||[]).forEach(l=>{ if(l.order===o.id)l.who=p.who; }); } });
+}
 function setProc(pid,f,v){
   const p=DB.procs.find(x=>x.id===pid); if(!p)return;
+  if(f==='who'&&!procOrderGuard(p,v)){ render(); return; }
   snap('proc:'+pid+':'+f);
   if(f==='amt')v=+v||0;
   p[f]=v; if(f==='date'||f==='end')p.month='';
@@ -4114,8 +4183,9 @@ function checkDrop(pid,who,ds){
   return w;
 }
 function applyMove(pid,who,ds){
+  const p=DB.procs.find(x=>x.id===pid); if(!p)return; if(!procOrderGuard(p,who)){ render(); return; }
   snap();
-  const p=DB.procs.find(x=>x.id===pid); const c=DB.cases.find(x=>x.id===p.case);
+  const c=DB.cases.find(x=>x.id===p.case);
   const from=`${p.who} ${md(p.date)}`;
   const len=spanLen(p); p.who=who; p.date=ds; p.end=len>1?addDays(ds,len-1):''; p.month='';
   recalcPlan(c);
@@ -4236,6 +4306,8 @@ document.addEventListener('drop',e=>{ if(tab!=='case'||!isFileDrag(e))return; e.
 /* ================= events ================= */
 document.addEventListener('click',e=>{
   if(e.target.dataset&&e.target.dataset.estopen!=null){ estOpen=e.target.dataset.estopen==='1'; render(); return; }
+  if(e.target.dataset&&e.target.dataset.setsales){ const c=DB.cases.find(x=>x.id===e.target.dataset.setsales); if(!c)return;
+    const v=Math.round(linesOf(c.id).reduce((a,l)=>a+lineSell(l),0)); if(!v)return; snap(); c.sales=v; save(); render(); toast(`受注額を ${yen(v)} にした`,undo); return; }
   if(e.target.id==='menuFold'){ const on=document.body.classList.toggle('slim'); try{ localStorage.setItem('aw-slim',on?'1':''); }catch(x){} render(); return; }
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
   const cpl=e.target.closest('[data-cpage]'); if(cpl){ openCasePage(cpl.dataset.cpage); return; }
@@ -4395,8 +4467,10 @@ document.addEventListener('click',e=>{
     save(); render();
     toast('工程を削除した',undo); return;}
   if(e.target.id==='delCase'&&selCase&&!e.target.dataset.sure){
+    { const nr=(DB.reports||[]).filter(r=>r.case===selCase).length, no=ordersOf(selCase).filter(o=>o.st!=='下書き').length;   /* 完了報告・写真は消すと元に戻せない */
+      if(nr||no){ toast(`この案件は消せない：${[no?`送った発注 ${no}件`:'',nr?`完了報告 ${nr}件`:''].filter(Boolean).join('・')}がある。消すと完了報告と写真も消えて、元に戻せない。${no?'先に発注を取り消してください':''}`); return; } }
     const c=DB.cases.find(x=>x.id===selCase); const n=procsOf(selCase).length+linesOf(selCase).length+ordersOf(selCase).length;
-    e.target.dataset.sure='1'; e.target.textContent=`本当に消す（工程・明細・発注 ${n}件も消える）`;
+    e.target.dataset.sure='1'; e.target.textContent=`本当に消す（工程・明細・発注 ${n}件と、写真も消える）`;
     setTimeout(()=>{const b=document.getElementById('delCase'); if(b){delete b.dataset.sure; b.textContent='この案件を削除';}},4000);
     return;}
   if(e.target.id==='delCase'&&selCase){

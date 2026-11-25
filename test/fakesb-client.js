@@ -4,7 +4,7 @@
   const listeners=[];
   function from(table){
     return {
-      select:()=>({ range:(a,b)=>call({op:'select',table,range:[a,b]}), eq:()=>({single:async()=>({data:{id:'u1',role:'hq',org:'hq',name:'テスト'},error:null})}) }),
+      select:()=>({ range:(a,b)=>call({op:'select',table,range:[a,b]}), eq:()=>{ const me=async()=>({data:{id:'u1',role:'hq',org:'hq',name:'テスト'},error:null}); return {single:me,maybeSingle:me}; } }),
       upsert:(rows,opt)=>call({op:'upsert',table,rows:Array.isArray(rows)?rows:[rows],conflict:(opt&&opt.onConflict)||'id'}).then(r=>{ (Array.isArray(rows)?rows:[rows]).forEach(row=>listeners.forEach(l=>l(table,'UPDATE',row))); return r; }),
       delete:()=>({ in:(col,ids)=>call({op:'delete',table,ids}).then(r=>{ ids.forEach(id=>listeners.forEach(l=>l(table,'DELETE',{id}))); return r; }) }),
     };

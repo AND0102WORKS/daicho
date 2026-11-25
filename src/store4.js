@@ -118,6 +118,7 @@ async function dbLoad(){
   const mx=(arr,re)=>arr.reduce((m,r)=>{const k=re.exec(String(r.id)); return k?Math.max(m,+k[1]):m;},0);
   DB.seq=mx(DB.cases,/^[CRN](\d+)/); DB.pseq=mx(DB.procs,/^[PQ](\d+)/); DB.lseq=mx(DB.lines,/^L(\d+)/); DB.prseq=mx(DB.prices,/^PR(\d+)/);
   migrate(); rememberAll();
+  if(typeof undoStack!=='undefined')undoStack.length=0; remoteLog.length=0;   /* 読み直す前の控えに戻すと、その間の他の人の変更を消してしまう */
   M.senzoku.length=0; DB.vendors.filter(v=>v.type==='専属').forEach(v=>M.senzoku.push(v.name));
   M.kensa=(DB.vendors.find(v=>v.defKind==='AW検査')||{}).name||'';
   dbState='読み込んだ '+new Date().toTimeString().slice(0,5);
@@ -133,7 +134,7 @@ function reset(){ toast('v4 では「元データに戻す」は無い（デー�
 function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],reports:[],invoices:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
 
 /* ---- 保存：変わった行だけ ---- */
-function save(){ dbSaveSoon(); }
+function save(){ if(typeof syncOrdersFromProcs==='function'){ try{ syncOrdersFromProcs(); }catch(e){} } dbSaveSoon(); }
 function dbSaveSoon(){ dbDirty=true; clearTimeout(dbSaveTimer); dbSaveTimer=setTimeout(dbSaveNow,400); }
 async function dbSaveNow(){
   if(!sb||!dbDirty)return; if(dbBusy){dbSaveSoon();return;}
@@ -226,8 +227,45 @@ function dbSubscribe(){
       renderIdle();
     });
   });
-  rtChan.subscribe(st=>{ alog('realtime',st); });
+  rtChan.subscribe(st=>{ alog('realtime',st);
+    if(st==='SUBSCRIBED'){ if(rtDown)dbResync('つなぎ直し'); rtDown=false; }
+    else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED')rtDown=true; });
 }
+/* ---- 取り直し：Realtime が切れていた間（スリープ・回線切れ）の他の人・業者の変更を受け取る ----
+   これが無いと、切れていた間の変更を知らないまま行を直したとき、行ごと古い値で上書きしてしまう（承諾・完了が元に戻る）。
+   手元で直してまだ保存していない行は触らない。手元で消してまだ保存していない行は戻さない。 */
+let rtDown=false, resyncBusy=false, hiddenAt=0;
+async function dbResync(why){
+  if(!sb||!ME||resyncBusy)return;
+  if(dbBusy||dbDirty){ setTimeout(()=>dbResync(why),1500); return; }
+  resyncBusy=true;
+  try{
+    const ts=Object.keys(COLS), got=await Promise.all(ts.map(t=>fetchAll(t).catch(()=>null)));
+    const same=(t,a,b)=>JSON.stringify(recToRow(t,a))===JSON.stringify(recToRow(t,b));
+    let n=0;
+    ts.forEach((t,ix)=>{ const rows=got[ix]; if(!rows)return; const arr=DB[t]||(DB[t]=[]), seen=new Set();
+      rows.forEach(row=>{ const rec=rowToRec(t,row), k=t+':'+rec.id; seen.add(rec.id);
+        const i=arr.findIndex(r=>r.id===rec.id);
+        if(i<0){ if(recLast[k]!==undefined)return;                       /* 手元で消して、まだ保存していない */
+          logRemote({t,rec:JSON.parse(JSON.stringify(rec))}); if(t==='cases')arr.unshift(rec); else arr.push(rec); recLast[k]=sig(rec); n++; return; }
+        const l=arr[i];
+        if(recLast[k]===undefined||sig(l)!==recLast[k])return;           /* 手元で作った・直した行で、まだ保存していない */
+        if(same(t,l,rec))return;
+        logRemote({t,rec:JSON.parse(JSON.stringify(rec))});
+        Object.keys(l).forEach(x=>delete l[x]); Object.assign(l,rec); recLast[k]=sig(l); n++;
+        if(t==='orders'&&typeof onOrderRemote==='function'){ try{ onOrderRemote(l); }catch(e){} } });
+      for(let i=arr.length-1;i>=0;i--){ const r=arr[i], k=t+':'+r.id;     /* 向こうで消えた行 */
+        if(!r.id||seen.has(r.id)||recLast[k]===undefined||sig(r)!==recLast[k])continue;
+        logRemote({t,del:r.id}); arr.splice(i,1); delete recLast[k]; n++; } });
+    alog('resync',why+' '+n);
+    if(n){ M.senzoku.length=0; DB.vendors.filter(v=>v.type==='専属').forEach(v=>M.senzoku.push(v.name)); renderIdle(); }
+  }catch(e){ alog('resync ERR',(e&&e.message)||e); }
+  finally{ resyncBusy=false; }
+}
+document.addEventListener('visibilitychange',()=>{ if(document.hidden){ hiddenAt=Date.now(); return; }
+  if(hiddenAt&&Date.now()-hiddenAt>60000)dbResync('画面に戻った'); hiddenAt=0; });
+window.addEventListener('online',()=>dbResync('回線が戻った'));
+setInterval(()=>{ if(!document.hidden)dbResync('定期'); },600000);
 let idleTimer=null;
 function renderIdle(){
   clearTimeout(idleTimer);
@@ -251,7 +289,8 @@ async function initAuth(){
 }
 function onAuth(ev,s){
   const had=!!SESSION; SESSION=s;
-  if(!s){ if(had||ME){ ME=null; dbState='ログインが切れました。もう一度ログインしてください'; alog('auth',ev+' signed out'); render(); } return; }
+  if(!s){ if(denied){ dbState=denied; denied=''; render(); return; }
+    if(had||ME){ ME=null; dbState='ログインが切れました。もう一度ログインしてください'; alog('auth',ev+' signed out'); render(); } return; }
   if(ev==='TOKEN_REFRESHED')checkClock(s);
   if(!ME)boot();
 }
@@ -266,14 +305,19 @@ function checkClock(s){
 }
 /* 読み込みは同時に1本だけ。以前はログイン直後の通知（INITIAL_SESSION・SIGNED_IN・TOKEN_REFRESHED）ごとに
    読み込みが重ねて走り、そのたびにトークン更新が起きて、更新の回数制限に当たってログインが切れていた */
-let bootP=null, bootFails=0;
+let bootP=null, bootFails=0, denied='';
 function boot(){ if(!bootP)bootP=boot1().finally(()=>{ bootP=null; }); return bootP; }
 async function boot1(){
   if(!SESSION||ME)return;
   if(bootFails>=3)return;     /* 続けて失敗したら自動では繰り返さない（再読み込みでやり直す） */
   try{
-    const {data:me}=await sb.from('profiles').select('*').eq('id',SESSION.user.id).single();
-    ME=me||{role:'staff',org:'hq'}; ORG=ME.org||'hq';
+    let {data:me}=await sb.from('profiles').select('*').eq('id',SESSION.user.id).maybeSingle();
+    if(!me){   /* 初回ログインの後で登録された人：登録（role_presets）があれば、ここで利用者として作る */
+      try{ await sb.rpc('ensure_profile'); const r=await sb.from('profiles').select('*').eq('id',SESSION.user.id).maybeSingle(); me=r.data; }catch(e){ alog('ensure_profile',(e&&e.message)||e); } }
+    if(!me||['hq','staff','viewer'].indexOf(me.role)<0){   /* 登録の無いメールアドレス：何も読み込まない */
+      denied='このメールアドレスは台帳に登録されていません。管理者に登録を頼んでください（'+((SESSION.user&&SESSION.user.email)||'')+'）';
+      alog('auth','not registered'); dbState=denied; toast(denied); try{ await sb.auth.signOut(); }catch(e){} SESSION=null; ME=null; dbState=denied; render(); return; }
+    ME=me; ORG=ME.org||'hq';
     await dbLoad(); dbSubscribe(); bootFails=0; render();
     await reloadInbox();
   }catch(e){ bootFails++; ME=null; dbState='読み込めなかった：'+String((e&&e.message)||e)+'。ページを再読み込みしてください'; alog('boot ERR',(e&&e.message)||e); toast(dbState); render(); }
