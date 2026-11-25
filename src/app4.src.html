@@ -1852,7 +1852,7 @@ function siteInfo(c){
   return `<div class="siteinfo${na||nk?' miss':''}">
     <label>住所<input type="text" data-cinfo="addr" data-c="${c.id}" value="${esc(c.addr||'')}" placeholder="未入力：業者の地図に出ない" class="${na?'ng':''}"></label>
     <label>鍵情報<input type="text" data-cinfo="keyInfo" data-c="${c.id}" value="${esc(c.keyInfo||'')}" placeholder="未入力：キーボックスの場所・番号など" class="${nk?'ng':''}"></label>
-    <span class="note" style="margin:0" title="住所は業者ページの工程と発注書に出る。鍵情報は発注書と、業者ページの工程（作業日の3日前〜終了の翌日だけ）に出る。打診の段階では鍵情報は出ない">業者ページ・発注書に出る</span></div>`;
+    <span class="note" style="margin:0" title="住所は業者ページの工程と発注書に出る。鍵情報は発注書と、業者ページの工程に出る。打診の段階では鍵情報は出ない">業者ページ・発注書に出る</span></div>`;
 }
 function orderPanel(c){
   const ls=linesOf(c.id);

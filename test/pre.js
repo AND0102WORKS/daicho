@@ -1,5 +1,5 @@
 // 試験運用の前の直し（./reset.sh のあとに node pre.js）
-//  発注書ページの鍵情報は作業日の前後だけ／下書きの発注書のリンクは業者ページに渡さない／承諾後に中身を変えたら承諾を取り消す／発注の取り消しの歯止め
+//  鍵情報は日付で絞らない／下書きの発注書のリンクは業者ページに渡さない／承諾後に中身を変えたら承諾を取り消す／発注の取り消しの歯止め
 const {chromium}=require('playwright');const {spawn}=require('child_process');const {Client}=require('pg');
 const VT='aa11bb22cc33dd44ee55ff66';
 (async()=>{
@@ -27,12 +27,13 @@ const VT='aa11bb22cc33dd44ee55ff66';
   ok('送付済にすると、リンクが渡る', jo.order_st==='送付済'&&jo.order_token===o.token, jo);
   // ---- 鍵情報 ----
   let ov=await one("select key_info from order_view($1)",[o.token]);
-  ok('発注書：作業日が10日先なら、鍵情報は出さない（案内だけ）', ov.key_info==='（作業日の3日前から表示されます）', ov);
+  ok('発注書：作業日が10日先でも、鍵情報が出る（日付で絞らない）', ov.key_info==='キーボックス 1234', ov);
+  ok('業者ページの工程でも、10日先の工程に鍵情報が出る', ((await one("select key_info from my_schedule($1,current_date,current_date+30)",[VT]))||{}).key_info==='キーボックス 1234');
   await p.evaluate(()=>setDate('P1',fmtD(new Date(Date.now()+2*864e5)),'')); await saved();
   ov=await one("select key_info,start_date::text s from order_view($1)",[o.token]);
-  ok('工程を2日先にすると発注書の工期も変わり、鍵情報が出る', ov.key_info==='キーボックス 1234', ov);
+  ok('工程を2日先にすると発注書の工期も変わる', ov.key_info==='キーボックス 1234'&&!!ov.s, ov);
   await q("update orders set start_date=current_date-5, end_date=current_date-3 where id=$1",[o.id]);
-  ok('作業が終わって2日たつと、鍵情報は出なくなる', (await one("select key_info from order_view($1)",[o.token])).key_info==='（作業日の3日前から表示されます）');
+  ok('作業が終わったあとも、発注書に鍵情報が出る', (await one("select key_info from order_view($1)",[o.token])).key_info==='キーボックス 1234');
   await p.evaluate(()=>{ save(); }); await saved();
   // ---- 承諾後に中身を変える ----
   await q("select order_accept($1,'長沼')",[o.token]); await p.evaluate(()=>dbResync('test')); await p.waitForTimeout(800);

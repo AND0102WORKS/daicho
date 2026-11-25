@@ -376,10 +376,8 @@ create or replace function my_schedule(p_token text, p_from date, p_to date)
 returns table(proc_id text, case_id text, prop text, addr text, kind text, start_date date, end_date date, prog text, memo text, client text, key_info text)
 language sql security definer stable as $$
   select p.id, c.id, c.prop, c.addr, p.kind, p.start_date, p.end_date, p.prog, p.memo, c.client,
-    -- 鍵情報は作業日の前後だけ（開始の3日前〜終了の翌日。日本時間）。それ以外は案内だけ返す（URL が漏れたときの被害を小さく）
-    case when coalesce(c.key_info,'')='' then ''
-         when (now() at time zone 'Asia/Tokyo')::date between p.start_date-3 and coalesce(p.end_date,p.start_date)+1 then c.key_info
-         else '（作業日の3日前から表示されます）' end
+    -- 鍵情報は、その工程の業者にはいつでも見せる（2026-11-26 北村さんの指示。以前は作業日の3日前〜終了の翌日だけだった）。打診中の工程は下の条件で出ない
+    coalesce(c.key_info,'')
   from procs p join cases c on c.id=p.case_id join vendors v on v.name=p.who
   where v.token=p_token and v.active and coalesce(p.ask,'')<>'打診中'      -- 打診中は出さない（受けたら出る）
     and p.start_date<=p_to and coalesce(p.end_date,p.start_date)>=p_from   -- 期間に少しでも掛かる工程（前の週から続く工程も出す）
@@ -877,7 +875,7 @@ alter table lines enable trigger audit_lines; alter table orders enable trigger 
 
 -- ====================================================================
 -- 2026-11-26 試験運用の前の直し：発注書の鍵情報・下書きの発注書・承諾の取り消し（関数の置き換えとトリガの追加のみ）
--- 1) 発注書ページの鍵情報は、工程と同じく「作業日の3日前〜終了の翌日」だけ出す（今までは、いつでも出ていた）
+-- 1) 発注書ページ（鍵情報は日付で絞らない：同日の 20261126c で戻した）
 create or replace function order_view(p_token text)
 returns table(order_no text, who text, kind text, start_date date, end_date date, due date, naiyo text, memo text, st text, accepted_at timestamptz,
               prop text, addr text, client text, lines jsonb, plan date, procs jsonb, key_info text, taxable boolean)
@@ -891,9 +889,7 @@ language sql security definer stable set search_path = public as $$
         'items',(select jsonb_agg(trim(coalesce(l.spec,'')||' '||l.name) order by l.no, l.id) from lines l
                  where l.case_id=p.case_id and l.kind=p.kind and p.kind<>'' and not l.cut and l.qty>0)
       ) order by p.start_date nulls last, p.id) from procs p where p.case_id=o.case_id),
-    case when coalesce(c.key_info,'')='' then ''
-         when o.start_date is not null and (now() at time zone 'Asia/Tokyo')::date between o.start_date-3 and coalesce(o.end_date,o.start_date)+1 then c.key_info
-         else '（作業日の3日前から表示されます）' end,
+    coalesce(c.key_info,''),   -- 鍵情報は日付で絞らない（2026-11-26 北村さんの指示）
     coalesce(o.taxable,true)
   from orders o join cases c on c.id=o.case_id where o.token=p_token
     and not exists (select 1 from vendors v where v.name=o.who and not v.active) $$;
