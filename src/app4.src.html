@@ -62,36 +62,39 @@ p{margin:0}
   body.slim #menuFold{text-align:center;padding:8px 0;font-size:14px}
   body.slim .top .src{display:none}
 }
-/* 月次の表（損益）。月が横、各月に金額と比率 */
-.plw{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--card);max-height:calc(100vh - 150px)}
+/* 月次の表（損益）。月が横、各月に金額と比率。色は明細の表と同じ（青＝売上・橙＝原価・緑＝利益） */
+.plw{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--card);max-height:calc(100vh - 210px)}
 table.plt{border-collapse:separate;border-spacing:0;font-size:12.5px;font-variant-numeric:tabular-nums;min-width:100%}
-table.plt th,table.plt td{padding:3px 8px;line-height:1.35;height:24px;border-right:1px solid #E3DED3;border-bottom:1px solid #EFEBE2;white-space:nowrap;background:var(--card)}
-table.plt thead th{position:sticky;top:0;z-index:3;background:#EDEAE3;font-weight:700;text-align:center}
-table.plt thead tr.sub th{top:25px;font-weight:500;font-size:11px;color:var(--sub)}
+table.plt th,table.plt td{padding:4px 9px;line-height:1.4;height:27px;border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);white-space:nowrap;background:var(--card);color:var(--ink)}
+table.plt thead th{position:sticky;top:0;z-index:3;background:var(--card2);font-weight:700;font-size:12px;color:var(--ink);text-align:center;border-bottom:none}
+table.plt thead tr.sub th{top:27px;font-weight:500;font-size:10.5px;color:var(--sub);border-bottom:1px solid var(--line)}
 table.plt td.r,table.plt th.r{text-align:right}
-table.plt .pr{color:var(--sub);font-size:11.5px;min-width:52px;border-right:2px solid #C9C3B6}
-table.plt td.r:not(.pr){min-width:92px}
+table.plt .pr{color:var(--sub);font-size:11.5px;min-width:46px;border-right:1px solid var(--line)}
+table.plt td.r:not(.pr){min-width:84px}
 table.plt .g{position:sticky;left:0;z-index:2;text-align:left;font-weight:700}
-table.plt .g2{position:sticky;left:34px;z-index:2;min-width:170px;border-right:2px solid #8E9AA0}
+table.plt .g2{position:sticky;left:30px;z-index:2;min-width:176px;border-right:2px solid #8E9AA0;color:var(--ink)}
 table.plt td.g[colspan]{border-right:2px solid #8E9AA0}
-table.plt thead .g{z-index:4;left:0;border-right:2px solid #8E9AA0}
-table.plt .vert{width:34px;min-width:34px;max-width:34px;padding:0;text-align:center;vertical-align:middle;font-weight:700}
-table.plt .vert span{writing-mode:vertical-rl;letter-spacing:.2em}
-table.plt .rt{text-align:right;font-weight:700}
-table.plt tr.band td{font-weight:800;font-size:13px;height:28px;border-top:2px solid #8E9AA0;border-bottom:2px solid #8E9AA0}
-table.plt tr.band.sales td,table.plt tr.band.gross td{background:#DCE8F6}
-table.plt tr.band.op td{background:#DDF1DD}
+table.plt thead .g{z-index:4;left:0;border-right:2px solid #8E9AA0;text-align:left}
+table.plt .vert{width:30px;min-width:30px;max-width:30px;padding:0;text-align:center;vertical-align:middle;font-weight:700;font-size:11px;color:var(--sub);border-right:1px solid var(--line2)}
+table.plt .vert span{writing-mode:vertical-rl;letter-spacing:.25em}
+table.plt .rt{font-weight:700}
+table.plt tr.band td{font-weight:800;font-size:13px;height:32px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+table.plt tr.band.sales td{background:#EEF4FA}
+table.plt tr.band.gross td{background:#EEF6F0}
+table.plt tr.band.op td{background:var(--ok-bg);border-top:2px solid var(--ok);font-size:13.5px}
 table.plt tr.band small{font-weight:500;font-size:10.5px;color:var(--sub);margin-left:8px}
-table.plt tr.sum td{font-weight:700}
-table.plt tr.sum.cogs td,table.plt tr.sum.cogs~tr:not(.band):not(.sga):not(.cnt) td.vert{background:#F3C9C9}
-table.plt tr.sum.cogs td.vert{background:#F3C9C9}
-table.plt tr.sum.sga td{background:#F9E3E3}
-table.plt tr.sum.sga td.vert{background:#F9E3E3}
-table.plt td.na{color:#B9B3A6;text-align:right}
-table.plt td.cur,table.plt th.cur{box-shadow:inset 0 0 0 9999px rgba(15,95,90,.06)}
-table.plt .ptot{font-weight:700;background:#F6F3EC}
-table.plt tr.band .ptot{background:inherit}
+table.plt tr.sum td{font-weight:700;background:#FBF3E6}
+table.plt tr.sum.sga td{background:#F3EFE7}
+table.plt tr.sum td.vert{background:var(--card)}
+table.plt tr.dt td{color:var(--sub)}table.plt tr.dt td.g2{color:var(--ink);padding-left:20px}
+table.plt td.na{color:#C4BFB3}
+table.plt td.neg{color:var(--warn)}
+table.plt td.cur,table.plt th.cur{box-shadow:inset 0 0 0 9999px rgba(15,94,99,.055)}
+table.plt th.cur{color:var(--acc)}
+table.plt .ptot{font-weight:700;border-left:2px solid #8E9AA0}
+table.plt .pr.ptot{border-left:none}
 table.plt tr.cnt td{color:var(--sub);font-size:11.5px;border-bottom:none}
+table.plt .fold{all:unset;cursor:pointer;color:var(--acc);font-weight:700;font-size:11.5px;margin-left:10px}
 /* 明細の表のいちばん下：合計の行（列の真下にそろえる。スクロールしても下に残る） */
 .ln tfoot td{position:sticky;bottom:0;z-index:3;background:var(--card);border-top:2px solid var(--acc);padding:6px 8px;font-size:14px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
 .ln tfoot td.lab{text-align:left}.ln tfoot td.lab small{font-weight:500;font-size:11.5px;color:var(--sub);margin-left:12px}.ln tfoot td.lab small.w{color:var(--warn);font-weight:700}
@@ -3843,7 +3846,7 @@ function vPay0(){
 const PL_FY_START=5;
 const PL_COGS=['材料費（現場）','駐車場代（現場）'];
 const PL_SGA=['人件費（社内）','旅費交通費','燃料費','パーキング代','設備投資費','材料費（社内）','消耗品費','接待交際費','通信費','宣伝広告費','地代/家賃','保険','雇用保険・労災・所得税','福利厚生','減価償却費','その他'];
-let plFy=null;
+let plFy=null, plSga=false;
 function vPl(){
   const now=fmtD(new Date()), cy=+now.slice(0,4), cm=+now.slice(5,7);
   if(plFy==null)plFy=cm>=PL_FY_START?cy:cy-1;
@@ -3852,24 +3855,32 @@ function vPl(){
   DB.cases.forEach(c=>{ const m=ym(DB.basis==='請求'?c.bill:planOf(c)); if(!agg[m])return; agg[m].s+=salesEx(c); agg[m].c+=costOf(c.id); agg[m].n++; });
   const T={s:0,c:0,n:0}; MS.forEach(m=>{ T.s+=agg[m].s; T.c+=agg[m].c; T.n+=agg[m].n; });
   const num=v=>Math.round(v||0).toLocaleString('ja-JP'), pct=(v,s)=>s?(v/s*100).toFixed(1)+'%':'';
-  const cells=(f,ratio,cls)=>MS.map(m=>{ const x=agg[m], v=f(x); return `<td class="r ${cls||''}${m===ym(now)?' cur':''}">${num(v)}</td><td class="r pr ${cls||''}${m===ym(now)?' cur':''}">${ratio?pct(v,x.s):''}</td>`; }).join('')
+  const cells=(f,ratio,cls)=>MS.map(m=>{ const x=agg[m], v=f(x); return `<td class="r ${cls||''}${neg(v)}${m===ym(now)?' cur':''}">${num(v)}</td><td class="r pr ${cls||''}${m===ym(now)?' cur':''}">${ratio?pct(v,x.s):''}</td>`; }).join('')
     +`<td class="r ptot ${cls||''}">${num(f(T))}</td><td class="r pr ptot ${cls||''}">${ratio?pct(f(T),T.s):''}</td>`;
+  const neg=v=>v<0?' neg':'';
   const none=cls=>MS.map(m=>`<td class="r na ${cls||''}${m===ym(now)?' cur':''}">—</td><td class="r pr na ${cls||''}${m===ym(now)?' cur':''}"></td>`).join('')+`<td class="r na ptot ${cls||''}">—</td><td class="r pr na ptot ${cls||''}"></td>`;
   const z=DB.cases.filter(c=>salesEx(c)>0&&costOf(c.id)===0&&agg[ym(DB.basis==='請求'?c.bill:planOf(c))]);
   return `<div class="bar"><h2>月次</h2>
       <button class="btn small" data-plfy="-1" title="前の年度">◀</button><b style="font-size:14px">${plFy}年度</b><span class="note" style="margin:0">（${plFy}年${PL_FY_START}月〜${plFy+1}年${PL_FY_START-1}月）</span><button class="btn small" data-plfy="1" title="次の年度">▶</button>
       <span class="grow"></span><span class="note" style="margin:0">計上基準</span>
       <select id="basisSel" title="売上をどの日付で月に乗せるか">${optsL(['完工','請求'],DB.basis,{'完工':'計上：完工基準','請求':'計上：請求月基準'})}</select></div>
+    <div class="kpi">
+      <div class="k"><small>${plFy}年度 売上高（税抜）</small><b>${yen(T.s)}</b></div>
+      <div class="k"><small>売上原価</small><b>${yen(T.c)}</b></div>
+      <div class="k"><small>売上総利益</small><b style="color:${T.s-T.c<0?'var(--warn)':'var(--ok)'}">${yen(T.s-T.c)}</b></div>
+      <div class="k"><small>粗利率</small><b>${T.s?((T.s-T.c)/T.s*100).toFixed(1)+'%':'—'}</b></div>
+      <div class="k"><small>案件数</small><b>${T.n}</b></div></div>
     <div class="plw"><table class="plt"><thead>
       <tr><th class="g" colspan="2">${plFy}年度</th>${MS.map(m=>`<th class="r${m===ym(now)?' cur':''}" colspan="2">${m.slice(0,4)===String(plFy)&&m.slice(5,7)!=='01'?'':m.slice(0,4)+'年 '}${+m.slice(5,7)}月</th>`).join('')}<th class="r ptot" colspan="2">合計</th></tr>
       <tr class="sub"><th class="g" colspan="2">（税抜・円）</th>${MS.map(m=>`<th class="r${m===ym(now)?' cur':''}">金額</th><th class="r pr${m===ym(now)?' cur':''}">比率</th>`).join('')}<th class="r ptot">金額</th><th class="r pr ptot">比率</th></tr></thead><tbody>
       <tr class="band sales"><td class="g" colspan="2">売上高</td>${cells(x=>x.s,false)}</tr>
-      <tr class="sum cogs"><td class="g vert" rowspan="${2+PL_COGS.length}"><span>売上原価</span></td><td class="g2 rt">合計</td>${cells(x=>x.c,true)}</tr>
-      <tr><td class="g2">人件費（外注）</td>${cells(x=>x.c,true)}</tr>
-      ${PL_COGS.map(n=>`<tr><td class="g2">${n}</td>${none()}</tr>`).join('')}
+      <tr class="sum cogs"><td class="g vert" rowspan="${2+PL_COGS.length}"><span>原価</span></td><td class="g2 rt">売上原価 合計</td>${cells(x=>x.c,true)}</tr>
+      <tr class="dt"><td class="g2">人件費（外注）</td>${cells(x=>x.c,true)}</tr>
+      ${PL_COGS.map(n=>`<tr class="dt"><td class="g2">${n}</td>${none()}</tr>`).join('')}
       <tr class="band gross"><td class="g" colspan="2">売上総利益</td>${cells(x=>x.s-x.c,true)}</tr>
-      <tr class="sum sga"><td class="g vert" rowspan="${1+PL_SGA.length}"><span>販売費及び一般管理費</span></td><td class="g2 rt">合計</td>${none()}</tr>
-      ${PL_SGA.map(n=>`<tr><td class="g2">${n}</td>${none()}</tr>`).join('')}
+      ${plSga?`<tr class="sum sga"><td class="g vert" rowspan="${1+PL_SGA.length}"><span>販管費</span></td><td class="g2 rt">合計<button class="fold" data-plsga="0">内訳をたたむ</button></td>${none()}</tr>
+      ${PL_SGA.map(n=>`<tr class="dt"><td class="g2">${n}</td>${none()}</tr>`).join('')}`
+      :`<tr class="sum sga"><td class="g" colspan="2">販売費及び一般管理費<button class="fold" data-plsga="1">内訳（${PL_SGA.length}科目）をひらく</button></td>${none()}</tr>`}
       <tr class="band op"><td class="g" colspan="2">営業利益<small>販管費 未取込</small></td>${cells(x=>x.s-x.c,true)}</tr>
       <tr class="cnt"><td class="g" colspan="2">案件数</td>${MS.map(m=>`<td class="r${m===ym(now)?' cur':''}">${agg[m].n||''}</td><td class="pr${m===ym(now)?' cur':''}"></td>`).join('')}<td class="r ptot">${T.n}</td><td class="pr ptot"></td></tr>
     </tbody></table></div>
@@ -4333,6 +4344,7 @@ document.addEventListener('click',e=>{
   if(e.target.dataset&&e.target.dataset.estopen!=null){ estOpen=e.target.dataset.estopen==='1'; render(); return; }
   if(e.target.dataset&&e.target.dataset.setsales){ const c=DB.cases.find(x=>x.id===e.target.dataset.setsales); if(!c)return;
     const v=Math.round(linesOf(c.id).reduce((a,l)=>a+lineSell(l),0)); if(!v)return; snap(); c.sales=v; save(); render(); toast(`受注額を ${yen(v)} にした`,undo); return; }
+  if(e.target.dataset&&e.target.dataset.plsga){ plSga=e.target.dataset.plsga==='1'; render(); return; }
   if(e.target.dataset&&e.target.dataset.plfy){ plFy=(plFy||+THIS_M.slice(0,4))+(+e.target.dataset.plfy); render(); return; }
   if(e.target.id==='menuFold'){ const on=document.body.classList.toggle('slim'); try{ localStorage.setItem('aw-slim',on?'1':''); }catch(x){} render(); return; }
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
