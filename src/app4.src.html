@@ -62,6 +62,36 @@ p{margin:0}
   body.slim #menuFold{text-align:center;padding:8px 0;font-size:14px}
   body.slim .top .src{display:none}
 }
+/* 月次の表（損益）。月が横、各月に金額と比率 */
+.plw{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--card);max-height:calc(100vh - 150px)}
+table.plt{border-collapse:separate;border-spacing:0;font-size:12.5px;font-variant-numeric:tabular-nums;min-width:100%}
+table.plt th,table.plt td{padding:3px 8px;line-height:1.35;height:24px;border-right:1px solid #E3DED3;border-bottom:1px solid #EFEBE2;white-space:nowrap;background:var(--card)}
+table.plt thead th{position:sticky;top:0;z-index:3;background:#EDEAE3;font-weight:700;text-align:center}
+table.plt thead tr.sub th{top:25px;font-weight:500;font-size:11px;color:var(--sub)}
+table.plt td.r,table.plt th.r{text-align:right}
+table.plt .pr{color:var(--sub);font-size:11.5px;min-width:52px;border-right:2px solid #C9C3B6}
+table.plt td.r:not(.pr){min-width:92px}
+table.plt .g{position:sticky;left:0;z-index:2;text-align:left;font-weight:700}
+table.plt .g2{position:sticky;left:34px;z-index:2;min-width:170px;border-right:2px solid #8E9AA0}
+table.plt td.g[colspan]{border-right:2px solid #8E9AA0}
+table.plt thead .g{z-index:4;left:0;border-right:2px solid #8E9AA0}
+table.plt .vert{width:34px;min-width:34px;max-width:34px;padding:0;text-align:center;vertical-align:middle;font-weight:700}
+table.plt .vert span{writing-mode:vertical-rl;letter-spacing:.2em}
+table.plt .rt{text-align:right;font-weight:700}
+table.plt tr.band td{font-weight:800;font-size:13px;height:28px;border-top:2px solid #8E9AA0;border-bottom:2px solid #8E9AA0}
+table.plt tr.band.sales td,table.plt tr.band.gross td{background:#DCE8F6}
+table.plt tr.band.op td{background:#DDF1DD}
+table.plt tr.band small{font-weight:500;font-size:10.5px;color:var(--sub);margin-left:8px}
+table.plt tr.sum td{font-weight:700}
+table.plt tr.sum.cogs td,table.plt tr.sum.cogs~tr:not(.band):not(.sga):not(.cnt) td.vert{background:#F3C9C9}
+table.plt tr.sum.cogs td.vert{background:#F3C9C9}
+table.plt tr.sum.sga td{background:#F9E3E3}
+table.plt tr.sum.sga td.vert{background:#F9E3E3}
+table.plt td.na{color:#B9B3A6;text-align:right}
+table.plt td.cur,table.plt th.cur{box-shadow:inset 0 0 0 9999px rgba(15,95,90,.06)}
+table.plt .ptot{font-weight:700;background:#F6F3EC}
+table.plt tr.band .ptot{background:inherit}
+table.plt tr.cnt td{color:var(--sub);font-size:11.5px;border-bottom:none}
 /* 明細の表のいちばん下：合計の行（列の真下にそろえる。スクロールしても下に残る） */
 .ln tfoot td{position:sticky;bottom:0;z-index:3;background:var(--card);border-top:2px solid var(--acc);padding:6px 8px;font-size:14px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
 .ln tfoot td.lab{text-align:left}.ln tfoot td.lab small{font-weight:500;font-size:11.5px;color:var(--sub);margin-left:12px}.ln tfoot td.lab small.w{color:var(--warn);font-weight:700}
@@ -3808,41 +3838,43 @@ function vPay0(){
 }
 
 /* ================= 月次 ================= */
+/* 月次：損益の表（月が横、各月に金額と比率）。年度は5月始まり。
+   売上高と外注費は台帳から。材料費・駐車場代と販管費は会計ソフト（freee）から取り込む予定で、いまは枠だけ */
+const PL_FY_START=5;
+const PL_COGS=['材料費（現場）','駐車場代（現場）'];
+const PL_SGA=['人件費（社内）','旅費交通費','燃料費','パーキング代','設備投資費','材料費（社内）','消耗品費','接待交際費','通信費','宣伝広告費','地代/家賃','保険','雇用保険・労災・所得税','福利厚生','減価償却費','その他'];
+let plFy=null;
 function vPl(){
-  const MS=MS_LIST();
-  const bill={}, done={};
-  DB.cases.forEach(c=>{const s=salesEx(c), k=costOf(c.id);
-    const mb=ym(c.bill), mdn=ym(planOf(c));
-    if(mb){bill[mb]=bill[mb]||{s:0,c:0,n:0}; bill[mb].s+=s; bill[mb].c+=k; bill[mb].n++;}
-    if(mdn){done[mdn]=done[mdn]||{s:0,c:0,n:0}; done[mdn].s+=s; done[mdn].c+=k; done[mdn].n++;}});
-  const tb=(o,t)=>`<div class="card" style="margin-bottom:12px"><h3 style="font-size:14px;margin-bottom:8px">${t}</h3>
-    <div class="tw" style="max-height:none"><table><thead><tr><th></th>
-    ${MS.map(m=>`<th class="r">${mlabel(m)}</th>`).join('')}<th class="r">合計</th></tr></thead><tbody>
-    ${[['件数','n',v=>v],['売上（税抜）','s',yen],['原価（税抜）','c',yen]].map(([l,f,fmt])=>
-      `<tr><td>${l}</td>${MS.map(m=>`<td class="r">${fmt((o[m]||{})[f]||0)}</td>`).join('')}
-       <td class="r"><b>${fmt(MS.reduce((a,m)=>a+((o[m]||{})[f]||0),0))}</b></td></tr>`).join('')}
-    <tr><td><b>粗利（税抜）</b></td>${MS.map(m=>{const x=o[m]||{s:0,c:0};
-      return `<td class="r"><b>${yen(x.s-x.c)}</b></td>`;}).join('')}
-      <td class="r"><b>${yen(MS.reduce((a,m)=>a+((o[m]||{s:0}).s-(o[m]||{c:0}).c),0))}</b></td></tr>
-    <tr><td>粗利率</td>${MS.map(m=>{const x=o[m]||{s:0,c:0};
-      return `<td class="r">${x.s?((x.s-x.c)/x.s*100).toFixed(1)+'%':'—'}</td>`;}).join('')}
-      <td class="r">${(()=>{const s=MS.reduce((a,m)=>a+((o[m]||{s:0}).s),0),c=MS.reduce((a,m)=>a+((o[m]||{c:0}).c),0);
-        return s?((s-c)/s*100).toFixed(1)+'%':'—';})()}</td></tr>
-    <tr><td style="color:var(--sub)">売上（税込）</td>${MS.map(m=>`<td class="r" style="color:var(--sub)">${yen(inc((o[m]||{}).s||0))}</td>`).join('')}
-      <td class="r" style="color:var(--sub)">${yen(inc(MS.reduce((a,m)=>a+((o[m]||{}).s||0),0)))}</td></tr>
-    </tbody></table></div></div>`;
-  const z=DB.cases.filter(c=>salesEx(c)>0&&costOf(c.id)===0);
-  const A=tb(done,'完工（予定）月ベース　工事が実際に動いた月で見る'+(DB.basis==='完工'?'　← いま採用中':''));
-  const Bt=tb(bill,'請求月ベース　いまの月次決算表と同じ見方'+(DB.basis==='請求'?'　← いま採用中':''));
+  const now=fmtD(new Date()), cy=+now.slice(0,4), cm=+now.slice(5,7);
+  if(plFy==null)plFy=cm>=PL_FY_START?cy:cy-1;
+  const MS=[]; for(let i=0;i<12;i++){ const m=PL_FY_START+i, y=plFy+(m>12?1:0); MS.push(`${y}-${String(m>12?m-12:m).padStart(2,'0')}`); }
+  const agg={}; MS.forEach(m=>{ agg[m]={s:0,c:0,n:0}; });
+  DB.cases.forEach(c=>{ const m=ym(DB.basis==='請求'?c.bill:planOf(c)); if(!agg[m])return; agg[m].s+=salesEx(c); agg[m].c+=costOf(c.id); agg[m].n++; });
+  const T={s:0,c:0,n:0}; MS.forEach(m=>{ T.s+=agg[m].s; T.c+=agg[m].c; T.n+=agg[m].n; });
+  const num=v=>Math.round(v||0).toLocaleString('ja-JP'), pct=(v,s)=>s?(v/s*100).toFixed(1)+'%':'';
+  const cells=(f,ratio,cls)=>MS.map(m=>{ const x=agg[m], v=f(x); return `<td class="r ${cls||''}${m===ym(now)?' cur':''}">${num(v)}</td><td class="r pr ${cls||''}${m===ym(now)?' cur':''}">${ratio?pct(v,x.s):''}</td>`; }).join('')
+    +`<td class="r ptot ${cls||''}">${num(f(T))}</td><td class="r pr ptot ${cls||''}">${ratio?pct(f(T),T.s):''}</td>`;
+  const none=cls=>MS.map(m=>`<td class="r na ${cls||''}${m===ym(now)?' cur':''}">—</td><td class="r pr na ${cls||''}${m===ym(now)?' cur':''}"></td>`).join('')+`<td class="r na ptot ${cls||''}">—</td><td class="r pr na ptot ${cls||''}"></td>`;
+  const z=DB.cases.filter(c=>salesEx(c)>0&&costOf(c.id)===0&&agg[ym(DB.basis==='請求'?c.bill:planOf(c))]);
   return `<div class="bar"><h2>月次</h2>
-      <span class="note" style="margin:0">計上基準</span>
-      <select id="basisSel" title="売上をどの日付で月に乗せるか">${optsL(['完工','請求'],DB.basis,{'完工':'計上：完工基準','請求':'計上：請求月基準'})}</select>
-      <span class="note" style="margin:0">請求タブの締め方も一緒に切り替わる</span></div>
-    ${DB.basis==='完工'?A+Bt:Bt+A}
-    <div class="card"><h3 style="font-size:14px;margin-bottom:6px">この粗利率が信用できない理由</h3>
-      <p class="note" style="margin-top:0">売上はあるのに発注が1件も入っていない案件が <b>${z.length}件・${yen(z.reduce((a,c)=>a+salesEx(c),0))}（税抜）</b> ある。
-      その分だけ原価が抜け、粗利が過大に出る。販管費はこの台帳にそもそも入っていないので（経費シートは見出しだけ）、
-      月次決算表の営業利益＝売上総利益になっている。販管費はfreee側にあるので、そちらと突き合わせないと営業利益は出ない。</p></div>`;
+      <button class="btn small" data-plfy="-1" title="前の年度">◀</button><b style="font-size:14px">${plFy}年度</b><span class="note" style="margin:0">（${plFy}年${PL_FY_START}月〜${plFy+1}年${PL_FY_START-1}月）</span><button class="btn small" data-plfy="1" title="次の年度">▶</button>
+      <span class="grow"></span><span class="note" style="margin:0">計上基準</span>
+      <select id="basisSel" title="売上をどの日付で月に乗せるか">${optsL(['完工','請求'],DB.basis,{'完工':'計上：完工基準','請求':'計上：請求月基準'})}</select></div>
+    <div class="plw"><table class="plt"><thead>
+      <tr><th class="g" colspan="2">${plFy}年度</th>${MS.map(m=>`<th class="r${m===ym(now)?' cur':''}" colspan="2">${m.slice(0,4)===String(plFy)&&m.slice(5,7)!=='01'?'':m.slice(0,4)+'年 '}${+m.slice(5,7)}月</th>`).join('')}<th class="r ptot" colspan="2">合計</th></tr>
+      <tr class="sub"><th class="g" colspan="2">（税抜・円）</th>${MS.map(m=>`<th class="r${m===ym(now)?' cur':''}">金額</th><th class="r pr${m===ym(now)?' cur':''}">比率</th>`).join('')}<th class="r ptot">金額</th><th class="r pr ptot">比率</th></tr></thead><tbody>
+      <tr class="band sales"><td class="g" colspan="2">売上高</td>${cells(x=>x.s,false)}</tr>
+      <tr class="sum cogs"><td class="g vert" rowspan="${2+PL_COGS.length}"><span>売上原価</span></td><td class="g2 rt">合計</td>${cells(x=>x.c,true)}</tr>
+      <tr><td class="g2">人件費（外注）</td>${cells(x=>x.c,true)}</tr>
+      ${PL_COGS.map(n=>`<tr><td class="g2">${n}</td>${none()}</tr>`).join('')}
+      <tr class="band gross"><td class="g" colspan="2">売上総利益</td>${cells(x=>x.s-x.c,true)}</tr>
+      <tr class="sum sga"><td class="g vert" rowspan="${1+PL_SGA.length}"><span>販売費及び一般管理費</span></td><td class="g2 rt">合計</td>${none()}</tr>
+      ${PL_SGA.map(n=>`<tr><td class="g2">${n}</td>${none()}</tr>`).join('')}
+      <tr class="band op"><td class="g" colspan="2">営業利益<small>販管費 未取込</small></td>${cells(x=>x.s-x.c,true)}</tr>
+      <tr class="cnt"><td class="g" colspan="2">案件数</td>${MS.map(m=>`<td class="r${m===ym(now)?' cur':''}">${agg[m].n||''}</td><td class="pr${m===ym(now)?' cur':''}"></td>`).join('')}<td class="r ptot">${T.n}</td><td class="pr ptot"></td></tr>
+    </tbody></table></div>
+    <p class="note">売上高と人件費（外注）は台帳の数字（案件の受注額と、業者への発注金額）。「—」の行（材料費・駐車場代・販管費）はまだ取り込んでいない。会計ソフトから取り込めるようにする予定で、それまで営業利益は売上総利益と同じ値になる。${
+      z.length?`<br><span style="color:var(--warn)">この年度に、売上はあるのに発注が1件も入っていない案件が ${z.length}件・${yen(z.reduce((a,c)=>a+salesEx(c),0))} ある。その分、原価が抜けて粗利が大きく出ている（要確認の「原価なし」）。</span>`:''}</p>`;
 }
 
 /* 要確認からその場で直す */
@@ -4301,6 +4333,7 @@ document.addEventListener('click',e=>{
   if(e.target.dataset&&e.target.dataset.estopen!=null){ estOpen=e.target.dataset.estopen==='1'; render(); return; }
   if(e.target.dataset&&e.target.dataset.setsales){ const c=DB.cases.find(x=>x.id===e.target.dataset.setsales); if(!c)return;
     const v=Math.round(linesOf(c.id).reduce((a,l)=>a+lineSell(l),0)); if(!v)return; snap(); c.sales=v; save(); render(); toast(`受注額を ${yen(v)} にした`,undo); return; }
+  if(e.target.dataset&&e.target.dataset.plfy){ plFy=(plFy||+THIS_M.slice(0,4))+(+e.target.dataset.plfy); render(); return; }
   if(e.target.id==='menuFold'){ const on=document.body.classList.toggle('slim'); try{ localStorage.setItem('aw-slim',on?'1':''); }catch(x){} render(); return; }
   const t=e.target.closest('#tabs button'); if(t){tab=t.dataset.t;pendStart=null;render();return;}
   const cpl=e.target.closest('[data-cpage]'); if(cpl){ openCasePage(cpl.dataset.cpage); return; }
