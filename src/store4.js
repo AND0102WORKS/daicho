@@ -221,6 +221,7 @@ function dbSubscribe(){
       const i=arr.findIndex(r=>r.id===rec.id);
       if(i>=0&&isOwnEcho(t,k,rec)){                    /* 自分の書き込みの反射（DB が足した項目だけ受け取る。token など） */
         const l=arr[i]; let added=false; Object.keys(rec).forEach(x=>{ if(l[x]===undefined){ l[x]=rec[x]; added=true; } });
+        ['vendor_id','client_id'].forEach(x=>{ if(rec[x]!==undefined&&l[x]!==rec[x])l[x]=rec[x]; });   /* 番号は DB が名前から埋める。画面は書かないので、いつも DB の値を受け取る */
         delete sentRows[k]; if(recLast[k]!==undefined)recLast[k]=sig(l); if(added)renderIdle(); return; }
       logRemote({t,rec:JSON.parse(JSON.stringify(rec))});
       if(i>=0){ const l=arr[i]; Object.keys(l).forEach(x=>delete l[x]); Object.assign(l,rec); } else { if(t==='cases')arr.unshift(rec); else arr.push(rec); }
