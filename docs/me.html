@@ -503,6 +503,8 @@ async function start(){
   const {data,error}=await sb.rpc('my_vendor',{p_token:token});
   if(error||!data||!data.length){ setMode('sched'); load(); return; }   /* 無効なリンクの表示は load() に任せる */
   ME=data[0]; document.getElementById('who').textContent=ME.name+' さん';
+  /* 業者がこのページを開いたことを記録する（台帳の「利用中」）。台帳から確かめに開いたとき（&s=1）は記録しない。失敗しても先へ進む */
+  if(new URLSearchParams(location.search).get('s')!=='1'){ try{ sb.rpc('vendor_seen',{p_token:token}).then(()=>{},()=>{}); }catch(e){} }
   const rows=await loadOrders();
   setMode(ASKS.length||(rows&&rows.some(o=>o.st==='送付済'))?'orders':(rows&&rows.length&&ME.type==='外注'?'orders':'sched'));
   load();

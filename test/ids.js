@@ -22,17 +22,17 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   // 台帳で業者名を変える（マスタの入力欄と同じ動き）
   const srv=spawn('node',['fakesb-server.js'],{stdio:'ignore',cwd:__dirname}); await new Promise(r=>setTimeout(r,800));
   const b=await chromium.launch({args:['--no-proxy-server']}); const p=await b.newPage({viewport:{width:1300,height:900}});
-  const errs=[]; p.on('pageerror',e=>errs.push(e.message)); p.on('dialog',x=>x.accept());
+  const errs=[]; p.on('pageerror',e=>errs.push(e.message)); p.on('dialog',x=>x.accept(x.type()==='prompt'?'長沼 俊介（新）':undefined));
   await p.goto('http://localhost:8787/'); await p.waitForTimeout(1500);
-  await p.evaluate(()=>{ tab='master'; mTab='発注先'; render(); }); await p.waitForTimeout(400);
-  await p.fill('tr[data-v="長沼俊介"] .mv[data-f="name"]','長沼 俊介（新）'); await p.keyboard.press('Tab'); await p.waitForTimeout(2200);
+  await p.evaluate(()=>{ tab='vendor'; vpId='V1'; vpTab='基本情報'; render(); }); await p.waitForTimeout(400);
+  await p.click('#vRename'); await p.waitForTimeout(2200);   // 協力業者のページの「名前を変える」
   const after={v:(await one("select name from vendors where id='V1'")).name, p:(await one("select who,vendor_id from procs where id='P1'")),
     r:(await one("select who,vendor_id from reports where id='RI'")), i:(await one("select who from invoices where id='IV1'")).who, pay:(await one("select who,amount from payments where vendor_id='V1'"))};
   ok('業者名を変えると、工程の名前も変わり、番号はそのまま', after.v==='長沼 俊介（新）'&&after.p.who==='長沼 俊介（新）'&&after.p.vendor_id==='V1', after.p);
   ok('完了報告・請求書・支払済みの記録も新しい名前になる（古い名前のまま取り残されない）', after.r.who==='長沼 俊介（新）'&&after.r.vendor_id==='V1'&&after.i==='長沼 俊介（新）'&&after.pay.who==='長沼 俊介（新）'&&after.pay.amount===24200, after);
   ok('業者の請求の一覧（my_billing）が、名前を変えたあとも承認済みの報告と請求書を返す', (b=>b.items.length===1&&b.items[0].proc_id==='P1'&&b.invoices.length===1)((await one("select my_billing((select token from vendors where id='V1')) b")).b));
   // 顧客名を変える
-  await p.evaluate(()=>{ mTab='顧客'; render(); }); await p.waitForTimeout(400);
+  await p.evaluate(()=>{ tab='master'; mTab='顧客'; render(); }); await p.waitForTimeout(400);
   const cid=(await one("select client_id from cases where id='C1302'")).client_id;
   await p.fill('tr[data-cm="日本財託"] .mc[data-f="name"]','日本財託（新）'); await p.keyboard.press('Tab'); await p.waitForTimeout(2200);
   const ca=await one("select client,client_id from cases where id='C1302'"), rc=await one("select client,amount from receipts where client_id='"+cid+"'");

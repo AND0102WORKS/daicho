@@ -102,6 +102,18 @@ table.plt tbody tr:hover td{background-image:linear-gradient(rgba(0,0,0,.018),rg
 table.plt .ptot{font-weight:700;border-left:2px solid #8E9AA0;min-width:100px}
 table.plt tr.cnt td{color:var(--sub);font-size:11.5px;border-bottom:none}
 .kpi .k.warnk{border-color:#E7BCB0;background:var(--warn-bg)}.kpi .k.warnk b{font-size:14px;color:var(--warn)}.kpi .k.warnk a{cursor:pointer;text-decoration:underline}
+.vst{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.vst i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.vst.use{background:var(--ok-bg);color:var(--ok)}.vst.use i{background:var(--ok)}
+.vst.inv{background:#FFF1D6;color:#7A5200}.vst.inv i{background:#C98A00}
+.vst.non{background:var(--line2);color:var(--sub)}.vst.non i{background:#9AA}
+tr.vrow{cursor:pointer}tr.vrow td{padding:9px 10px}tr.vrow .nm b{font-size:13.5px}tr.vrow .nm small,.vnote{display:block;color:var(--sub);font-size:11px;margin-top:2px}
+.miss{color:var(--warn);font-weight:700}
+.vgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}.vgrid .card{margin:0}@media(max-width:1000px){.vgrid{grid-template-columns:1fr}}
+.vpact{float:right;display:flex;gap:6px;align-items:center}.cphead .vst{vertical-align:3px}
+.vgrid .cpform{grid-template-columns:1fr 1fr}.vpact a.btn{text-decoration:none}
+.vname{display:flex;align-items:center;gap:10px}.vname b{font-size:15px}
+.chk{display:flex;align-items:center;gap:6px;font-size:13px;height:34px}
 .pldrill{margin-top:10px;border-left:4px solid var(--acc)}
 .pllow{margin-top:10px}
 .pledw{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:700px){.pledw{grid-template-columns:1fr}}
@@ -509,8 +521,9 @@ const TABLES={
           map:{case:'case_id',order:'order_id',cqty:'cost_qty',cunit:'cost_unit'}, dates:[], bools:['cut']},
   orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable','token'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
-  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src'],
-          map:{full:'full_name',defKind:'def_kind',close:'close_day'}, dates:[], bools:['active','taxable']},
+  /* seen_at・first_seen_at（業者が業者ページを開いた日時）は DB が入れる。画面は読むだけ */
+  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at'],
+          map:{full:'full_name',defKind:'def_kind',close:'close_day',invitedAt:'invited_at'}, dates:[], bools:['active','taxable'], ts:['invited_at']},
   clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src','est_mode'],
           map:{full:'full_name',close:'close_day',estMode:'est_mode'}, dates:[], bools:[]},
   prices:{cols:['id','org','name','alias','kind','unit','price','who','client','memo'], map:{}, dates:[], bools:[]},
@@ -702,7 +715,7 @@ function dbSubscribe(){
       const i=arr.findIndex(r=>r.id===rec.id);
       if(i>=0&&isOwnEcho(t,k,rec)){                    /* 自分の書き込みの反射（DB が足した項目だけ受け取る。token など） */
         const l=arr[i]; let added=false; Object.keys(rec).forEach(x=>{ if(l[x]===undefined){ l[x]=rec[x]; added=true; } });
-        ['vendor_id','client_id'].forEach(x=>{ if(rec[x]!==undefined&&l[x]!==rec[x])l[x]=rec[x]; });   /* 番号は DB が名前から埋める。画面は書かないので、いつも DB の値を受け取る */
+        ['vendor_id','client_id','seen_at','first_seen_at','token'].forEach(x=>{ if(rec[x]!==undefined&&l[x]!==rec[x])l[x]=rec[x]; });   /* 番号は DB が名前から埋める。画面は書かないので、いつも DB の値を受け取る */
         delete sentRows[k]; if(recLast[k]!==undefined)recLast[k]=sig(l); if(added)renderIdle(); return; }
       logRemote({t,rec:JSON.parse(JSON.stringify(rec))});
       if(i>=0){ const l=arr[i]; Object.keys(l).forEach(x=>delete l[x]); Object.assign(l,rec); } else { if(t==='cases')arr.unshift(rec); else arr.push(rec); }
@@ -734,7 +747,9 @@ async function dbResync(why){
           logRemote({t,rec:JSON.parse(JSON.stringify(rec))}); if(t==='cases')arr.unshift(rec); else arr.push(rec); recLast[k]=sig(rec); n++; return; }
         const l=arr[i];
         if(recLast[k]===undefined||sig(l)!==recLast[k])return;           /* 手元で作った・直した行で、まだ保存していない */
-        if(same(t,l,rec))return;
+        if(same(t,l,rec)){   /* 画面が書かない項目（DB が入れる番号・業者ページを開いた日時・リンク）だけ変わっていることがある */
+          let ch=false; ['vendor_id','client_id','seen_at','first_seen_at','token'].forEach(x=>{ if(rec[x]!==undefined&&l[x]!==rec[x]){ l[x]=rec[x]; ch=true; } });
+          if(ch){ recLast[k]=sig(l); n++; } return; }
         logRemote({t,rec:JSON.parse(JSON.stringify(rec))});
         Object.keys(l).forEach(x=>delete l[x]); Object.assign(l,rec); recLast[k]=sig(l); n++;
         if(t==='orders'&&typeof onOrderRemote==='function'){ try{ onOrderRemote(l); }catch(e){} } });
@@ -925,6 +940,9 @@ function renameVendor(old,nw){
   (DB.lines||[]).forEach(l=>{if(l.who===old)l.who=nw;});
   (DB.orders||[]).forEach(o=>{if(o.who===old)o.who=nw;});
   (DB.prices||[]).forEach(x=>{if(x.who===old)x.who=nw;});
+  (DB.reports||[]).forEach(x=>{if(x.who===old)x.who=nw;});
+  (DB.invoices||[]).forEach(x=>{if(x.who===old)x.who=nw;});
+  { const o=DB.paid||{}; Object.keys(o).forEach(key=>{ if(key.indexOf(old+'|')===0){ o[nw+key.slice(old.length)]=o[key]; delete o[key]; } }); }   /* 支払済みの記録 */
   if(DB.off&&DB.off[old]){DB.off[nw]=DB.off[old]; delete DB.off[old];}
 }
 /* 顧客の改名：案件・単価表・入金の記録も追随 */
@@ -932,10 +950,11 @@ function renameClient(old,nw){
   if(!old||!nw||old===nw)return;
   DB.cases.forEach(x=>{if(x.client===old)x.client=nw;});
   (DB.prices||[]).forEach(x=>{if(x.client===old)x.client=nw;});
-  ['recv','paid'].forEach(k=>{const o=DB[k]||{}; Object.keys(o).forEach(key=>{ if(key.indexOf(old+'|')===0){o[nw+key.slice(old.length)]=o[key]; delete o[key];} });});
+  ['recv'].forEach(k=>{const o=DB[k]||{}; Object.keys(o).forEach(key=>{ if(key.indexOf(old+'|')===0){o[nw+key.slice(old.length)]=o[key]; delete o[key];} });});   /* 入金の記録だけ（支払済みは業者の名前なので触らない） */
 }
 /* 参照されている発注先・顧客は消せない */
-const vendorRefs=nm=>DB.procs.filter(p=>p.who===nm).length+(DB.lines||[]).filter(l=>l.who===nm).length+(DB.orders||[]).filter(o=>o.who===nm).length+(DB.prices||[]).filter(x=>x.who===nm).length;
+const vendorRefs=nm=>DB.procs.filter(p=>p.who===nm).length+(DB.lines||[]).filter(l=>l.who===nm).length+(DB.orders||[]).filter(o=>o.who===nm).length+(DB.prices||[]).filter(x=>x.who===nm).length
+  +(DB.reports||[]).filter(r=>r.who===nm).length+(DB.invoices||[]).filter(i=>i.who===nm).length+Object.keys(DB.paid||{}).filter(k=>k.indexOf(nm+'|')===0).length;
 const clientRefs=nm=>DB.cases.filter(c=>c.client===nm).length+(DB.prices||[]).filter(x=>x.client===nm).length;
 const isClient=nm=>!!clientOf(nm);
 const isVendor=nm=>!!vendorOf(nm);
@@ -2255,14 +2274,14 @@ function orderSheet(oid){
 
 /* ================= tabs ================= */
 const TABS=[['ledger','案件台帳'],['order','見積・発注'],['proc','工程を組む'],['board','手配ボード'],['kanko','完工予定'],['insp','検査カレンダー'],
-            ['bill','請求'],['pay','支払'],['pl','月次'],['master','マスタ'],['check','要確認']];
+            ['bill','請求'],['pay','支払'],['pl','月次'],['vendor','協力業者'],['master','マスタ'],['check','要確認']];
 let tab='ledger', selCase=null, selProc=null;
 let fClient='すべて', fMonth='すべて', fStatus='すべて', fQ='', bMonth=THIS_M, kMonth=THIS_M;
 let fScope='運用中';
 let iClient='日本財託', iMonth=addM(THIS_M,-1);   /* 請求は前月分を見ることが多い */
 let cMonth=THIS_M, cWho='すべて', pendStart=null, pHide=false;
 let pCase=null, pFilter='発注前（未）', pQ='', pShift=0, kView='すべて', pSort='起算日が近い順';
-let mTab='発注先', mQ='';
+let mTab='顧客', mQ='';
 let oMode=(()=>{ try{ const v=localStorage.getItem('aw-omode'); return ['見積','発注','まとめ'].indexOf(v)>=0?v:'発注'; }catch(e){ return '発注'; } })();   /* 明細の表の形 */
 function setOMode(m){ oMode=m; try{ localStorage.setItem('aw-omode',m); }catch(e){} render(); }
 let oCase=null, oFilter='発注前（未）', oQ='', oSel={}, oView='make', oMonth=THIS_M, oSt='未完了';
@@ -2281,6 +2300,7 @@ const TABIC={
   bill:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9.5 8l2.5 3.5L14.5 8M12 11.5V16M9.5 12.5h5M9.5 14.5h5"/>',
   pay:'<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 15h2"/>',
   pl:'<path d="M4 20h16"/><path d="M7 20v-6M12 20V6M17 20v-9"/>',
+  vendor:'<path d="M14.5 5.5l4 4M4 20l1-4L16 5l3 3L8 19z"/><path d="M4 8l4-4 3 3-4 4z"/>',
   master:'<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.5a3 3 0 0 1 0 5.5M17.5 14.8c2.1.7 3.5 2.5 3.5 5.2"/>',
   check:'<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>' };
 const tabIcon=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TABIC[k]||''}</svg>`;
@@ -2291,7 +2311,7 @@ function renderTabs(){
   issues().forEach(i=>{const c=B[i.c]; if(c&&c.live)seen.add(i.k+'|'+i.c);});
   const n=seen.size;
   document.getElementById('tabs').innerHTML=TABS.map(([k,l])=>
-    `${k==='bill'||k==='master'?'<div class="sep"></div>':''}<button class="${tab===k||(tab==='case'&&k==='ledger')?'on':''}" data-t="${k}" title="${l}">${tabIcon(k)}<span>${l}</span>${k==='check'&&n?`<i class="bdg">${n}</i>`:''}</button>`).join('');
+    `${k==='bill'||k==='vendor'?'<div class="sep"></div>':''}<button class="${tab===k||(tab==='case'&&k==='ledger')?'on':''}" data-t="${k}" title="${l}">${tabIcon(k)}<span>${l}</span>${k==='check'&&n?`<i class="bdg">${n}</i>`:''}</button>`).join('');
   const slim=document.body.classList.contains('slim'), mf=document.getElementById('menuFold'); if(mf){ mf.textContent=slim?'≫':'≪ メニューをたたむ'; mf.title=slim?'メニューを開く':'メニューをたたんで、画面を広く使う'; }
   document.getElementById('src').innerHTML=(HIDE?'':`<button class="btn small" id="hideOn" title="押した時点にある案件をすべて画面から隠す。データは消えない。このブラウザだけ">今までの案件を隠す</button><br>`)+
     `運用中 ${DB.cases.filter(c=>c.live).length} 件／過去 ${DB.cases.filter(c=>!c.live).length} 件／工程 ${DB.procs.length} 件`+
@@ -3055,8 +3075,9 @@ function convertAll(){
 }
 function mBar(oldN){
   return `<div class="bar"><h2>マスタ</h2>
-    <select id="mTab" title="どのマスタを出すか">${optsL(['発注先','顧客','単価'],mTab,
-      {'発注先':'発注先マスタ','顧客':'顧客マスタ','単価':'発注単価マスタ'})}</select>
+    <select id="mTab" title="どのマスタを出すか">${optsL(['顧客','単価'],mTab,
+      {'顧客':'顧客マスタ','単価':'発注単価マスタ'})}</select>
+    <button class="btn small" data-gotab="vendor" title="発注先（業者・職人）は、左のメニューの「協力業者」に移した">発注先は「協力業者」へ →</button>
     <input type="search" id="mQ" placeholder="名前で探す" value="${esc(mQ)}" style="min-width:160px">
     <button class="btn small" id="addRow">＋ 行を足す</button>
     ${mTab==='単価'?'<button class="btn small" id="impPrice">貼り付けて取り込む</button>':''}
@@ -3300,7 +3321,8 @@ function vMaster0(){
   const q=mQ.toLowerCase();
   const oldN=DB.procs.filter(p=>p.kind&&PKINDS.indexOf(p.kind)<0).length;
   if(mTab==='単価')return vPrice();
-  if(mTab==='発注先'){
+  if(mTab==='発注先')mTab='顧客';   /* 発注先は「協力業者」メニューへ移した */
+  if(false){
     const list=DB.vendors.filter(v=>!q||(v.name+v.full+(v.inv||'')).toLowerCase().includes(q));
     return `${mBar(oldN)}
       <div class="tw"><table><thead><tr>
@@ -3352,6 +3374,156 @@ function vMaster0(){
     </tbody></table></div>
     <p class="note">締日とサイトが請求期間と入金予定日を決める。月末締めは31、5日締めは5。
       ${M.termNote&&M.termNote['日本財託']?`<br><span style="color:var(--warn)">※ ${esc(M.termNote['日本財託'])}。岸本さんに確認。</span>`:''}</p>`;
+}
+
+/* ================= 協力業者 =================
+   一覧 → 行を押すと業者のページ（基本情報・手配中の現場・支払・単価・休み）。一覧では書き換えない。
+   業者ページの状態：未招待 → 招待済み（invitedAt）→ 利用中（seen_at：業者が業者ページを開くと DB が入れる） */
+let vpId='', vpTab='基本情報', vQ='', vKind='', vSt='';
+const VPTABS=['基本情報','手配中の現場','支払','単価','休み'];
+const vState=v=>v.seen_at?'use':v.invitedAt?'inv':'non';
+const vStateChip=v=>{ const k=vState(v); return `<span class="vst ${k}"><i></i>${k==='use'?'利用中':k==='inv'?'招待済み':'未招待'}</span>`; };
+const vStateNote=v=>{ const k=vState(v); return k==='use'?`最後に開いた ${md(String(v.seen_at).slice(0,10))}`:k==='inv'?`${md(String(v.invitedAt).slice(0,10))} に送った・まだ開いていない`:''; };
+const vLive=()=>new Set(DB.cases.filter(c=>c.live).map(c=>c.id));
+const vOpenProcs=(nm,L)=>DB.procs.filter(p=>p.who===nm&&p.prog!=='完了'&&L.has(p.case));
+const vMonthAmt=(nm,m)=>DB.procs.filter(p=>p.who===nm&&ym(p.date)===m).reduce((a,p)=>a+(+p.amt||0),0);
+const vKindsHtml=v=>vendorKinds(v).map(k=>`<span class="cl" style="background:${kcol(k)}">${esc(k)}</span>`).join(' ');
+function vVendors(){
+  const v0=vpId?DB.vendors.find(x=>x.id===vpId):null; if(v0)return vVendorPage(v0); vpId='';
+  const q=vQ.toLowerCase(), m=THIS_M, L=vLive();
+  const all=DB.vendors.filter(v=>v.active!==false||vSt==='stop');
+  const list=DB.vendors.filter(v=>(!q||(v.name+(v.full||'')+(v.inv||'')+(v.contact||'')).toLowerCase().includes(q))&&(!vKind||vendorKinds(v).indexOf(vKind)>=0)
+    &&(vSt==='stop'?v.active===false:(v.active!==false&&(!vSt||vState(v)===vSt))));
+  const live=DB.vendors.filter(v=>v.active!==false), cnt=k=>live.filter(v=>vState(v)===k).length;
+  return `<div class="bar"><h2>協力業者</h2>
+      <input type="search" id="vQ" placeholder="名前で探す" value="${esc(vQ)}" style="min-width:170px">
+      <select id="vKind" title="職種で絞る"><option value="">職種：すべて</option>${opts(PKINDS,vKind)}</select>
+      <select id="vSt" title="業者ページの状態で絞る">${optsL(['','non','inv','use','stop'],vSt,{'':'状態：すべて','non':'未招待','inv':'招待済み（まだ開いていない）','use':'利用中','stop':'使用停止'})}</select>
+      <span class="grow"></span><button class="btn primary" id="vAdd">＋ 協力業者を登録</button></div>
+    <div class="kpi"><div class="k"><small>登録</small><b>${live.length}</b></div><div class="k"><small>利用中</small><b style="color:var(--ok)">${cnt('use')}</b></div>
+      <div class="k"><small>招待済み・まだ開いていない</small><b style="color:#7A5200">${cnt('inv')}</b></div><div class="k"><small>未招待</small><b>${cnt('non')}</b></div>
+      <div class="k"><small>登録番号が未入力</small><b style="color:${live.filter(v=>!v.inv&&v.taxable!==false).length?'var(--warn)':'inherit'}">${live.filter(v=>!v.inv&&v.taxable!==false).length}</b></div></div>
+    <div class="tw" style="max-height:calc(100vh - 230px)"><table><thead><tr><th>名前</th><th>区分</th><th>職種</th><th class="r">手配中</th><th class="r">今月の発注（税抜）</th><th>課税</th><th>登録番号</th><th>業者ページ</th><th></th></tr></thead><tbody>
+    ${list.map(v=>{ const n=vOpenProcs(v.name,L).length, a=vMonthAmt(v.name,m), k=vState(v), note=vStateNote(v);
+      return `<tr class="vrow" data-vp="${esc(v.id||'')}" data-vn="${esc(v.name)}"><td class="nm"><b>${esc(v.name)}</b>${v.full&&v.full!==v.name?`<small>${esc(v.full)}</small>`:''}</td>
+        <td><span class="st">${esc(v.type||'外注')}</span>${v.active===false?' <span class="flag">使用停止</span>':''}</td><td>${vKindsHtml(v)}</td>
+        <td class="r">${n?n+'件':'—'}</td><td class="r">${a?yen(a):'—'}</td><td>${v.type==='専属'?'—':v.taxable===false?'免税':'課税'}</td>
+        <td style="font-size:12px;color:var(--sub)">${v.inv?esc(v.inv):(v.type==='専属'||v.taxable===false?'—':'<span class="miss">未入力</span>')}</td>
+        <td>${vStateChip(v)}${note?`<small class="vnote">${note}</small>`:''}</td>
+        <td>${v.active===false?'':k==='non'?`<button class="btn small primary" data-vinvite="${esc(v.name)}">招待する</button>`:k==='inv'?`<button class="btn small" data-vinvite="${esc(v.name)}">もう一度送る</button>`:''}</td></tr>`; }).join('')
+      ||`<tr><td colspan="9" class="note" style="padding:14px">当てはまる協力業者はいない。</td></tr>`}</tbody></table></div>
+    <p class="note">行を押すと、その業者のページが開く（基本情報・手配中の現場・支払・単価・休み）。名前や取引条件は、業者のページで直す。</p>`;
+}
+function vVendorPage(v){
+  if(VPTABS.indexOf(vpTab)<0)vpTab='基本情報';
+  const nm=v.name, open=vOpenProcs(nm,vLive()).sort((a,b)=>(a.date||'9').localeCompare(b.date||'9')), B=byId(), reps=(DB.reports||[]).filter(r=>r.who===nm);
+  const F=(l,h,full)=>`<div${full?' class="full"':''}><label class="fl">${l}</label>${h}</div>`, T=(f,ph,ty)=>`<input type="${ty||'text'}" data-vf="${f}" value="${esc(v[f]==null?'':v[f])}" placeholder="${ph||''}">`;
+  const head=`<div class="cphead">
+      <a id="vpBack" class="cpback" title="協力業者の一覧にもどる">← 協力業者</a><h2>${esc(nm)}</h2><span class="st">${esc(v.type||'外注')}</span>${vKindsHtml(v)} ${v.active===false?'<span class="flag">使用停止</span>':vStateChip(v)}
+      <span class="vpact">${v.token?`<a class="btn small" href="${esc(vendorLink(v))}&s=1" target="_blank" rel="noopener" title="この業者に見えている画面を確かめる（開いても「利用中」にはならない）">業者ページを見る</a>
+        <button class="btn small" data-vreset="${esc(nm)}" title="リンクが他の人に渡ってしまったとき。今のリンクは使えなくなる">リンクを作り直す</button>
+        <button class="btn small ${vState(v)==='non'?'primary':''}" data-vinvite="${esc(nm)}">${vState(v)==='non'?'招待する':'案内をもう一度送る'}</button>`:'<span class="note" style="margin:0">保存中…（少し待つとリンクができる）</span>'}</span>
+      <div class="cpsub">${[v.full&&v.full!==nm?esc(v.full):'',v.addr?esc(v.addr):'',v.phone?esc(v.phone):'',vStateNote(v)].filter(Boolean).join('　／　')||'&nbsp;'}</div>
+      <div class="cptabs">${VPTABS.filter(t=>t!=='休み'||v.type==='専属').map(t=>`<button class="${t===vpTab?'on':''}" data-vptab="${t}">${t}${t==='手配中の現場'&&open.length?`<i>${open.length}</i>`:''}</button>`).join('')}</div></div>`;
+  let body='';
+  const jobs=(ps,empty)=>ps.length?`<div class="tw" style="max-height:none"><table><thead><tr><th>物件</th><th>区分</th><th>期間</th><th class="r">発注金額（税抜）</th><th>発注</th><th>完了報告</th></tr></thead><tbody>
+      ${ps.map(p=>{ const c=B[p.case]||{}, o=p.order?DB.orders.find(x=>x.id===p.order):null, r=reps.find(x=>x.proc===p.id), [rl,rc]=r?RST[r.st]||[r.st,'']:['',''];
+        return `<tr><td><a class="cplink" data-cpage="${p.case}" title="案件ページを開く">${esc(c.prop||'（物件未入力）')}</a></td><td><span class="cl" style="background:${kcol(p.kind)}">${esc(p.kind)}</span></td>
+          <td>${p.date?spanLabel(p):'未定'}</td><td class="r">${p.amt?yen(p.amt):'—'}</td>
+          <td>${p.ask==='打診中'?'<span class="flag">打診中</span>':o?`<span class="st ${OSTC[o.st]}">${esc(o.st)}</span> ${esc(o.no)}`:isStaffJob(p.kind)?'<span class="note" style="margin:0">社内</span>':'<span class="note" style="margin:0">未発注</span>'}</td>
+          <td>${r?`<span class="st ${rc}">${rl}</span>`:'<span class="note" style="margin:0">まだ</span>'}</td></tr>`; }).join('')}</tbody></table></div>`:`<p class="note" style="margin:0">${empty}</p>`;
+  if(vpTab==='基本情報'){
+    body=`<div class="vgrid">
+      <div class="card"><h3 class="cph">基本情報</h3><div class="fg cpform">
+        ${F('名前（台帳での呼び名）',`<div class="vname"><b>${esc(nm)}</b><button class="btn small" id="vRename" title="工程・発注・完了報告・請求書・支払の記録も、新しい名前に一緒に変わる">名前を変える</button></div>`,1)}
+        ${F('正式名称（発注書・請求書に出る）',T('full'),1)}
+        ${F('区分',`<select data-vf="type">${opts(VTYPES,v.type||'外注')}</select>`)}${F('職種（既定の工程区分）',`<select data-vf="defKind">${opts(PKINDS,v.defKind||'内装')}</select>`)}
+        ${F('検査もする',isInsp(v.defKind)?'<div class="note" style="margin:6px 0 0">検査担当</div>':`<label class="chk"><input type="checkbox" data-vf="insp"${canInspect(v)?' checked':''}> AW検査も頼む</label>`)}${F('担当者',T('contact'))}
+        ${F('電話',T('phone'))}${F('メール（発注書の送り先）',T('email','未登録'))}
+        ${F('住所',T('addr'),1)}</div></div>
+      <div class="card"><h3 class="cph">取引条件</h3><div class="fg cpform">
+        ${F('消費税',`<select data-vf="taxable"${v.taxable===false?' style="border-color:var(--warn)"':''}><option value="1"${v.taxable!==false?' selected':''}>課税（発注書に10%を足す）</option><option value="0"${v.taxable===false?' selected':''}>免税（消費税なし）</option></select>`,1)}
+        ${F('登録番号（インボイス）'+(v.inv||v.taxable===false||v.type==='専属'?'':' <span style="color:var(--warn)">未入力</span>'),T('inv','T＋13桁'),1)}
+        ${F('締日',`<input type="number" data-vf="close" value="${v.close||30}" min="1" max="31">`)}${F('支払サイト（日）',`<input type="number" data-vf="site" value="${v.site||30}" min="0" max="120">`)}
+        ${F('振込先',T('bank','銀行・支店・種別・口座番号・名義'),1)}
+        <div class="full note" style="margin:0">${esc(payTerm(v))}。月末締めは 31。${v.taxable===false?'免税の業者には、発注書・請求書に消費税を足さない。':''}</div></div>
+        <div class="bar" style="margin:12px 0 0"><span class="grow"></span>${v.active===false?`<button class="btn small" data-vactive="1">使用を再開する</button>`:`<button class="btn small" data-vactive="0" title="使わなくなった業者。一覧に出なくなり、業者ページも開けなくなる。記録は残る">使用停止にする</button>`}
+          ${vendorRefs(nm)?'':`<button class="btn small danger" data-delv="${esc(nm)}">削除</button>`}</div></div></div>
+      <div class="card" style="margin-top:12px"><div class="bar" style="margin:0 0 8px"><h3 class="cph" style="margin:0">手配中の現場</h3>
+        <span class="note" style="margin:0">打診中 ${open.filter(p=>p.ask==='打診中').length}件・進行中 ${open.filter(p=>p.ask!=='打診中').length}件　今月の発注 ${yen(vMonthAmt(nm,THIS_M))}（税抜）</span></div>
+        ${jobs(open.slice(0,8),'いま頼んでいる現場は無い。')}${open.length>8?`<p class="note" style="margin:6px 0 0">ほか ${open.length-8}件。「手配中の現場」のタブで全部見られる。</p>`:''}</div>`;
+  } else if(vpTab==='手配中の現場'){
+    const done=DB.procs.filter(p=>p.who===nm&&p.prog==='完了').sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,30);
+    body=`<div class="card"><h3 class="cph">手配中（${open.length}件）</h3>${jobs(open,'いま頼んでいる現場は無い。')}</div>
+      <div class="card" style="margin-top:12px"><h3 class="cph">終わった現場（新しい順・30件まで）</h3>${jobs(done,'終わった現場はまだ無い。')}</div>`;
+  } else if(vpTab==='支払'){
+    const ms={}; DB.procs.filter(p=>p.who===nm&&p.date).forEach(p=>{ const m=ym(p.date); (ms[m]=ms[m]||{a:0,n:0}); ms[m].a+=(+p.amt||0); ms[m].n++; });
+    const keys=Object.keys(ms).sort().reverse().slice(0,12), tx=v.taxable!==false&&v.type!=='専属', invs=(DB.invoices||[]).filter(i=>i.who===nm);
+    body=`<div class="card"><div class="bar" style="margin:0 0 8px"><h3 class="cph" style="margin:0">月ごとの発注金額</h3><span class="note" style="margin:0">工程の日付の月で集計（新しい順・12か月まで）。${tx?'税込は10%を足した額。':'免税・専属は消費税なし。'}</span></div>
+      ${keys.length?`<div class="tw" style="max-height:none"><table><thead><tr><th>月</th><th class="r">件数</th><th class="r">発注金額（税抜）</th><th class="r">税込</th><th class="r">支払済みの記録</th></tr></thead><tbody>
+        ${keys.map(m=>`<tr><td>${m.slice(0,4)}年${+m.slice(5,7)}月</td><td class="r">${ms[m].n}</td><td class="r">${yen(ms[m].a)}</td><td class="r">${tx?yen(inc(ms[m].a)):yen(ms[m].a)}</td>
+          <td class="r">${(DB.paid||{})[nm+'|'+m]?yen(DB.paid[nm+'|'+m]):'—'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="note" style="margin:0">発注はまだ無い。</p>'}</div>
+      <div class="card" style="margin-top:12px"><h3 class="cph">完了報告（${reps.length}件）と請求書（${invs.length}件）</h3>
+        ${reps.length?`<div class="tw" style="max-height:none"><table><thead><tr><th>完了日</th><th>物件</th><th class="r">金額</th><th class="r">追加</th><th>状態</th><th>請求書</th></tr></thead><tbody>
+          ${reps.slice().sort((a,b)=>String(b.done).localeCompare(String(a.done))).map(r=>{ const [rl,rc]=RST[r.st]||[r.st,'']; return `<tr><td>${md(r.done)}</td><td><a class="cplink" data-cpage="${r.case}">${esc((B[r.case]||{}).prop||'')}</a></td>
+            <td class="r">${yen(r.base)}</td><td class="r">${+r.extra?yen(r.extra):'—'}</td><td><span class="st ${rc}">${rl}</span></td><td>${r.invoiceId?'載せた':'まだ'}</td></tr>`; }).join('')}</tbody></table></div>`
+          :'<p class="note" style="margin:0">完了報告はまだ無い。</p>'}
+        <p class="note" style="margin:8px 0 0">承認・支払明細書の作成・支払済みの入力は「支払」メニューで行う。</p></div>`;
+  } else if(vpTab==='単価'){
+    const pr=(DB.prices||[]).filter(x=>x.who===nm);
+    body=`<div class="card"><div class="bar" style="margin:0 0 8px"><h3 class="cph" style="margin:0">この業者の単価（${pr.length}件）</h3><span class="grow"></span><button class="btn small" data-gotab="master" data-mtab="単価">単価表で直す</button></div>
+      ${pr.length?`<div class="tw" style="max-height:none"><table><thead><tr><th>名称</th><th>区分</th><th>単位</th><th class="r">単価</th><th>依頼元</th><th>メモ</th></tr></thead><tbody>
+        ${pr.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.kind||'')}</td><td>${esc(x.unit||'')}</td><td class="r">${yen(x.price)}</td><td>${esc(x.client||'')}</td><td>${esc(x.memo||'')}</td></tr>`).join('')}</tbody></table></div>`
+        :'<p class="note" style="margin:0">この業者の単価は登録されていない。</p>'}</div>`;
+  } else {
+    const mons=[THIS_M,addM(THIS_M,1),addM(THIS_M,2)];
+    body=`<div class="card"><h3 class="cph">休み</h3>${mons.map(m=>{ const d=((DB.off||{})[nm]||{})[m]||[];
+      return `<div class="bar" style="margin:0 0 6px"><b style="min-width:90px">${m.slice(0,4)}年${+m.slice(5,7)}月</b><span>${d.length?d.slice().sort((a,b)=>a-b).map(x=>x+'日').join('・'):'<span class="note" style="margin:0">休みの登録なし</span>'}</span>
+        <span class="grow"></span><button class="btn small" data-avoff="${esc(nm)}|${m}">休みを入れる</button></div>`; }).join('')}
+      <p class="note" style="margin:6px 0 0">休みの日は、工程を組むときの予定表に「休」と出る。</p></div>`;
+  }
+  return head+`<div class="cpbody">${body}</div>`;
+}
+/* 招待：業者ページの専用リンクを送る。送ったら「招待済み」。相手が開くと DB が「利用中」にする */
+function vInviteMsg(v){ return [`${v.full||v.name} 様`,'',`いつもお世話になっております。${(DB.cfg&&DB.cfg.company)||'アンドワークス'}です。`,
+  '今後、工事のご依頼・日程のご相談・発注書・完了報告を、下記の専用ページで行います。','ログインは不要です。このリンクを開いて、ブックマーク（ホーム画面に追加）をお願いします。','',vendorLink(v),'',
+  '※ このリンクはご本人専用です。他の方には渡さないでください。'].join('\n'); }
+function vInvite(nm){
+  const v=vendorOf(nm); if(!v)return; if(!v.token){ toast('リンクがまだできていない。少し待ってから、もう一度押してください'); return; }
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg" style="max-width:580px;width:94vw"><h4>${esc(nm)} さんを招待する</h4>
+    <p class="note" style="margin:0 0 10px">業者ページの専用リンクを送る。相手はログイン不要で、リンクを開くだけで、打診への返事・工程・発注書・完了報告・請求が使える。</p>
+    <label class="fl">送る文面（直せる）</label><textarea id="vMsg" style="width:100%;height:190px;font-family:inherit;font-size:13px;line-height:1.7">${esc(vInviteMsg(v))}</textarea>
+    <div class="askbtn" style="margin-top:12px;gap:6px"><button class="btn small" id="askNo">やめる</button><span class="grow"></span>
+      <button class="btn small" data-vgo="copy">文面をコピー</button><button class="btn small" data-vgo="mail"${v.email?'':' title="メールアドレスが未登録。宛先は自分で入れる"'}>メールで送る</button><button class="btn small primary" data-vgo="line">LINEで送る</button></div>
+    <p class="note" style="margin:8px 0 0">押すと「招待済み」になり、相手がページを開くと「利用中」に変わる。${v.invitedAt?`前回 ${md(String(v.invitedAt).slice(0,10))} に送っている。`:''}</p></div>`;
+  el.addEventListener('click',e=>{ const t=e.target; if(t.id==='askNo'){ el.remove(); return; } const go=t.dataset.vgo; if(!go)return;
+    const msg=el.querySelector('#vMsg').value;
+    if(go==='copy')copyText(msg,'案内の文面をコピーした。LINE やメールに貼って送る');
+    else if(go==='mail')window.open(`mailto:${encodeURIComponent(v.email||'')}?subject=${encodeURIComponent('【ご案内】工事のご依頼・発注書の専用ページ')}&body=${encodeURIComponent(msg)}`);
+    else window.open('https://line.me/R/share?text='+encodeURIComponent(msg),'_blank','noopener');
+    snap('vinvite:'+nm); v.invitedAt=new Date().toISOString(); save(); el.remove(); render(); });
+  document.body.appendChild(el);
+}
+function vAddDialog(){
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg" style="max-width:480px;width:94vw"><h4>協力業者を登録</h4>
+    <div class="fg cpform" style="grid-template-columns:1fr 1fr"><div class="full"><label class="fl">名前（台帳での呼び名）</label><input type="text" id="vaName" placeholder="例：◯◯内装"></div>
+      <div><label class="fl">区分</label><select id="vaType">${opts(VTYPES,'外注')}</select></div><div><label class="fl">職種</label><select id="vaKind">${opts(PKINDS,'内装')}</select></div></div>
+    <p class="note" style="margin:8px 0 0">名前と職種だけで登録できる。連絡先・登録番号・振込先は、あとで業者のページで入れる。</p>
+    <div class="askbtn" style="margin-top:12px"><button class="btn small" id="askNo">やめる</button><button class="btn small primary" id="askYes">登録する</button></div></div>`;
+  el.addEventListener('click',e=>{ if(e.target.id==='askNo'){ el.remove(); return; } if(e.target.id!=='askYes')return;
+    const nm=el.querySelector('#vaName').value.trim(); if(!nm){ toast('名前を入れてください'); return; }
+    if(DB.vendors.some(x=>x.name===nm)){ toast(`「${nm}」は既にある`); return; }
+    snap(); const id='V'+Math.random().toString(36).slice(2,10);
+    DB.vendors.unshift({id,name:nm,full:'',inv:'',type:el.querySelector('#vaType').value,defKind:el.querySelector('#vaKind').value,close:30,site:30,bank:'',src:'手で追加',taxable:true,active:true});
+    el.remove(); vpId=id; vpTab='基本情報'; save(); render(); toast(`${nm} を登録した。連絡先や取引条件を入れて、「招待する」で業者ページの案内を送る`); });
+  document.body.appendChild(el); setTimeout(()=>{ const i=el.querySelector('#vaName'); if(i)i.focus(); },0);
+}
+function vRenameAsk(v){
+  const nw=(prompt(`「${v.name}」の新しい名前を入れてください。\n工程・発注・完了報告・請求書・支払の記録も、新しい名前に一緒に変わります。`,v.name)||'').trim();
+  if(!nw||nw===v.name)return; if(DB.vendors.some(x=>x!==v&&x.name===nw)){ toast(`「${nw}」は既にある`); return; }
+  const old=v.name; snap(); v.name=nw; renameVendor(old,nw); save(); render(); toast(`名前を「${nw}」に変えた（${old} から）`,undo);
 }
 
 /* ================= 請求 ================= */
@@ -3431,8 +3603,8 @@ let cpCase=null, cpBack='ledger', cpTab='概要';
 /* 見ていた画面（タブ・開いていた案件）を覚えておき、再読み込みしても同じ画面に戻す（このブラウザのタブの中だけ） */
 (()=>{ try{ const v=JSON.parse(sessionStorage.getItem('aw-view')||'null'); if(!v)return;
   if(typeof v.tab==='string')tab=v.tab; selCase=v.selCase||null; pCase=v.pCase||null; oCase=v.oCase||null;
-  if(v.oView)oView=v.oView; cpCase=v.cpCase||null; if(v.cpBack)cpBack=v.cpBack; if(v.cpTab)cpTab=v.cpTab; }catch(e){} })();
-function keepView(){ try{ sessionStorage.setItem('aw-view',JSON.stringify({tab,selCase,pCase,oCase,oView,cpCase,cpBack,cpTab})); }catch(e){} }
+  if(v.oView)oView=v.oView; cpCase=v.cpCase||null; if(v.cpBack)cpBack=v.cpBack; if(v.cpTab)cpTab=v.cpTab; if(v.vpId)vpId=v.vpId; if(v.vpTab)vpTab=v.vpTab; }catch(e){} })();
+function keepView(){ try{ sessionStorage.setItem('aw-view',JSON.stringify({tab,selCase,pCase,oCase,oView,cpCase,cpBack,cpTab,vpId,vpTab})); }catch(e){} }
 function openCasePage(id,t){ if(tab!=='case')cpBack=tab; if(cpCase!==id||t)cpTab=t||'概要'; cpCase=id; oSel={}; tab='case'; render(); window.scrollTo(0,0); }
 const RST={'報告済':['確認待ち','wip'],'承認':['承認済み','done'],'差し戻し':['差し戻し','']};
 /* ---- 案件ページ：物件が主役。物件の下にタブ（概要／案件情報／見積・発注／工程／写真／完了報告・請求）。
@@ -4145,7 +4317,7 @@ function withHidden(fn){
 }
 function paint(){
   document.getElementById('main').innerHTML=(tab==='case'?'':hideBar()+inboxBanner())+(
-    tab==='case'?vCase():tab==='ledger'?vLedger():tab==='order'?vOrder():tab==='proc'?vProc():tab==='board'?vBoard():tab==='kanko'?vKanko():tab==='insp'?vInsp():
+    tab==='case'?vCase():tab==='vendor'?vVendors():tab==='ledger'?vLedger():tab==='order'?vOrder():tab==='proc'?vProc():tab==='board'?vBoard():tab==='kanko'?vKanko():tab==='insp'?vInsp():
     tab==='bill'?vBill():tab==='pay'?vPay():tab==='pl'?vPl():tab==='master'?vMaster():vCheck());
 }
 
@@ -4445,6 +4617,16 @@ document.addEventListener('click',e=>{
   { const pm=tab==='pl'&&e.target.closest&&e.target.closest('[data-plm]'); if(pm){ plMonth=plMonth===pm.dataset.plm?'':pm.dataset.plm; render();
       if(plMonth){ const d=document.querySelector('.pldrill'); if(d&&d.scrollIntoView)d.scrollIntoView({block:'nearest',behavior:'smooth'}); } return; } }
   if(e.target.id==='plEdit'){ plEdit(); return; }
+  if(e.target.id==='vAdd'){ vAddDialog(); return; }
+  if(e.target.id==='vpBack'){ vpId=''; render(); return; }
+  if(e.target.id==='vRename'){ const v=DB.vendors.find(x=>x.id===vpId); if(v)vRenameAsk(v); return; }
+  { const t=e.target, vi=t.closest&&t.closest('[data-vinvite]'); if(vi){ vInvite(vi.dataset.vinvite); return; }
+    const vt=t.closest&&t.closest('[data-vptab]'); if(vt){ vpTab=vt.dataset.vptab; render(); return; }
+    const va=t.closest&&t.closest('[data-vactive]'); if(va){ const v=DB.vendors.find(x=>x.id===vpId); if(v){ const on=va.dataset.vactive==='1';
+      if(!on&&!confirm(`${v.name} を使用停止にしますか？\n一覧に出なくなり、業者ページも開けなくなります。記録は残り、あとで再開できます。`))return;
+      snap(); v.active=on; save(); render(); toast(on?`${v.name} の使用を再開した`:`${v.name} を使用停止にした`,undo); } return; }
+    const gt=t.closest&&t.closest('[data-gotab]'); if(gt){ tab=gt.dataset.gotab; if(gt.dataset.mtab)mTab=gt.dataset.mtab; vpId=''; render(); return; }
+    const vr=tab==='vendor'&&!vpId&&t.closest&&t.closest('tr[data-vp]'); if(vr&&!t.closest('button,a,input,select')){ const v=DB.vendors.find(x=>x.name===vr.dataset.vn); if(v){ if(!v.id){ toast('保存中。少し待ってから開いてください'); return; } vpId=v.id; vpTab='基本情報'; render(); window.scrollTo(0,0); } return; } }
   if(e.target.dataset&&e.target.dataset.plall){ plAll=e.target.dataset.plall==='1'; render(); return; }
   if(e.target.dataset&&e.target.dataset.plsga){ plSga=e.target.dataset.plsga==='1'; render(); return; }
   if(e.target.dataset&&e.target.dataset.plfy){ plFy=(plFy||+THIS_M.slice(0,4))+(+e.target.dataset.plfy); render(); return; }
@@ -4653,9 +4835,9 @@ document.addEventListener('click',e=>{
       toast(`${nm} の${hit.length}件を ${v.defKind} にした`, undo);};
     return;}
   const dv=e.target.closest('[data-delv]');
-  if(dv){const n=vendorRefs(dv.dataset.delv); if(n){toast(`この発注先は工程・明細・発注・単価表から${n}件参照されているので消せない`);return;}
-    snap(); DB.vendors=DB.vendors.filter(v=>v.name!==dv.dataset.delv); save(); render();
-    toast('発注先を削除した', undo); return;}
+  if(dv){const n=vendorRefs(dv.dataset.delv); if(n){toast(`この業者は工程・発注・完了報告・支払などの記録が ${n}件あるので消せない。使わなくなったら「使用停止」にする`);return;}
+    snap(); DB.vendors=DB.vendors.filter(v=>v.name!==dv.dataset.delv); vpId=''; save(); render();
+    toast('協力業者を削除した', undo); return;}
   const dc=e.target.closest('[data-delc]');
   if(dc){const n=clientRefs(dc.dataset.delc); if(n){toast(`この顧客は案件・単価表から${n}件参照されているので消せない`);return;}
     snap(); DB.clients=DB.clients.filter(c=>c.name!==dc.dataset.delc); save(); render();
@@ -4755,6 +4937,14 @@ document.addEventListener('change',e=>{
   if(el.id==='cpPh'){cpUpPh=el.value;return;}
   if(el.id==='cpFiles'){cpAddFiles(el.files); el.value=''; return;}
   if(el.id==='mTab'){mTab=el.value;mQ='';render();return;}
+  if(el.id==='vQ'){ vQ=el.value; renderSoon(); return; }
+  if(el.id==='vKind'){ vKind=el.value; render(); return; }
+  if(el.id==='vSt'){ vSt=el.value; render(); return; }
+  if(el.dataset&&el.dataset.vf&&tab==='vendor'&&vpId){ const v=DB.vendors.find(x=>x.id===vpId); if(!v)return; const f=el.dataset.vf; snap('vendor:'+v.id+':'+f);
+    if(f==='close'||f==='site')v[f]=+el.value||30; else if(f==='taxable')v[f]=el.value!=='0';
+    else if(f==='insp'){ const ks=String(v.kinds||'').split(/[,、\s]+/).filter(k=>k&&!isInsp(k)); if(el.checked)ks.push('AW検査'); v.kinds=ks.join(','); }
+    else v[f]=String(el.value).trim();
+    save(); renderSoon(); return; }
   if(el.classList.contains('mv')){
     const tr=el.closest('[data-v]'); const v=vendorOf(tr.dataset.v); if(!v)return;
     const f=el.dataset.f, old=v.name; snap('vendor:'+old+':'+f);

@@ -28,8 +28,9 @@ const TABLES={
           map:{case:'case_id',order:'order_id',cqty:'cost_qty',cunit:'cost_unit'}, dates:[], bools:['cut']},
   orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable','token'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
-  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src'],
-          map:{full:'full_name',defKind:'def_kind',close:'close_day'}, dates:[], bools:['active','taxable']},
+  /* seen_at・first_seen_at（業者が業者ページを開いた日時）は DB が入れる。画面は読むだけ */
+  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at'],
+          map:{full:'full_name',defKind:'def_kind',close:'close_day',invitedAt:'invited_at'}, dates:[], bools:['active','taxable'], ts:['invited_at']},
   clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src','est_mode'],
           map:{full:'full_name',close:'close_day',estMode:'est_mode'}, dates:[], bools:[]},
   prices:{cols:['id','org','name','alias','kind','unit','price','who','client','memo'], map:{}, dates:[], bools:[]},
@@ -221,7 +222,7 @@ function dbSubscribe(){
       const i=arr.findIndex(r=>r.id===rec.id);
       if(i>=0&&isOwnEcho(t,k,rec)){                    /* 自分の書き込みの反射（DB が足した項目だけ受け取る。token など） */
         const l=arr[i]; let added=false; Object.keys(rec).forEach(x=>{ if(l[x]===undefined){ l[x]=rec[x]; added=true; } });
-        ['vendor_id','client_id'].forEach(x=>{ if(rec[x]!==undefined&&l[x]!==rec[x])l[x]=rec[x]; });   /* 番号は DB が名前から埋める。画面は書かないので、いつも DB の値を受け取る */
+        ['vendor_id','client_id','seen_at','first_seen_at','token'].forEach(x=>{ if(rec[x]!==undefined&&l[x]!==rec[x])l[x]=rec[x]; });   /* 番号は DB が名前から埋める。画面は書かないので、いつも DB の値を受け取る */
         delete sentRows[k]; if(recLast[k]!==undefined)recLast[k]=sig(l); if(added)renderIdle(); return; }
       logRemote({t,rec:JSON.parse(JSON.stringify(rec))});
       if(i>=0){ const l=arr[i]; Object.keys(l).forEach(x=>delete l[x]); Object.assign(l,rec); } else { if(t==='cases')arr.unshift(rec); else arr.push(rec); }
@@ -253,7 +254,9 @@ async function dbResync(why){
           logRemote({t,rec:JSON.parse(JSON.stringify(rec))}); if(t==='cases')arr.unshift(rec); else arr.push(rec); recLast[k]=sig(rec); n++; return; }
         const l=arr[i];
         if(recLast[k]===undefined||sig(l)!==recLast[k])return;           /* 手元で作った・直した行で、まだ保存していない */
-        if(same(t,l,rec))return;
+        if(same(t,l,rec)){   /* 画面が書かない項目（DB が入れる番号・業者ページを開いた日時・リンク）だけ変わっていることがある */
+          let ch=false; ['vendor_id','client_id','seen_at','first_seen_at','token'].forEach(x=>{ if(rec[x]!==undefined&&l[x]!==rec[x]){ l[x]=rec[x]; ch=true; } });
+          if(ch){ recLast[k]=sig(l); n++; } return; }
         logRemote({t,rec:JSON.parse(JSON.stringify(rec))});
         Object.keys(l).forEach(x=>delete l[x]); Object.assign(l,rec); recLast[k]=sig(l); n++;
         if(t==='orders'&&typeof onOrderRemote==='function'){ try{ onOrderRemote(l); }catch(e){} } });
