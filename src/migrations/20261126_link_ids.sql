@@ -87,6 +87,9 @@ create trigger client_renamed after insert or update of name on clients for each
 revoke execute on function link_vendor_id(), link_client_id(), vendor_renamed(), client_renamed() from public, anon, authenticated;
 
 -- ---------- 4) 今あるデータに番号を入れる ----------
+-- 番号を入れるだけの書き換えなので、変更履歴（audit）には残さない
+alter table cases disable trigger audit_cases; alter table procs disable trigger audit_procs;
+alter table lines disable trigger audit_lines; alter table orders disable trigger audit_orders;
 do $$ declare t text; begin
   foreach t in array array['procs','lines','orders','reports','invoices','photos','prices','payments','days_off'] loop
     execute format('update %1$s x set vendor_id=v.id from vendors v where v.name=x.who and v.org=x.org and x.vendor_id is distinct from v.id', t);
@@ -94,3 +97,5 @@ do $$ declare t text; begin
   foreach t in array array['cases','prices','receipts','inbox'] loop
     execute format('update %1$s x set client_id=c.id from clients c where c.name=x.client and c.org=x.org and x.client_id is distinct from c.id', t);
   end loop; end $$;
+alter table cases enable trigger audit_cases; alter table procs enable trigger audit_procs;
+alter table lines enable trigger audit_lines; alter table orders enable trigger audit_orders;
