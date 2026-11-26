@@ -2267,6 +2267,7 @@ function orderSheet(oid){
   const ls=orderLines(oid), amt=ls.reduce((a,l)=>a+lineAmt(l),0);
   const v=vendorOf(o.who)||{};
   const el=document.createElement('div'); el.className='ask';
+  el.addEventListener('click',e=>{ if(e.target.id!=='osMemoSave')return; snap(); o.memo=el.querySelector('#osMemo').value.trim(); save(); el.remove(); orderSheet(oid); toast('備考を保存した'); });   /* 下書きのあいだは備考を直せる */
   el.innerHTML=`<div class="ob">${o.st!=='完了'&&o.st!=='請求済'&&(!c.addr||!c.keyInfo)?`<div class="obdraft" style="background:var(--warn-bg);border-color:var(--warn)">この案件は ${[!c.addr&&'住所',!c.keyInfo&&'鍵情報'].filter(Boolean).join('・')} が未入力です。業者に現場の場所や入り方が伝わりません。この画面を閉じて、案件の見出しの下の欄に入れてください。</div>`:''}${o.st==='下書き'?`<div class="obdraft">まだ下書きです。業者にはまだ届いていません。内容を確かめて、メール・LINEで送ったら「送付済にする」を押すと、業者ページに出て承諾できるようになります。</div>`:''}<h3>発 注 書</h3>
     <div class="meta">
       <b>発注No</b><span>${esc(o.no)}</span>
@@ -2288,10 +2289,23 @@ function orderSheet(oid){
       :`合計 ${yen(amt)}　<small style="font-weight:400">（発注先が免税事業者のため消費税なし）</small>`}</p>
     <p class="note">支払条件：${esc(payTerm(v))}<br>アンドワークス株式会社</p>
     ${o.st==='下書き'?`<div class="osmemo">${memoBox(o.case,o.memo||'','osMemo')}<div class="askbtn" style="margin-top:6px"><span class="note" style="margin:0">下書きのあいだは、備考を直せる</span><button class="btn small primary" id="osMemoSave">備考を保存</button></div></div>`:''}
-    <div class="askbtn" style="margin-top:14px"><button class="btn small" id="askNo">閉じる</button></div></div>`;
+    <div class="askbtn" style="margin-top:14px;flex-wrap:wrap;gap:6px">
+      ${o.token?`<button class="btn small primary" id="oMail" title="${v.email?esc(v.email)+' 宛てのメールを、文面とリンクが入った状態で開く':'発注先マスタにメールが入っていない。宛先は開いたメールで入れる'}">メールで送る${v.email?'':'（宛先なし）'}</button>
+        <button class="btn small primary" id="oLine" title="LINE を、文面とリンクが入った状態で開く。送り先の業者を選んで送る">LINEで送る</button>
+        <button class="btn small" id="oLink">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
+      ${o.st==='下書き'?`<button class="btn small" id="oSent" title="業者に送ったら押す。状態が「送付済」になり、案件が「発注 済」になる。業者ページの発注の一覧にも出る">送付済にする</button>`:''}
+      <span class="grow"></span><button class="btn small" id="askNo">閉じる</button></div>
+    <p class="note" style="margin:6px 0 0">「メールで送る」「LINEで送る」を押すと、文面と発注書のリンクが入った状態で開くので、送信を押す。送ったら「送付済にする」。業者はログイン無しで発注書を見て「承諾」を押せる。承諾すると状態が「承諾」になり日時が残る。送付済にした発注は、業者ページ（マスタの発注先の「リンク」）の一覧にも自動で出る。</p></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
-  { const sv=el.querySelector('#osMemoSave'); if(sv)sv.onclick=()=>{ snap(); o.memo=el.querySelector('#osMemo').value.trim(); save(); el.remove(); orderSheet(oid); toast('備考を保存した'); }; }
+  const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderLink(o),'業者用のリンクをコピーした');
+  const after=()=>{ if(o.st==='下書き')toast('送ったら「送付済にする」を押す', ()=>{ el.remove(); nextOrderSt(o.id); }, '送付済にする'); };
+  const om=el.querySelector('#oMail'); if(om)om.onclick=()=>{ const m=orderMessage(o,c,v);
+    const a=document.createElement('a'); a.href='mailto:'+encodeURIComponent(v.email||'')+'?subject='+encodeURIComponent(m.subject)+'&body='+encodeURIComponent(m.body);
+    document.body.appendChild(a); a.click(); a.remove(); after(); };
+  const ol=el.querySelector('#oLine'); if(ol)ol.onclick=()=>{ const m=orderMessage(o,c,v);
+    window.open('https://line.me/R/share?text='+encodeURIComponent(m.body),'_blank','noopener'); after(); };
+  const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ el.remove(); nextOrderSt(o.id); };   /* 案件の発注表の「送る」と同じ処理（案件の 発注＝済・状態も進める） */
 }
 
 /* ================= tabs ================= */

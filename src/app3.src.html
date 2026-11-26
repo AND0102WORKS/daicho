@@ -2217,6 +2217,7 @@ function orderSheet(oid){
   const ls=orderLines(oid), amt=ls.reduce((a,l)=>a+lineAmt(l),0);
   const v=vendorOf(o.who)||{};
   const el=document.createElement('div'); el.className='ask';
+  el.addEventListener('click',e=>{ if(e.target.id!=='osMemoSave')return; snap(); o.memo=el.querySelector('#osMemo').value.trim(); save(); el.remove(); orderSheet(oid); toast('備考を保存した'); });   /* 下書きのあいだは備考を直せる */
   el.innerHTML=`<div class="ob">${o.st!=='完了'&&o.st!=='請求済'&&(!c.addr||!c.keyInfo)?`<div class="obdraft" style="background:var(--warn-bg);border-color:var(--warn)">この案件は ${[!c.addr&&'住所',!c.keyInfo&&'鍵情報'].filter(Boolean).join('・')} が未入力です。業者に現場の場所や入り方が伝わりません。この画面を閉じて、案件の見出しの下の欄に入れてください。</div>`:''}${o.st==='下書き'?`<div class="obdraft">まだ下書きです。業者にはまだ届いていません。内容を確かめて、メール・LINEで送ったら「送付済にする」を押すと、業者ページに出て承諾できるようになります。</div>`:''}<h3>発 注 書</h3>
     <div class="meta">
       <b>発注No</b><span>${esc(o.no)}</span>
@@ -2241,7 +2242,6 @@ function orderSheet(oid){
     <div class="askbtn" style="margin-top:14px"><button class="btn small" id="askNo">閉じる</button></div></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
-  { const sv=el.querySelector('#osMemoSave'); if(sv)sv.onclick=()=>{ snap(); o.memo=el.querySelector('#osMemo').value.trim(); save(); el.remove(); orderSheet(oid); toast('備考を保存した'); }; }
 }
 
 /* ================= tabs ================= */
