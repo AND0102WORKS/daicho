@@ -37,6 +37,7 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   let bl=await one("select no,client,client_id,month,subtotal,tax,total,st,jsonb_array_length(items) n,period_from::text f,period_to::text t,due_date::text due from bills");
   ok('請求書を作ると、番号が付いて DB に残る（税は合計に1回）', !!bl&&/^R-2611-001$/.test(bl.no)&&bl.subtotal===141500&&bl.tax===14150&&bl.total===155650&&bl.n===2&&bl.st==='請求済'&&bl.f==='2026-11-01'&&bl.t==='2026-11-30'&&bl.due==='2026-12-31'&&bl.client_id==='CL1', bl);
   await p.screenshot({path:__dirname+'/bill3.png'});
+  ok('請求書の行に税抜と税込が並ぶ', (await T('.billdoc')).includes('金額（税抜）')&&(await T('.billdoc')).includes('金額（税込）')&&(await T('.billdoc')).includes('100,650')&&(await T('.billdoc')).includes('55,000'));
   // 固定：案件の金額を変えても請求書は変わらない
   await q("update cases set sales=99999 where id='CB2'"); await p.evaluate(()=>dbResync('test')); await p.waitForTimeout(900); t=await T('#main');
   ok('あとから案件の金額を直しても、出した請求書は変わらない', t.includes('155,650')&&t.includes('R-2611-001'));

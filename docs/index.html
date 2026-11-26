@@ -3112,6 +3112,7 @@ function mBar(oldN){
     <select id="mTab" title="どのマスタを出すか">${optsL(['顧客','単価'],mTab,
       {'顧客':'顧客マスタ','単価':'発注単価マスタ'})}</select>
     <button class="btn small" data-gotab="vendor" title="発注先（業者・職人）は、左のメニューの「協力業者」に移した">発注先は「協力業者」へ →</button>
+    <button class="btn small" id="bCo" title="請求書に載せる自社の住所・登録番号・振込先">自社の情報</button>
     <input type="search" id="mQ" placeholder="名前で探す" value="${esc(mQ)}" style="min-width:160px">
     <button class="btn small" id="addRow">＋ 行を足す</button>
     ${mTab==='単価'?'<button class="btn small" id="impPrice">貼り付けて取り込む</button>':''}
@@ -3603,12 +3604,13 @@ function billDoc(d){
         <div style="font-size:12.5px">対象期間　${md(d.from)} 〜 ${md(d.to)}（${d.items.length}件）<br>お支払期限　${jp(d.due)}</div></div>
       <div style="text-align:right;font-size:12px;line-height:1.75">${d.no?`請求書番号　${esc(d.no)}<br>発行日　${jp(d.issued)}<br>`:'<span style="color:#A32A1E">（下書き：まだ番号が付いていない）</span><br>'}
         <b style="font-size:13.5px">${esc(co.name||(DB.cfg&&DB.cfg.company)||'アンドワークス株式会社')}</b><br>${co.addr?esc(co.addr)+'<br>':''}${co.tel?'TEL '+esc(co.tel)+'<br>':''}${co.inv?'登録番号 '+esc(co.inv):''}</div></div>
-    <table style="width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px"><thead><tr><th style="text-align:left;padding:5px 6px">完工日</th><th style="text-align:left;padding:5px 6px">物件</th><th style="text-align:left;padding:5px 6px">内容</th><th style="text-align:right;padding:5px 6px">金額（税抜）</th></tr></thead><tbody>
-      ${d.items.map(i=>`<tr><td style="${td}">${md(i.date)}</td><td style="${td}">${esc(i.prop||'（物件未入力）')}</td><td style="${td}">${esc(i.kind||'')}</td><td style="${td};text-align:right">${yen(i.amt)}</td></tr>`).join('')}
+    <table style="width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px"><thead><tr><th style="text-align:left;padding:5px 6px">完工日</th><th style="text-align:left;padding:5px 6px">物件</th><th style="text-align:left;padding:5px 6px">内容</th><th style="text-align:right;padding:5px 6px">金額（税抜）</th><th style="text-align:right;padding:5px 6px">金額（税込）</th></tr></thead><tbody>
+      ${d.items.map(i=>`<tr><td style="${td}">${md(i.date)}</td><td style="${td}">${esc(i.prop||'（物件未入力）')}</td><td style="${td}">${esc(i.kind||'')}</td><td style="${td};text-align:right">${yen(i.amt)}</td><td style="${td};text-align:right">${yen(inc(i.amt))}</td></tr>`).join('')}
     </tbody></table>
     <div style="margin:10px 0 0 auto;width:300px;font-size:13px"><div style="display:flex;justify-content:space-between"><span>小計（10%対象・税抜）</span><span>${yen(d.subtotal)}</span></div>
       <div style="display:flex;justify-content:space-between"><span>消費税（10%）</span><span>${yen(d.tax)}</span></div>
       <div style="display:flex;justify-content:space-between;font-weight:700;border-top:2px solid #000;margin-top:4px;padding-top:4px"><span>合計（税込）</span><span>${yen(d.total)}</span></div></div>
+    ${d.items.reduce((x,i)=>x+inc(i.amt),0)!==d.total?'<p style="margin:6px 0 0;font-size:11px;color:#555;text-align:right">※ 消費税は請求書の合計に対して計算しています（行ごとの税込の合計と数円ずれることがあります）</p>':''}
     ${co.bank?`<p style="margin:16px 0 0;font-size:12.5px;white-space:pre-wrap"><b>お振込先</b>　${esc(co.bank)}</p>`:''}${co.note?`<p style="margin:6px 0 0;font-size:12px;white-space:pre-wrap;color:#444">${esc(co.note)}</p>`:''}`;
 }
 function vBill(){
