@@ -36,6 +36,7 @@ const VT='aa11bb22cc33dd44ee55ff66';
     await p.click('#mkOrder'); await w(); await p.selectOption('#oqWho',who); await p.click('#askYes'); await p.waitForTimeout(1500); };
   await mk('LN1','長沼俊介');
   ok('発注書（下書き）に、押すと自動で知らせること・届き方が出る', (await T('.ob')).includes('押すと自動で業者に知らせる（携帯の通知 設定済み（1台）・メール 未登録）'));
+  await p.screenshot({path:__dirname+'/notify0.png'});
   await p.click('#oSent'); await p.waitForTimeout(4500);
   const lg=await q("select kind,ok,detail,vendor_id from notify_log");
   ok('「発注」を押すと業者に知らせ、記録が残る', lg.length===1&&lg[0].kind==='push'&&lg[0].ok&&lg[0].vendor_id==='V1'&&(await T('#toast')).includes('携帯の通知（1台） で知らせた'), {lg,toast:await T('#toast').catch(()=>'')});

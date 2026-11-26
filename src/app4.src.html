@@ -116,6 +116,9 @@ table.plt tr.cnt td{color:var(--sub);font-size:11.5px;border-bottom:none}
 .tchip::before{content:'＋'}.tchip.on{background:var(--acc);color:#fff}.tchip.on::before{content:'✓'}
 .memota{width:100%;height:120px;font-family:inherit;font-size:13px;line-height:1.7;margin-top:4px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;box-sizing:border-box;resize:vertical}
 .osmemo{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+.osmemo .memota{height:76px}
+/* 発注書の下のボタン：長い発注書でも、いつも見える所に置く */
+.obact{position:sticky;bottom:-22px;background:var(--card);padding:10px 0 12px;margin:10px 0 0;border-top:1px solid var(--line);z-index:2;align-items:center}
 .bseg{display:inline-flex;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
 .bseg button{border:none;background:none;padding:0 13px;height:34px;font-weight:700;font-size:13px;font-family:inherit;color:var(--ink);cursor:pointer;opacity:1}
 .bseg button+button{border-left:1px solid var(--line)}
@@ -2318,8 +2321,8 @@ function orderSheet(oid){
       :`合計 ${yen(amt)}　<small style="font-weight:400">（発注先が免税事業者のため消費税なし）</small>`}</p>
     <p class="note">支払条件：${esc(payTerm(v))}<br>アンドワークス株式会社</p>
     ${o.st==='下書き'?`<div class="osmemo">${memoBox(o.case,o.memo||'','osMemo')}<div class="askbtn" style="margin-top:6px"><span class="note" style="margin:0">下書きのあいだは、備考を直せる</span><button class="btn small primary" id="osMemoSave">備考を保存</button></div></div>`:''}
-    <div class="askbtn" style="margin-top:14px;flex-wrap:wrap;gap:6px">
-      ${o.st==='下書き'?`<button class="btn small primary" id="oSent" title="発注書を業者ページに出す。業者が見て「承諾」を押せるようになる。状態が「送付済」になる">発注</button>`:''}
+    <div class="askbtn obact" style="flex-wrap:wrap;gap:6px">
+      ${o.st==='下書き'?`<button class="btn primary" id="oSent" title="発注書を業者ページに出す。業者が見て「承諾」を押せるようになる。状態が「送付済」になる">発注</button>`:''}
       ${o.token?`<button class="btn small" id="oLink" title="発注No・現場・工期・金額と、発注書のリンクをコピーする。LINE やメールに貼って業者に知らせる">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
       <span class="grow"></span><button class="btn small" id="askNo">閉じる</button></div>
     <p class="note" style="margin:6px 0 0">${o.st==='下書き'?'「発注」を押すと、業者ページに出て、業者が承諾できるようになる。':'この発注書は業者ページに出ている。'}${o.st==='下書き'?'押すと自動で業者に知らせる（'+vReachLabel(v)+'）。':''}${orderNotifyNote(o)?'<b>'+orderNotifyNote(o)+'。</b>':''}届かない業者には「リンクをコピー」して、LINE やメールに貼る。</p></div>`;

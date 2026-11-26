@@ -152,8 +152,8 @@ function orderSheet(oid){''',1)
 src2=src2.replace('''    <div class="askbtn" style="margin-top:14px"><button class="btn small" id="askNo">閉じる</button></div></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
-}''','''    <div class="askbtn" style="margin-top:14px;flex-wrap:wrap;gap:6px">
-      ${o.st==='下書き'?`<button class="btn small primary" id="oSent" title="発注書を業者ページに出す。業者が見て「承諾」を押せるようになる。状態が「送付済」になる">発注</button>`:''}
+}''','''    <div class="askbtn obact" style="flex-wrap:wrap;gap:6px">
+      ${o.st==='下書き'?`<button class="btn primary" id="oSent" title="発注書を業者ページに出す。業者が見て「承諾」を押せるようになる。状態が「送付済」になる">発注</button>`:''}
       ${o.token?`<button class="btn small" id="oLink" title="発注No・現場・工期・金額と、発注書のリンクをコピーする。LINE やメールに貼って業者に知らせる">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
       <span class="grow"></span><button class="btn small" id="askNo">閉じる</button></div>
     <p class="note" style="margin:6px 0 0">${o.st==='下書き'?'「発注」を押すと、業者ページに出て、業者が承諾できるようになる。':'この発注書は業者ページに出ている。'}${o.st==='下書き'?'押すと自動で業者に知らせる（'+vReachLabel(v)+'）。':''}${orderNotifyNote(o)?'<b>'+orderNotifyNote(o)+'。</b>':''}届かない業者には「リンクをコピー」して、LINE やメールに貼る。</p></div>`;

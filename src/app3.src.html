@@ -116,6 +116,9 @@ table.plt tr.cnt td{color:var(--sub);font-size:11.5px;border-bottom:none}
 .tchip::before{content:'＋'}.tchip.on{background:var(--acc);color:#fff}.tchip.on::before{content:'✓'}
 .memota{width:100%;height:120px;font-family:inherit;font-size:13px;line-height:1.7;margin-top:4px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;box-sizing:border-box;resize:vertical}
 .osmemo{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+.osmemo .memota{height:76px}
+/* 発注書の下のボタン：長い発注書でも、いつも見える所に置く */
+.obact{position:sticky;bottom:-22px;background:var(--card);padding:10px 0 12px;margin:10px 0 0;border-top:1px solid var(--line);z-index:2;align-items:center}
 .bseg{display:inline-flex;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
 .bseg button{border:none;background:none;padding:0 13px;height:34px;font-weight:700;font-size:13px;font-family:inherit;color:var(--ink);cursor:pointer;opacity:1}
 .bseg button+button{border-left:1px solid var(--line)}

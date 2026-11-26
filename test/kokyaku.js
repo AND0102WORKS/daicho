@@ -55,7 +55,7 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   await p.selectOption('#oqWho','長沼俊介'); await p.click('#askYes'); await saved();
   const od=await one("select memo,st,token from orders");
   ok('発注書の備考にテンプレートの文面と書き足した分が残る', od.memo.includes('【クロス貼替の決まり】')&&od.memo.includes('【完了の仕様（清掃）】')&&od.memo.includes('駐車場は3番')&&od.st==='下書き', od.memo);
-  ok('発注書のボタンは「発注」「リンクをコピー」「業者の画面を見る」「閉じる」だけ', (await p.$$eval('.ob > .askbtn:not(.osmemo .askbtn) .btn',a=>a.map(x=>x.textContent.trim()).join('|')))==='発注|リンクをコピー|業者の画面を見る|閉じる'&&!(await p.$('#oMail'))&&!(await p.$('#oLine')));
+  ok('発注書のボタンは「発注」「リンクをコピー」「業者の画面を見る」「閉じる」だけ', (await p.$$eval('.ob > .obact .btn',a=>a.map(x=>x.textContent.trim()).join('|')))==='発注|リンクをコピー|業者の画面を見る|閉じる'&&!(await p.$('#oMail'))&&!(await p.$('#oLine')));
   ok('下書きの発注書で、備考を直せる', !!(await p.$('#osMemo'))&&(await p.$$('.ob .tchip.on')).length===2);
   await p.click('.ob .tchip[data-tpl="1"]'); await w(); await p.click('#osMemoSave'); await saved();
   ok('発注書から外して保存できる', !(await one("select memo from orders")).memo.includes('クロス')&&(await T('.ob')).includes('完了写真は各2枚以上'));
