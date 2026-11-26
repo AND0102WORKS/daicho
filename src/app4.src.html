@@ -2301,7 +2301,7 @@ function orderSheet(oid){
 
 /* ================= tabs ================= */
 const TABS=[['ledger','案件台帳'],['order','見積・発注'],['proc','工程を組む'],['board','手配ボード'],['kanko','完工予定'],['insp','検査カレンダー'],
-            ['bill','請求'],['pay','支払'],['pl','月次'],['vendor','協力業者'],['master','マスタ'],['check','要確認']];
+            ['bill','請求'],['pay','支払'],['pl','月次'],['vendor','協力業者'],['master','設定'],['check','要確認']];
 let tab='ledger', selCase=null, selProc=null;
 let fClient='すべて', fMonth='すべて', fStatus='すべて', fQ='', bMonth=THIS_M, kMonth=THIS_M;
 let fScope='運用中';
@@ -2328,7 +2328,7 @@ const TABIC={
   pay:'<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 15h2"/>',
   pl:'<path d="M4 20h16"/><path d="M7 20v-6M12 20V6M17 20v-9"/>',
   vendor:'<path d="M14.5 5.5l4 4M4 20l1-4L16 5l3 3L8 19z"/><path d="M4 8l4-4 3 3-4 4z"/>',
-  master:'<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.5a3 3 0 0 1 0 5.5M17.5 14.8c2.1.7 3.5 2.5 3.5 5.2"/>',
+  master:'<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
   check:'<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>' };
 const tabIcon=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TABIC[k]||''}</svg>`;
 try{ if(localStorage.getItem('aw-slim')==='1')document.body.classList.add('slim'); }catch(e){}
@@ -3101,18 +3101,46 @@ function convertAll(){
   toast(n?`${n}件の区分を既定の区分に置き換えた`:'置き換える工程は無かった', n?undo:null);
 }
 function mBar(oldN){
-  return `<div class="bar"><h2>マスタ</h2>
-    <select id="mTab" title="どのマスタを出すか">${optsL(['顧客','単価'],mTab,
-      {'顧客':'顧客マスタ','単価':'発注単価マスタ'})}</select>
+  const list=mTab==='顧客'||mTab==='単価';
+  return `<div class="bar"><h2>設定</h2>
+    <span class="bseg">${[['事業者情報','事業者情報'],['利用者','利用者'],['顧客','顧客'],['単価','発注単価']].map(([v,l])=>`<button class="${mTab===v?'on':''}" data-mtab2="${v}">${l}</button>`).join('')}</span>
     <button class="btn small" data-gotab="vendor" title="発注先（業者・職人）は、左のメニューの「協力業者」に移した">発注先は「協力業者」へ →</button>
-    <button class="btn small" id="bCo" title="請求書に載せる自社の住所・登録番号・振込先">自社の情報</button>
-    <input type="search" id="mQ" placeholder="名前で探す" value="${esc(mQ)}" style="min-width:160px">
-    <button class="btn small" id="addRow">＋ 行を足す</button>
+    ${list?`<input type="search" id="mQ" placeholder="名前で探す" value="${esc(mQ)}" style="min-width:160px">
+    <button class="btn small" id="addRow">＋ 行を足す</button>`:''}
     ${mTab==='単価'?'<button class="btn small" id="impPrice">貼り付けて取り込む</button>':''}
     ${mTab==='単価'&&pendingPrices().length?`<button class="btn primary" id="impPriceDb">単価表を取り込む（${pendingPrices().length}件）</button>`:''}
-    ${mTab!=='単価'&&oldN?`<span class="note" style="margin:0">旧区分のまま残っている工程 <b style="color:var(--warn)">${oldN}件</b></span>
+    ${mTab==='顧客'&&oldN?`<span class="note" style="margin:0">旧区分のまま残っている工程 <b style="color:var(--warn)">${oldN}件</b></span>
       <button class="btn primary" id="convAll">既定の区分で一括置き換え</button>`:''}
-    ${mTab!=='単価'&&!oldN?'<span class="note" style="margin:0;color:var(--ok)">旧区分の工程は残っていない</span>':''}</div>`;
+    ${mTab==='顧客'&&!oldN?'<span class="note" style="margin:0;color:var(--ok)">旧区分の工程は残っていない</span>':''}</div>`;
+}
+/* ---- 設定：事業者情報（請求書などに載せる自社の情報。settings の co に保存） ---- */
+const CO_F=[['name','会社名（事業者名）',''],['addr','住所','〒・住所'],['tel','電話',''],['inv','登録番号（インボイス）','T＋13桁'],['bank','お振込先（顧客に案内する自社の口座）','銀行・支店・種別・口座番号・名義',1],['note','請求書の下に入れる一言','例：振込手数料はご負担をお願いいたします。',1]];
+let coBack='';
+function vCo(){
+  const co=Object.assign({name:(DB.cfg&&DB.cfg.company)||'アンドワークス株式会社'},DB.co||{}), ed=ME&&ME.role==='hq';
+  return `<div class="card" style="max-width:720px"><h3 class="cph">事業者情報</h3>
+    <p class="note" style="margin:0 0 10px">ここに入れた内容が、請求書に載る。全員の画面に反映される。${ed?'':'<b>変えられるのは管理者だけ。</b>'}</p>
+    <div class="fg cpform" style="grid-template-columns:1fr">${CO_F.map(([k,l,ph,ta])=>`<div class="full"><label class="fl">${l}</label>${ta?`<textarea id="co_${k}" ${ed?'':'disabled'} style="width:100%;height:58px;font-family:inherit;font-size:13px" placeholder="${ph}">${esc(co[k]||'')}</textarea>`:`<input type="text" id="co_${k}" ${ed?'':'disabled'} value="${esc(co[k]||'')}" placeholder="${ph}">`}</div>`).join('')}</div>
+    <div class="askbtn" style="margin-top:12px">${coBack?`<button class="btn small" data-gotab="${coBack}">← ${coBack==='bill'?'請求':'戻る'}</button>`:''}${ed?'<button class="btn small primary" id="coSave">保存する</button>':''}</div></div>`;
+}
+/* ---- 設定：利用者（誰が台帳を使えるか・役割・振込先を見られるか）。管理者だけ。DB の関数 staff_users / staff_user_save を使う ---- */
+let uList=null, uErr='';
+const UROLE={hq:'管理者（全部できる）',staff:'スタッフ（入力できる）',viewer:'閲覧だけ',none:'停止（入れない）'};
+function usersLoad(){ if(!sb)return; sb.rpc('staff_users',{}).then(({data,error})=>{ uErr=error?(error.message||'読めなかった'):''; uList=Array.isArray(data)?data:[]; if(tab==='master'&&mTab==='利用者')render(); }); }
+function userSave(email,name,role,fin,msg){
+  sb.rpc('staff_user_save',{p_email:email,p_name:name,p_role:role,p_fin:!!fin}).then(({error})=>{ if(error){ toast('保存できなかった（'+(error.message||error)+'）'); } else toast(msg||'保存した'); usersLoad(); });
+}
+function vUsers(){
+  if(!(ME&&ME.role==='hq'))return '<p class="note">利用者の設定は、管理者だけが見られる。</p>';
+  if(uList===null){ usersLoad(); return '<p class="note">読み込み中…</p>'; }
+  const ro=(v,at)=>`<select ${at}>${Object.keys(UROLE).map(k=>`<option value="${k}"${v===k?' selected':''}>${UROLE[k]}</option>`).join('')}</select>`;
+  return `${uErr?`<p class="note" style="color:var(--warn)">${esc(uErr)}</p>`:''}<div class="tw" style="max-height:none"><table><thead><tr><th>名前</th><th>メールアドレス</th><th>役割</th><th>振込先を見られる（経理）</th><th>状態</th></tr></thead><tbody>
+    ${uList.map(u=>`<tr class="vrow" data-uem="${esc(u.email)}"><td><input type="text" data-uf="name" value="${esc(u.name||'')}" style="width:150px"></td><td>${esc(u.email)}${u.me?' <span class="st">自分</span>':''}</td>
+      <td>${u.me?esc(UROLE[u.role]||u.role):ro(u.role,'data-uf="role"')}</td><td><label class="chk"><input type="checkbox" data-uf="fin"${u.fin?' checked':''}${u.role==='none'?' disabled':''}> 見られる</label></td>
+      <td>${u.role==='none'?'<span class="vst non"><i></i>停止</span>':u.in?'<span class="vst use"><i></i>利用中</span>':'<span class="vst wait"><i></i>登録済み・まだ入っていない</span>'}</td></tr>`).join('')}
+    <tr><td><input type="text" id="uName" placeholder="名前" style="width:150px"></td><td><input type="text" id="uEmail" placeholder="メールアドレス" style="width:240px"></td><td>${ro('staff','id="uRole"')}</td>
+      <td><label class="chk"><input type="checkbox" id="uFin"> 見られる</label></td><td><button class="btn small primary" id="uAdd">＋ 利用者を足す</button></td></tr></tbody></table></div>
+    <p class="note">ここに登録したメールアドレスの人だけが、台帳に入れる（メールに届くリンクでログイン）。やめた人は「停止」にする（記録は残る）。振込先（協力業者の口座）は、「見られる」に印の付いた人にだけ出る。</p>`;
 }
 /* ---- 発注単価マスタ ---- */
 /* 表記ゆれを吸収してから照合する。貼替／張替／貼り替え／張り替え は同じ扱い */
@@ -3348,6 +3376,8 @@ function applyPrices(cid){
 function vMaster0(){
   const q=mQ.toLowerCase();
   const oldN=DB.procs.filter(p=>p.kind&&PKINDS.indexOf(p.kind)<0).length;
+  if(mTab==='事業者情報')return mBar(oldN)+vCo();
+  if(mTab==='利用者')return mBar(oldN)+vUsers();
   if(mTab==='単価')return vPrice();
   if(mTab==='発注先')mTab='顧客';   /* 発注先は「協力業者」メニューへ移した */
   if(false){
@@ -4894,7 +4924,11 @@ document.addEventListener('click',e=>{
     if((x=c('[data-pmode]'))){ pMode=x.dataset.pmode; if(pMode==='range'&&pView==='year')pView='vendor'; render(); return; }
     if((x=c('[data-pview]'))){ pView=x.dataset.pview; render(); return; }
     if(!c('button')&&(x=c('tr[data-pwho]'))){ pWho=x.dataset.pwho; pView='proc'; render(); return; } }
-  if(e.target.id==='bCo'){ billCoAsk(); return; }
+  if(e.target.id==='bCo'){ coBack=tab==='bill'?'bill':''; tab='master'; mTab='事業者情報'; render(); window.scrollTo(0,0); return; }
+  if(e.target.id==='coSave'){ const o={}; CO_F.forEach(([k])=>{ o[k]=document.getElementById('co_'+k).value.trim(); }); DB.co=o; save(); render(); toast('事業者情報を保存した'); return; }
+  if(e.target.id==='uAdd'){ const em=document.getElementById('uEmail').value.trim(); if(!em||em.indexOf('@')<0){ toast('メールアドレスを入れてください'); return; }
+    userSave(em,document.getElementById('uName').value.trim(),document.getElementById('uRole').value,document.getElementById('uFin').checked,em+' を登録した'); return; }
+  { const mt=e.target.closest&&e.target.closest('[data-mtab2]'); if(mt){ mTab=mt.dataset.mtab2; mQ=''; if(mTab!=='事業者情報')coBack=''; if(mTab==='利用者')uList=null; render(); return; } }
   if(e.target.id==='bBack'){ bOpen=''; render(); return; }
   if(tab==='bill'){ const t=e.target, c=q=>t.closest&&t.closest(q); let x;
     if((x=c('[data-bmode]'))){ bMode=x.dataset.bmode; bOpen=''; if(bMode==='range'&&bView==='year')bView='client'; render(); return; }
@@ -5225,6 +5259,10 @@ document.addEventListener('change',e=>{
   if(el.id==='cpPh'){cpUpPh=el.value;return;}
   if(el.id==='cpFiles'){cpAddFiles(el.files); el.value=''; return;}
   if(el.id==='mTab'){mTab=el.value;mQ='';render();return;}
+  if(el.dataset&&el.dataset.uf){ const tr=el.closest('tr[data-uem]'), u=tr&&(uList||[]).find(x=>x.email===tr.dataset.uem); if(!u)return;
+    const nm=tr.querySelector('[data-uf="name"]').value.trim(), rs=tr.querySelector('[data-uf="role"]'), role=rs?rs.value:u.role, fin=tr.querySelector('[data-uf="fin"]').checked;
+    if(el.dataset.uf==='role'&&role==='none'&&!confirm(`${u.name||u.email} さんを停止する？\n台帳に入れなくなる（記録は残る。あとで戻せる）。`)){ render(); return; }
+    userSave(u.email,nm,role,fin); return; }
   if(el.id==='vBank'&&vpId){ saveBank(vpId,el.value).then(ok=>{ if(ok)toast('振込先を保存した'); }); return; }
   if(el.id==='vQ'){ vQ=el.value; renderSoon(); return; }
   if(el.id==='vKind'){ vKind=el.value; render(); return; }

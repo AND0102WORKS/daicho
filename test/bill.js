@@ -47,7 +47,9 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   await p.click('[data-bact="print"]'); await w();
   ok('印刷・PDF：請求書の紙面が開く', String(await p.evaluate(()=>window.__printed||'')).includes('R-2611-001')&&(await p.evaluate(()=>window.__didPrint))===1);
   // 自社の情報
-  await p.click('#bCo'); await w(); await p.fill('#co_inv','T0000000000000'); await p.fill('#co_bank','見本銀行 見本支店 普通 0000000'); await p.click('#askYes'); await saved();
+  await p.click('#bCo'); await w(); const inSet=(await T('#main')).includes('事業者情報')&&(await T('#tabs .on')).includes('設定');
+  await p.fill('#co_inv','T0000000000000'); await p.fill('#co_bank','見本銀行 見本支店 普通 0000000'); await p.click('#coSave'); await saved(); await p.click('[data-gotab="bill"]'); await w();
+  ok('自社の情報は「設定」の事業者情報で入れる', inSet);
   const co=await one("select value from settings where key='co'");
   ok('自社の情報が保存され、請求書に載る', co&&co.value.inv==='T0000000000000'&&(await T('.billdoc')).includes('T0000000000000')&&(await T('.billdoc')).includes('見本銀行'), co);
   // 入金
