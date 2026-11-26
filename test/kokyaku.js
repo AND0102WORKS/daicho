@@ -36,15 +36,24 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   await p.click('[data-kltab="発注書の備考"]'); await w();
   await p.click('#klTplAdd'); await w(); await p.fill('#tpTitle','完了の仕様（清掃）'); await p.fill('#tpBody','・完了写真は各2枚以上\n・ブレーカーは落として退室'); await p.check('#tpAlways'); await p.click('#askYes'); await saved();
   await p.click('#klTplAdd'); await w(); await p.fill('#tpTitle','クロス貼替の決まり'); await p.fill('#tpBody','・指定品番 SP-0000'); await p.click('#askYes'); await saved();
+  await p.click('#klTplAdd'); await w(); await p.fill('#tpTitle','リペアの範囲'); await p.selectOption('#tpKind','リペア補修'); await p.fill('#tpBody','・補修は見積の範囲まで'); await p.check('#tpAlways'); await p.click('#askYes'); await saved();
+  await p.click('[data-tplmv="2|-1"]'); await saved(); await p.click('[data-tplmv="1|1"]'); await saved();   /* 上へ・下へ（元の並びに戻る） */
   let tp=(await one("select tpls from clients where id='CL1'")).tpls;
-  ok('テンプレートを顧客ごとに登録できる（いつも入れる の印つき）', tp.length===2&&tp[0].title==='完了の仕様（清掃）'&&tp[0].always===true&&tp[1].always===false&&(await T('.cpbody')).includes('いつも入れる'), tp.map(x=>x.title));
+  ok('テンプレートを顧客ごとに登録できる（いつも入れる・どの工事で出すか・並べ替え）', tp.length===3&&tp[2].title==='リペアの範囲'&&tp[2].kind==='リペア補修'&&(tp[0].kind||'')===''&&(await T('.cpbody')).includes('すべての工事')&&tp[0].title==='完了の仕様（清掃）'&&tp[0].always===true&&tp[1].always===false&&(await T('.cpbody')).includes('いつも入れる'), tp.map(x=>x.title));
   await p.screenshot({path:__dirname+'/kokyaku2.png'});
   await p.click('[data-tpled="1"]'); await w(); await p.fill('#tpBody','・指定品番 SP-0000\n・巾木はそのまま'); await p.click('#askYes'); await saved();
   ok('テンプレートを直せる', (await one("select tpls from clients where id='CL1'")).tpls[1].body.includes('巾木'));
   // 発注を作る：備考にテンプレート
   await p.evaluate(()=>{ tab='order'; oFilter='すべて'; oCase='C1302'; oSel={}; linesOf('C1302').forEach(l=>oSel[l.id]=true); render(); }); await w();
   await p.click('#mkOrder'); await w();
-  ok('発注を作るとき：その顧客のテンプレートがボタンで出て、「いつも入れる」は最初から入っている', (await p.$$('.ask .tchip')).length===2&&(await p.inputValue('#oqMemo')).includes('【完了の仕様（清掃）】')&&!(await p.inputValue('#oqMemo')).includes('クロス')&&!!(await p.$('.ask .tchip.on')));
+  ok('発注を作るとき：その顧客のテンプレートがボタンで出て、「いつも入れる」は最初から入っている', (await p.$$('.ask .tchip')).length===3&&(await p.inputValue('#oqMemo')).includes('【完了の仕様（清掃）】')&&!(await p.inputValue('#oqMemo')).includes('クロス')&&!!(await p.$('.ask .tchip.on')));
+  ok('清掃の発注書：リペア用のテンプレートは前に出ず「ほかのテンプレート（1件）」の中。「いつも入れる」でも入らない', (await T('.ask .tmore')).includes('ほかのテンプレート（1件）')&&(await p.$eval('.ask .trest',x=>x.hidden&&x.textContent.includes('リペアの範囲')))&&!(await p.inputValue('#oqMemo')).includes('リペア'));
+  await p.click('.ask .tmore'); await w();
+  ok('「ほかのテンプレート」を押すと開いて選べる', await p.$eval('.ask .trest',x=>!x.hidden));
+  await p.selectOption('#oqKind','リペア補修'); await w();
+  ok('工事区分をリペア補修に変えると、リペア用が前に出て最初から入る', (await p.inputValue('#oqMemo')).includes('【リペアの範囲】')&&!(await p.$('.ask .tmore')));
+  await p.selectOption('#oqKind','清掃'); await w();
+  ok('清掃に戻すと、元の「いつも入れる」に戻る', !(await p.inputValue('#oqMemo')).includes('リペア')&&(await p.inputValue('#oqMemo')).includes('【完了の仕様（清掃）】'));
   await p.click('.ask .tchip[data-tpl="1"]'); await w();
   ok('ボタンを押すと備考に入る', (await p.inputValue('#oqMemo')).includes('【クロス貼替の決まり】\n・指定品番 SP-0000\n・巾木はそのまま'));
   await p.click('.ask .tchip[data-tpl="0"]'); await w();
@@ -56,7 +65,7 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   const od=await one("select memo,st,token from orders");
   ok('発注書の備考にテンプレートの文面と書き足した分が残る', od.memo.includes('【クロス貼替の決まり】')&&od.memo.includes('【完了の仕様（清掃）】')&&od.memo.includes('駐車場は3番')&&od.st==='下書き', od.memo);
   ok('発注書のボタンは「発注」「リンクをコピー」「業者の画面を見る」「閉じる」だけ', (await p.$$eval('.ob > .obact .btn',a=>a.map(x=>x.textContent.trim()).join('|')))==='発注|リンクをコピー|業者の画面を見る|閉じる'&&!(await p.$('#oMail'))&&!(await p.$('#oLine')));
-  ok('下書きの発注書で、備考を直せる', !!(await p.$('#osMemo'))&&(await p.$$('.ob .tchip.on')).length===2);
+  ok('下書きの発注書で、備考を直せる', !!(await p.$('#osMemo'))&&(await p.$$('.ob .tchip.on')).length===2&&(await T('.ob .tmore')).includes('1件'));
   await p.click('.ob .tchip[data-tpl="1"]'); await w(); await p.click('#osMemoSave'); await saved();
   ok('発注書から外して保存できる', !(await one("select memo from orders")).memo.includes('クロス')&&(await T('.ob')).includes('完了写真は各2枚以上'));
   // 業者が見る発注書にも出る
