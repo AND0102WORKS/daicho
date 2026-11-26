@@ -531,8 +531,8 @@ const TABLES={
   orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable','token'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
   /* seen_at・first_seen_at（業者が業者ページを開いた日時）は DB が入れる。画面は読むだけ */
-  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at'],
-          map:{full:'full_name',defKind:'def_kind',close:'close_day',invitedAt:'invited_at'}, dates:[], bools:['active','taxable'], ts:['invited_at']},
+  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at','pay_m','pay_d'],
+          map:{full:'full_name',defKind:'def_kind',close:'close_day',invitedAt:'invited_at',payM:'pay_m',payD:'pay_d'}, dates:[], bools:['active','taxable'], ts:['invited_at']},
   clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src','est_mode'],
           map:{full:'full_name',close:'close_day',estMode:'est_mode'}, dates:[], bools:[]},
   prices:{cols:['id','org','name','alias','kind','unit','price','who','client','memo'], map:{}, dates:[], bools:[]},
@@ -570,7 +570,8 @@ function recToRow(t,rec){
     else if(T.bools.indexOf(c)>=0) v=!!v;
     else if(['sales','add_amt','est_amt','amt','sell','price','close_day','site','base','extra','subtotal','tax','total'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
     else if(c==='qty') v=(v===''||v==null)?0:(+v||0);
-    else if(c==='cost_qty') v=(v===''||v==null)?null:(+v||0);   /* 空＝販売の数量と同じ */
+    else if(c==='cost_qty') v=(v===''||v==null)?null:(+v||0);
+    else if(c==='pay_m'||c==='pay_d') v=(v===''||v==null)?null:Math.round(+v||0);   /* 支払日（何か月後の何日）。空＝サイトから決める */   /* 空＝販売の数量と同じ */
     else if(v===null) v='';
     row[c]=v; });
   return row;
@@ -3470,7 +3471,7 @@ function vVendorPage(v){
       <div class="card"><h3 class="cph">取引条件</h3><div class="fg cpform">
         ${F('消費税',`<select data-vf="taxable"${v.taxable===false?' style="border-color:var(--warn)"':''}><option value="1"${v.taxable!==false?' selected':''}>課税（発注書に10%を足す）</option><option value="0"${v.taxable===false?' selected':''}>免税（消費税なし）</option></select>`,1)}
         ${F('登録番号（インボイス）'+(v.inv||v.taxable===false||v.type==='専属'?'':' <span style="color:var(--warn)">未入力</span>'),T('inv','T＋13桁'),1)}
-        ${F('締日',`<input type="number" data-vf="close" value="${v.close||30}" min="1" max="31">`)}${F('支払サイト（日）',`<input type="number" data-vf="site" value="${v.site||30}" min="0" max="120">`)}
+        ${F('締日（月末は31）',`<input type="number" data-vf="close" value="${v.close||30}" min="1" max="31">`)}${F('支払日',`<span style="display:flex;gap:6px;align-items:center"><select data-vf="payM" style="flex:1">${[['0','当月'],['1','翌月'],['2','翌々月'],['3','3か月後']].map(([a,b])=>`<option value="${a}"${String(vPayTerm(v.name).m)===a?' selected':''}>${b}</option>`).join('')}</select><input type="number" data-vf="payD" value="${vPayTerm(v.name).d}" min="1" max="31" style="width:70px" title="何日に払うか（月末は31）"><small style="white-space:nowrap;color:var(--sub)">日（月末は31）</small></span>`)}
         ${F('振込先'+(ME&&ME.fin?'':' <span class="note" style="margin:0;font-weight:400">経理の担当だけが見られる</span>'),
           ME&&ME.fin?`<input type="text" id="vBank" value="${esc((DB.bank||{})[v.id]||'')}" placeholder="銀行・支店・種別・口座番号・名義">`
             :'<div class="vlock">この欄は、経理の担当と管理者だけが見られる</div>',1)}
@@ -4195,19 +4196,106 @@ function markInvoicePaid(id){
   const v=(DB.invoices||[]).find(x=>x.id===id); if(!v)return;
   snap(); v.st='支払済'; v.paidDate=fmtD(new Date()); save(); render(); toast(`${v.who} の${v.kind}を支払済にした`, undo);
 }
+/* ================= 支払 =================
+   ・月で絞る（業者ごとの締めの月）／日付の範囲で絞る（完了日）
+   ・業者ごとの合計／物件ごと／年間の表 を切り替える
+   ・1行＝工程1つ。金額は工程の発注金額（承認した追加を含む）。状態は完了報告と請求書・支払明細書から決まる */
+let pMode='month', pFrom='', pTo='', pView='vendor', pSt='', pWho='';
+const PST={non:['non','完了報告がまだ'],chk:['inv','報告の確認待ち'],doc:['inv','支払明細書がまだ'],wait:['wait','支払予定'],late:['late','支払期限を過ぎた'],use:['use','支払済み']};
+/* 業者の支払日：締めの月から payM か月後の payD 日（31＝月末）。入っていなければサイトから（45日までは翌月末、それより長ければ翌々月末） */
+function vPayTerm(who){ const v=vendorOf(who)||{}; return {close:+v.close||31, m:(v.payM===''||v.payM==null)?((+v.site||30)>45?2:1):+v.payM, d:+v.payD||31}; }
+function vPayDue(who,mon){ if(!mon)return ''; const t=vPayTerm(who), x=addM(mon,t.m), y=+x.slice(0,4), mo=+x.slice(5,7); return iso(y,mo,Math.min(t.d,eom(y,mo))); }
+const vPayLabel=who=>{ const t=vPayTerm(who); return `${t.close>=28?'月末':t.close+'日'}締め・${['当月','翌月','翌々月','3か月後'][t.m]||t.m+'か月後'}${t.d>=28?'末':t.d+'日'}払い`; };
+function payItems(){
+  const Rp={}; (DB.reports||[]).forEach(r=>{ Rp[r.proc]=r; }); const Iv={}; (DB.invoices||[]).forEach(v=>{ Iv[v.id]=v; });
+  const today=fmtD(new Date()), B=byId(), O={}; DB.orders.forEach(o=>{ O[o.id]=o; });
+  return DB.procs.filter(p=>p.who&&!isStaffJob(p.kind)).map(p=>{ const r=Rp[p.id], d=(r&&r.done)||p.end||p.date||''; if(!d)return null;
+    const amt=r&&r.st==='承認'?(+r.base||0)+(+r.extra||0):(+p.amt||0); if(!amt&&!r)return null;
+    const iv=r&&r.invoiceId?Iv[r.invoiceId]:null, m=iv?iv.month:closeMonthOf(d,vPayTerm(p.who).close), due=vPayDue(p.who,m);
+    const st=iv?(iv.st==='支払済'?'use':(due&&due<today?'late':'wait')):(r&&r.st==='承認'?'doc':(r&&r.st==='報告済'?'chk':'non'));
+    return {p,r,d,m,amt,inc:taxed(amt,vendorTaxable(p.who)),iv,due,st,c:B[p.case]||{},o:O[p.order]}; }).filter(Boolean);
+}
 function vPay(){
-  return vPayReports()+vPayInvoices()+vPay0();
+  if(!pFrom){ const y=+payMon.slice(0,4), mo=+payMon.slice(5,7); pFrom=iso(y,mo,1); pTo=iso(y,mo,eom(y,mo)); }
+  const seg=(k,cur,list)=>`<span class="bseg">${list.map(([v,l])=>`<button class="${cur===v?'on':''}" data-${k}="${v}">${l}</button>`).join('')}</span>`;
+  const MSr=MS_LIST().slice().reverse();
+  const head=`<div class="bar"><h2>支払</h2>${seg('pmode',pMode,[['month','月で選ぶ'],['range','日付で選ぶ']])}
+      ${pMode==='month'?`<select id="payMon" title="業者ごとの締めの月">${(MSr.indexOf(payMon)<0?[payMon].concat(MSr):MSr).map(m=>`<option value="${m}"${m===payMon?' selected':''}>${m.slice(0,4)}年 ${+m.slice(5,7)}月締め</option>`).join('')}</select>`
+        :`<input type="date" id="pFrom" value="${pFrom}" title="完了日がこの日から"><span class="note" style="margin:0">〜</span><input type="date" id="pTo" value="${pTo}" title="この日まで">`}
+      <span class="grow"></span>${seg('pview',pView,[['vendor','業者ごと'],['proc','物件ごと'],['year','年間の表']])}
+      ${ME&&ME.fin?'<button class="btn small" id="pBank" title="まだ払っていない請求書・支払明細書の振込先と金額の一覧（経理の担当だけ）">振込の一覧</button>':''}</div>`;
+  if(pView==='year')return vPayReports()+head+vPay0();
+  const all=payItems().filter(x=>pMode==='month'?x.m===payMon:(pFrom&&pTo&&x.d>=pFrom&&x.d<=pTo));
+  const names=[...new Set(all.map(x=>x.p.who))].sort((a,b)=>a.localeCompare(b,'ja'));
+  if(pWho&&names.indexOf(pWho)<0)pWho='';
+  const its=all.filter(x=>!pWho||x.p.who===pWho);
+  const K={non:0,chk:0,doc:0,wait:0,late:0,use:0}; its.forEach(x=>{ K[x.st]+=x.inc; });
+  const TOT=its.reduce((a,x)=>a+x.inc,0);
+  const stc=k=>`<span class="vst ${PST[k][0]}"><i></i>${PST[k][1]}</span>`;
+  const kpi=`<div class="kpi"><div class="k"><small>${pMode==='month'?mlab(payMon)+'締めの支払':md(pFrom)+'〜'+md(pTo)+' の完了'}（税込）</small><b>${yen(TOT)}</b><small>${its.length}件</small></div>
+      <div class="k"><small>完了報告がまだ</small><b>${yen(K.non)}</b></div><div class="k"><small>確認待ち・明細書がまだ</small><b style="color:#7A5200">${yen(K.chk+K.doc)}</b></div>
+      <div class="k"><small>支払予定</small><b style="color:#2B4C7E">${yen(K.wait)}</b></div><div class="k"><small>期限を過ぎた</small><b style="color:${K.late?'#A32A1E':'inherit'}">${yen(K.late)}</b></div><div class="k"><small>支払済み</small><b style="color:var(--ok)">${yen(K.use)}</b></div></div>`;
+  const filt=`<div class="bar" style="margin-top:0"><select id="pWho" title="業者で絞る">${opts(names,pWho,'協力業者：すべて')}</select>
+      <select id="pSt" title="状態で絞る"><option value="">状態：すべて</option>${Object.keys(PST).map(k=>`<option value="${k}"${pSt===k?' selected':''}>${PST[k][1]}</option>`).join('')}</select>
+      <span class="note" style="margin:0">${pMode==='month'?'業者ごとの締日で、その月の支払に入る工程（金額は発注金額＋承認した追加）':'完了日（無ければ工程の日）がこの期間に入る工程'}</span></div>`;
+  let body;
+  if(pView==='proc'){
+    const l=its.filter(x=>!pSt||x.st===pSt).sort((a,b)=>a.d.localeCompare(b.d)||a.p.who.localeCompare(b.p.who,'ja'));
+    body=l.length?`<div class="tw" style="max-height:none"><table><thead><tr><th>完了日</th><th>物件</th><th>区分</th><th>協力業者</th><th>発注番号</th><th class="r">金額（税抜）</th><th class="r">金額（税込）</th><th>支払予定日</th><th>状態</th></tr></thead><tbody>
+      ${l.map(x=>`<tr class="vrow"><td>${md(x.d)}${x.r?'':'<small class="sub2">予定</small>'}</td><td><a class="cplink" data-cpage="${x.p.case}" title="案件ページを開く">${esc(x.c.prop||'（物件未入力）')}</a></td>
+        <td>${esc(x.p.kind||'')}</td><td>${esc(x.p.who)}</td><td style="font-size:12px;color:var(--sub)">${x.o?esc(x.o.no):'—'}</td>
+        <td class="r">${yen(x.amt)}${x.r&&+x.r.extra?`<small class="sub2">うち追加 ${yen(x.r.extra)}${x.r.st==='承認'?'':'（未承認）'}</small>`:''}</td><td class="r">${yen(x.inc)}${vendorTaxable(x.p.who)?'':'<small class="sub2">免税</small>'}</td>
+        <td>${md(x.due)}</td><td>${stc(x.st)}${x.iv?`<small class="sub2">${esc(x.iv.kind)}${x.iv.paidDate?' '+md(x.iv.paidDate)+' 支払':''}</small>`:''}</td></tr>`).join('')}
+      <tr class="sumrow"><td colspan="5"><b>合計（${l.length}件）</b></td><td class="r"><b>${yen(l.reduce((a,x)=>a+x.amt,0))}</b></td><td class="r"><b>${yen(l.reduce((a,x)=>a+x.inc,0))}</b></td><td colspan="2"></td></tr></tbody></table></div>`
+      :'<p class="note">この条件に合う工程はない。</p>';
+  }else{
+    const by={}; its.forEach(x=>{ (by[x.p.who]=by[x.p.who]||[]).push(x); });
+    const ivOf={}; if(pMode==='month')(DB.invoices||[]).filter(v=>v.month===payMon&&(!pWho||v.who===pWho)).forEach(v=>{ by[v.who]=by[v.who]||[]; (ivOf[v.who]=ivOf[v.who]||[]).push(v); });
+    else its.forEach(x=>{ if(x.iv){ const a=(ivOf[x.p.who]=ivOf[x.p.who]||[]); if(a.indexOf(x.iv)<0)a.push(x.iv); } });
+    const ORD=['late','chk','doc','non','wait','use'];
+    let rows=Object.keys(by).map(who=>{ const l=by[who], cnt={}; l.forEach(x=>{ cnt[x.st]=(cnt[x.st]||0)+1; });
+      const ivs=ivOf[who]||[]; let st=ORD.find(k=>cnt[k]); if(!st)st=ivs.length?(ivs.every(v=>v.st==='支払済')?'use':'wait'):'non';
+      return {who,l,cnt,ivs,st,ex:l.reduce((a,x)=>a+x.amt,0),inc:l.reduce((a,x)=>a+x.inc,0),due:(l.find(x=>x.st===st)||l[0]||{}).due||(ivs[0]?vPayDue(who,ivs[0].month):'')}; })
+      .filter(r=>!pSt||r.cnt[pSt]).sort((a,b)=>ORD.indexOf(a.st)-ORD.indexOf(b.st)||b.inc-a.inc);
+    body=rows.length?`<div class="tw" style="max-height:none"><table><thead><tr><th>協力業者</th><th>締め・支払</th><th class="r">件数</th><th class="r">金額（税抜）</th><th class="r">金額（税込）</th><th>支払予定日</th><th>状態</th><th>請求書・支払明細書</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr class="vrow" data-pwho="${esc(r.who)}" style="cursor:pointer" title="この業者の物件ごとの内訳を見る"><td class="nm"><b>${esc(r.who)}</b>${isVendor(r.who)?'':'<span class="flag" style="margin-left:5px">マスタ外</span>'}</td>
+        <td style="font-size:12px;color:var(--sub)">${vPayLabel(r.who)}</td><td class="r">${r.l.length}件</td><td class="r">${yen(r.ex)}</td><td class="r"><b>${yen(r.inc)}</b>${vendorTaxable(r.who)?'':'<small class="sub2">免税</small>'}</td><td>${md(r.due)}</td>
+        <td>${stc(r.st)}${Object.keys(r.cnt).filter(k=>k!==r.st).length?`<small class="sub2">${Object.keys(r.cnt).filter(k=>k!==r.st).map(k=>PST[k][1]+' '+r.cnt[k]+'件').join('・')}</small>`:''}</td>
+        <td style="white-space:nowrap">${r.ivs.map(v=>`<div style="margin:2px 0"><button class="btn small" data-invdoc="${esc(v.id)}" title="${esc(v.kind)}を見る">${esc(v.kind)} ${yen(v.total)}</button>
+          ${v.st==='支払済'?`<small style="color:var(--ok);font-weight:700">支払済 ${md(v.paidDate)}</small>`:`${v.st==='確認済'?'<small style="color:var(--sub)">業者が確認済み</small> ':''}<button class="btn small primary" data-invpaid="${esc(v.id)}">支払済みにする</button>`}</div>`).join('')}
+          ${pMode==='month'&&r.cnt.doc?`<button class="btn small primary" data-mkstmt="${esc(r.who)}" title="業者が請求書を出さない場合に、会社から出す。業者は業者ページで内容を確認する">支払明細書を作る（${r.cnt.doc}件）</button>`:''}</td></tr>`).join('')}
+      <tr class="sumrow"><td colspan="2"><b>合計（${rows.length}社）</b></td><td class="r"><b>${rows.reduce((a,r)=>a+r.l.length,0)}件</b></td><td class="r"><b>${yen(rows.reduce((a,r)=>a+r.ex,0))}</b></td><td class="r"><b>${yen(rows.reduce((a,r)=>a+r.inc,0))}</b></td><td colspan="3"></td></tr></tbody></table></div>
+      <p class="note">行を押すと、その業者の物件ごとの内訳に切り替わる。業者は業者ページの「請求」から、承認済みの完了報告をまとめて請求書にできる（金額は台帳の発注金額から自動で入る）。出さない業者には、ここで支払明細書を作って届ける。</p>`
+      :'<p class="note">この条件に合う支払はない。</p>';
+  }
+  return vPayReports()+head+kpi+filt+body;
+}
+/* 振込の一覧（経理の担当だけ）：まだ払っていない請求書・支払明細書 */
+function payBankList(){
+  if(!(ME&&ME.fin))return;
+  const l=(DB.invoices||[]).filter(v=>v.st!=='支払済').map(v=>({v,V:vendorOf(v.who)||{},due:vPayDue(v.who,v.month)})).sort((a,b)=>String(a.due).localeCompare(String(b.due))||a.v.who.localeCompare(b.v.who,'ja'));
+  const doc=`<h3 style="margin:0 0 8px">振込の一覧（${fmtD(new Date())} 時点・未払い）</h3><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr><th style="text-align:left;padding:4px">支払予定日</th><th style="text-align:left;padding:4px">協力業者</th><th style="text-align:left;padding:4px">締め</th><th style="text-align:left;padding:4px">振込先</th><th style="text-align:right;padding:4px">金額</th></tr></thead><tbody>
+    ${l.map(x=>`<tr><td style="border-top:1px solid #ccc;padding:4px">${esc(x.due)}</td><td style="border-top:1px solid #ccc;padding:4px">${esc(x.V.full||x.v.who)}</td><td style="border-top:1px solid #ccc;padding:4px">${esc(x.v.month)}</td><td style="border-top:1px solid #ccc;padding:4px">${esc((DB.bank||{})[x.V.id]||'（未登録）')}</td><td style="border-top:1px solid #ccc;padding:4px;text-align:right">${yen(x.v.total)}</td></tr>`).join('')}
+    <tr><td colspan="4" style="border-top:2px solid #222;padding:4px"><b>合計（${l.length}件）</b></td><td style="border-top:2px solid #222;padding:4px;text-align:right"><b>${yen(l.reduce((a,x)=>a+(+x.v.total||0),0))}</b></td></tr></tbody></table>`;
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg" style="max-width:860px;width:94vw;max-height:90vh;overflow:auto"><div>${l.length?doc:'<p class="note">まだ払っていない請求書・支払明細書はない。</p>'}</div>
+    <div class="askbtn" style="margin-top:12px">${l.length?'<button class="btn small" id="pbPrint">印刷・PDF</button>':''}<button class="btn small" id="askNo">閉じる</button></div></div>`;
+  document.body.appendChild(el);
+  el.addEventListener('click',e=>{ if(e.target.id==='askNo'){ el.remove(); return; }
+    if(e.target.id==='pbPrint'){ const w=window.open('','_blank'); if(!w)return; w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>振込の一覧</title><style>body{font-family:sans-serif;margin:24px}</style></head><body>${doc}</body></html>`); w.document.close(); w.focus(); w.print(); } });
 }
 function vPay0(){
   const rows={}, tot={};
-  DB.procs.forEach(p=>{if(!p.who)return; const m=p.month?('2026-'+String(p.month.replace('月','')).padStart(2,'0')):ym(p.date);
+  const pm=p=>{ if(!p.month)return ym(p.date); const mo=+String(p.month).replace('月',''); if(!mo)return ym(p.date); const b=p.date||fmtD(new Date()); let y=+b.slice(0,4); const bm=+b.slice(5,7);
+    if(mo-bm>6)y--; else if(bm-mo>6)y++; return y+'-'+String(mo).padStart(2,'0'); };   /* 「月」の列は月だけ。年は工程の日付に近い年 */
+  DB.procs.forEach(p=>{if(!p.who)return; const m=pm(p);
     if(!m)return; rows[p.who]=rows[p.who]||{}; rows[p.who][m]=(rows[p.who][m]||0)+(+p.amt||0);
     tot[m]=(tot[m]||0)+(+p.amt||0);});
   const names=Object.keys(rows).sort((a,b)=>
     Object.values(rows[b]).reduce((x,y)=>x+y,0)-Object.values(rows[a]).reduce((x,y)=>x+y,0));
   const MS=MS_LIST();
   const inv=Object.fromEntries(DB.vendors.map(v=>[v.name,v.inv]));
-  return `<div class="bar"><h2>支払（発注先別）</h2><span class="note" style="margin:0">月ごとの金額は税抜（工程の発注金額）</span></div>
+  return `<p class="note" style="margin:0 0 8px">月ごとの金額は税抜（工程の発注金額）</p>
     <div class="tw"><table><thead><tr><th>発注先</th><th>登録番号</th>
       ${MS.map(m=>`<th class="r">${mlabel(m)}</th>`).join('')}<th class="r">合計（税抜）</th><th class="r">合計（税込）</th></tr></thead>
       <tbody>${names.map(nm=>{const sum=MS.reduce((a,m)=>a+(rows[nm][m]||0),0);
@@ -4799,6 +4887,11 @@ document.addEventListener('click',e=>{
   { const pm=tab==='pl'&&e.target.closest&&e.target.closest('[data-plm]'); if(pm){ plMonth=plMonth===pm.dataset.plm?'':pm.dataset.plm; render();
       if(plMonth){ const d=document.querySelector('.pldrill'); if(d&&d.scrollIntoView)d.scrollIntoView({block:'nearest',behavior:'smooth'}); } return; } }
   if(e.target.id==='plEdit'){ plEdit(); return; }
+  if(e.target.id==='pBank'){ payBankList(); return; }
+  if(tab==='pay'){ const t=e.target, c=q=>t.closest&&t.closest(q); let x;
+    if((x=c('[data-pmode]'))){ pMode=x.dataset.pmode; if(pMode==='range'&&pView==='year')pView='vendor'; render(); return; }
+    if((x=c('[data-pview]'))){ pView=x.dataset.pview; render(); return; }
+    if(!c('button')&&(x=c('tr[data-pwho]'))){ pWho=x.dataset.pwho; pView='proc'; render(); return; } }
   if(e.target.id==='bCo'){ billCoAsk(); return; }
   if(e.target.id==='bBack'){ bOpen=''; render(); return; }
   if(tab==='bill'){ const t=e.target, c=q=>t.closest&&t.closest(q); let x;
@@ -5123,6 +5216,9 @@ document.addEventListener('change',e=>{
     if(LBL[f])toast(`${l.name||'明細'}　${LBL[f]} ${was||0} → ${l[f]||0}　（販売 ${yen(lineSell(l))} ／ 原価 ${yen(lineAmt(l))}）`);
     return;}
   if(el.id==='payMon'){payMon=el.value;render();return;}
+  if(el.id==='pFrom'||el.id==='pTo'){ if(el.id==='pFrom')pFrom=el.value; else pTo=el.value; if(pFrom&&pTo&&pFrom>pTo){ const x=pFrom; pFrom=pTo; pTo=x; } render(); return; }
+  if(el.id==='pWho'){ pWho=el.value; render(); return; }
+  if(el.id==='pSt'){ pSt=el.value; render(); return; }
   if(el.id==='cpCat'){cpUpCat=el.value;render();return;}
   if(el.id==='cpPh'){cpUpPh=el.value;return;}
   if(el.id==='cpFiles'){cpAddFiles(el.files); el.value=''; return;}
@@ -5133,6 +5229,7 @@ document.addEventListener('change',e=>{
   if(el.id==='vSt'){ vSt=el.value; render(); return; }
   if(el.dataset&&el.dataset.vf&&tab==='vendor'&&vpId){ const v=DB.vendors.find(x=>x.id===vpId); if(!v)return; const f=el.dataset.vf; snap('vendor:'+v.id+':'+f);
     if(f==='close'||f==='site')v[f]=+el.value||30; else if(f==='taxable')v[f]=el.value!=='0';
+    else if(f==='payM'||f==='payD'){ const t=vPayTerm(v.name); v.payM=f==='payM'?+el.value:t.m; v.payD=f==='payD'?Math.min(31,Math.max(1,+el.value||31)):t.d; }
     else if(f==='insp'){ const ks=String(v.kinds||'').split(/[,、\s]+/).filter(k=>k&&!isInsp(k)); if(el.checked)ks.push('AW検査'); v.kinds=ks.join(','); }
     else v[f]=String(el.value).trim();
     save(); renderSoon(); return; }

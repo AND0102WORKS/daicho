@@ -29,8 +29,8 @@ const TABLES={
   orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable','token'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
   /* seen_at・first_seen_at（業者が業者ページを開いた日時）は DB が入れる。画面は読むだけ */
-  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at'],
-          map:{full:'full_name',defKind:'def_kind',close:'close_day',invitedAt:'invited_at'}, dates:[], bools:['active','taxable'], ts:['invited_at']},
+  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at','pay_m','pay_d'],
+          map:{full:'full_name',defKind:'def_kind',close:'close_day',invitedAt:'invited_at',payM:'pay_m',payD:'pay_d'}, dates:[], bools:['active','taxable'], ts:['invited_at']},
   clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src','est_mode'],
           map:{full:'full_name',close:'close_day',estMode:'est_mode'}, dates:[], bools:[]},
   prices:{cols:['id','org','name','alias','kind','unit','price','who','client','memo'], map:{}, dates:[], bools:[]},
@@ -68,7 +68,8 @@ function recToRow(t,rec){
     else if(T.bools.indexOf(c)>=0) v=!!v;
     else if(['sales','add_amt','est_amt','amt','sell','price','close_day','site','base','extra','subtotal','tax','total'].indexOf(c)>=0||(t==='lines'&&c==='no')) v=(v===''||v==null)?(c==='no'?null:0):Math.round(+v||0);   /* DB は int。小数だと保存が全部止まる */
     else if(c==='qty') v=(v===''||v==null)?0:(+v||0);
-    else if(c==='cost_qty') v=(v===''||v==null)?null:(+v||0);   /* 空＝販売の数量と同じ */
+    else if(c==='cost_qty') v=(v===''||v==null)?null:(+v||0);
+    else if(c==='pay_m'||c==='pay_d') v=(v===''||v==null)?null:Math.round(+v||0);   /* 支払日（何か月後の何日）。空＝サイトから決める */   /* 空＝販売の数量と同じ */
     else if(v===null) v='';
     row[c]=v; });
   return row;
