@@ -1995,7 +1995,7 @@ function orderPanel(c){
         <td><span class="st ${OSTC[o.st]}">${esc(o.st)}</span></td>
         <td><button class="btn small" data-osheet="${o.id}">発注書</button>
           ${OSTS.indexOf(o.st)<OSTS.length-1?`<button class="btn small" data-onext="${o.id}" data-ost="${esc(o.st)}">${
-            o.st==='下書き'?'送る':o.st==='送付済'?'承諾':o.st==='承諾'?'完了':'請求済'}</button>`:''}
+            o.st==='下書き'?'発注':o.st==='送付済'?'承諾':o.st==='承諾'?'完了':'請求済'}</button>`:''}
           <button class="btn small danger" data-odel="${o.id}">取消</button></td></tr>`;}).join('')}
     </tbody></table></div>`:'';
   return head+estPanel(c,sellSum)+tools+bar+table+olist;
@@ -2218,7 +2218,7 @@ function orderSheet(oid){
   const v=vendorOf(o.who)||{};
   const el=document.createElement('div'); el.className='ask';
   el.addEventListener('click',e=>{ if(e.target.id!=='osMemoSave')return; snap(); o.memo=el.querySelector('#osMemo').value.trim(); save(); el.remove(); orderSheet(oid); toast('備考を保存した'); });   /* 下書きのあいだは備考を直せる */
-  el.innerHTML=`<div class="ob">${o.st!=='完了'&&o.st!=='請求済'&&(!c.addr||!c.keyInfo)?`<div class="obdraft" style="background:var(--warn-bg);border-color:var(--warn)">この案件は ${[!c.addr&&'住所',!c.keyInfo&&'鍵情報'].filter(Boolean).join('・')} が未入力です。業者に現場の場所や入り方が伝わりません。この画面を閉じて、案件の見出しの下の欄に入れてください。</div>`:''}${o.st==='下書き'?`<div class="obdraft">まだ下書きです。業者にはまだ届いていません。内容を確かめて、メール・LINEで送ったら「送付済にする」を押すと、業者ページに出て承諾できるようになります。</div>`:''}<h3>発 注 書</h3>
+  el.innerHTML=`<div class="ob">${o.st!=='完了'&&o.st!=='請求済'&&(!c.addr||!c.keyInfo)?`<div class="obdraft" style="background:var(--warn-bg);border-color:var(--warn)">この案件は ${[!c.addr&&'住所',!c.keyInfo&&'鍵情報'].filter(Boolean).join('・')} が未入力です。業者に現場の場所や入り方が伝わりません。この画面を閉じて、案件の見出しの下の欄に入れてください。</div>`:''}${o.st==='下書き'?`<div class="obdraft">まだ下書きです。業者にはまだ届いていません。内容を確かめて「発注」を押すと、業者ページに出て承諾できるようになります。</div>`:''}<h3>発 注 書</h3>
     <div class="meta">
       <b>発注No</b><span>${esc(o.no)}</span>
       <b>発注日</b><span>${esc(o.sent||'（未送付）')}</span>
@@ -3902,7 +3902,7 @@ function caseTodos(c){
         else if(!p.date)add('工程','todo',`${p.kind}（${p.who}）の日程が決まっていない`);
         else if(!p.order&&!isStaffJob(p.kind)&&p.prog!=='完了')add('見積・発注','todo',`${p.kind}（${p.who}）の発注書を作る`);
       });
-      ods.forEach(o=>{ if(o.st==='下書き')add('見積・発注','warn',`発注書 ${o.no}（${o.who||'業者未定'}）がまだ下書き。送ったら「送付済にする」`);
+      ods.forEach(o=>{ if(o.st==='下書き')add('見積・発注','warn',`発注書 ${o.no}（${o.who||'業者未定'}）がまだ下書き。内容を確かめて「発注」を押す`);
         else if(o.st==='送付済')add('見積・発注','wait',`発注書 ${o.no}：${o.who} さんの承諾待ち`); });
     }
     reps.filter(r=>r.st==='報告済').forEach(r=>add('完了報告・請求','warn',`${r.who} さんの完了報告が届いている。確かめて承認する`));

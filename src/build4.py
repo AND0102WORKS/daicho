@@ -153,22 +153,15 @@ src2=src2.replace('''    <div class="askbtn" style="margin-top:14px"><button cla
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
 }''','''    <div class="askbtn" style="margin-top:14px;flex-wrap:wrap;gap:6px">
-      ${o.token?`<button class="btn small primary" id="oMail" title="${v.email?esc(v.email)+' 宛てのメールを、文面とリンクが入った状態で開く':'発注先マスタにメールが入っていない。宛先は開いたメールで入れる'}">メールで送る${v.email?'':'（宛先なし）'}</button>
-        <button class="btn small primary" id="oLine" title="LINE を、文面とリンクが入った状態で開く。送り先の業者を選んで送る">LINEで送る</button>
-        <button class="btn small" id="oLink">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
-      ${o.st==='下書き'?`<button class="btn small" id="oSent" title="業者に送ったら押す。状態が「送付済」になり、案件が「発注 済」になる。業者ページの発注の一覧にも出る">送付済にする</button>`:''}
+      ${o.st==='下書き'?`<button class="btn small primary" id="oSent" title="発注書を業者ページに出す。業者が見て「承諾」を押せるようになる。状態が「送付済」になる">発注</button>`:''}
+      ${o.token?`<button class="btn small" id="oLink" title="発注No・現場・工期・金額と、発注書のリンクをコピーする。LINE やメールに貼って業者に知らせる">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
       <span class="grow"></span><button class="btn small" id="askNo">閉じる</button></div>
-    <p class="note" style="margin:6px 0 0">「メールで送る」「LINEで送る」を押すと、文面と発注書のリンクが入った状態で開くので、送信を押す。送ったら「送付済にする」。業者はログイン無しで発注書を見て「承諾」を押せる。承諾すると状態が「承諾」になり日時が残る。送付済にした発注は、業者ページ（マスタの発注先の「リンク」）の一覧にも自動で出る。</p></div>`;
+    <p class="note" style="margin:6px 0 0">${o.st==='下書き'?'「発注」を押すと、業者ページに出て、業者が承諾できるようになる。':'この発注書は業者ページに出ている。'}業者に知らせるときは「リンクをコピー」して、LINE やメールに貼る。</p></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
-  const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderLink(o),'業者用のリンクをコピーした');
-  const after=()=>{ if(o.st==='下書き')toast('送ったら「送付済にする」を押す', ()=>{ el.remove(); nextOrderSt(o.id); }, '送付済にする'); };
-  const om=el.querySelector('#oMail'); if(om)om.onclick=()=>{ const m=orderMessage(o,c,v);
-    const a=document.createElement('a'); a.href='mailto:'+encodeURIComponent(v.email||'')+'?subject='+encodeURIComponent(m.subject)+'&body='+encodeURIComponent(m.body);
-    document.body.appendChild(a); a.click(); a.remove(); after(); };
-  const ol=el.querySelector('#oLine'); if(ol)ol.onclick=()=>{ const m=orderMessage(o,c,v);
-    window.open('https://line.me/R/share?text='+encodeURIComponent(m.body),'_blank','noopener'); after(); };
-  const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ el.remove(); nextOrderSt(o.id); };   /* 案件の発注表の「送る」と同じ処理（案件の 発注＝済・状態も進める） */
+  const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderMessage(o,c,v).body,'文面とリンクをコピーした。LINE やメールに貼って知らせる');
+  const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ el.remove(); nextOrderSt(o.id);
+    toast(`${o.no} を発注した（業者ページに出した）。業者に知らせるときは「リンクをコピー」`); };
 }''')
 src2=src2.replace('''        <th class="r">使用</th><th class="r">旧区分</th><th></th></tr></thead>''','''        <th class="r">使用</th><th class="r">旧区分</th><th title="業者・職人が自分への発注と工程を見るページ（ログイン無し）">業者ページ</th><th></th></tr></thead>''')
 src2=src2.replace('''        <td class="r">${old?`<b style="color:var(--warn)">${old}</b>`:'—'}</td>
