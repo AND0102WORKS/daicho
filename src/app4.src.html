@@ -112,6 +112,7 @@ tr.vrow{cursor:pointer}tr.vrow td{padding:9px 10px}tr.vrow .nm b{font-size:13.5p
 .vgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}.vgrid .card{margin:0}@media(max-width:1000px){.vgrid{grid-template-columns:1fr}}
 .vpact{float:right;display:flex;gap:6px;align-items:center}.cphead .vst{vertical-align:3px}
 .vgrid .cpform{grid-template-columns:1fr 1fr}.vpact a.btn{text-decoration:none}
+.vlock{background:var(--card2);border:1px dashed var(--line);border-radius:8px;padding:8px 12px;color:var(--sub);font-size:12.5px}
 .vname{display:flex;align-items:center;gap:10px}.vname b{font-size:15px}
 .chk{display:flex;align-items:center;gap:6px;font-size:13px;height:34px}
 .pldrill{margin-top:10px;border-left:4px solid var(--acc)}
@@ -522,7 +523,7 @@ const TABLES={
   orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable','token'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
   /* seen_at・first_seen_at（業者が業者ページを開いた日時）は DB が入れる。画面は読むだけ */
-  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at'],
+  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at'],
           map:{full:'full_name',defKind:'def_kind',close:'close_day',invitedAt:'invited_at'}, dates:[], bools:['active','taxable'], ts:['invited_at']},
   clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src','est_mode'],
           map:{full:'full_name',close:'close_day',estMode:'est_mode'}, dates:[], bools:[]},
@@ -595,12 +596,15 @@ async function dbLoad(){
   const [cases,procs,lines,orders,vendors,clients,prices,recv,paid,off,settings,reports,invoices]=await Promise.all([
     fetchAll('cases'),fetchAll('procs'),fetchAll('lines'),fetchAll('orders'),fetchAll('vendors'),fetchAll('clients'),fetchAll('prices'),
     fetchAll('receipts'),fetchAll('payments'),fetchAll('days_off'),fetchAll('settings'),
-    fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[])]);   /* 表がまだ無い DB でも台帳は開けるように */
+    fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[])]);
+  /* 振込先：経理の印（profiles.fin）のある人だけが読める表。印が無ければ DB が1行も返さない */
+  let bankRows=[]; if(ME&&ME.fin){ try{ bankRows=await fetchAll('vendor_bank'); }catch(e){ alog('bank',(e&&e.message)||e); } }   /* 表がまだ無い DB でも台帳は開けるように */
   DB={cases:cases.map(r=>rowToRec('cases',r)),procs:procs.map(r=>rowToRec('procs',r)),lines:lines.map(r=>rowToRec('lines',r)),
       orders:orders.map(r=>rowToRec('orders',r)),vendors:vendors.map(r=>rowToRec('vendors',r)),clients:clients.map(r=>rowToRec('clients',r)),
       prices:prices.map(r=>rowToRec('prices',r)),
       reports:reports.map(r=>rowToRec('reports',r)),invoices:invoices.map(r=>rowToRec('invoices',r)),
       recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
+  DB.bank={}; bankRows.forEach(r=>{ if(r.bank)DB.bank[r.vendor_id]=r.bank; });
   recv.forEach(r=>{ if(+r.amount)DB.recv[r.client+'|'+r.month]=r.amount; });      /* 0 は「消した」の意味 */
   paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
   off.forEach(r=>{ if((r.days||[]).length)(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice(); });
@@ -771,6 +775,13 @@ function renderIdle(){
   const a=document.activeElement, typing=a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!a.closest('.ask');
   if(typing||document.querySelector('.ask')){ idleTimer=setTimeout(renderIdle,3000); return; }
   render();
+}
+/* 振込先を保存する（経理の印のある人だけ。印が無ければ DB が断る） */
+async function saveBank(vid,val){
+  if(!sb||!vid)return false;
+  const {error}=await sb.from('vendor_bank').upsert({vendor_id:vid,org:ORG,bank:String(val||'').trim()},{onConflict:'vendor_id'});
+  if(error){ toast('振込先を保存できなかった（'+error.message+'）'); return false; }
+  DB.bank=DB.bank||{}; DB.bank[vid]=String(val||'').trim(); return true;
 }
 /* 発注番号：サーバーの連番 */
 async function allocOrderNo(){ const {data,error}=await sb.rpc('next_no',{p_org:ORG,p_name:'order'}); if(error)throw error; return +data; }
@@ -3445,7 +3456,9 @@ function vVendorPage(v){
         ${F('消費税',`<select data-vf="taxable"${v.taxable===false?' style="border-color:var(--warn)"':''}><option value="1"${v.taxable!==false?' selected':''}>課税（発注書に10%を足す）</option><option value="0"${v.taxable===false?' selected':''}>免税（消費税なし）</option></select>`,1)}
         ${F('登録番号（インボイス）'+(v.inv||v.taxable===false||v.type==='専属'?'':' <span style="color:var(--warn)">未入力</span>'),T('inv','T＋13桁'),1)}
         ${F('締日',`<input type="number" data-vf="close" value="${v.close||30}" min="1" max="31">`)}${F('支払サイト（日）',`<input type="number" data-vf="site" value="${v.site||30}" min="0" max="120">`)}
-        ${F('振込先',T('bank','銀行・支店・種別・口座番号・名義'),1)}
+        ${F('振込先'+(ME&&ME.fin?'':' <span class="note" style="margin:0;font-weight:400">経理の担当だけが見られる</span>'),
+          ME&&ME.fin?`<input type="text" id="vBank" value="${esc((DB.bank||{})[v.id]||'')}" placeholder="銀行・支店・種別・口座番号・名義">`
+            :'<div class="vlock">この欄は、経理の担当と管理者だけが見られる</div>',1)}
         <div class="full note" style="margin:0">${esc(payTerm(v))}。月末締めは 31。${v.taxable===false?'免税の業者には、発注書・請求書に消費税を足さない。':''}</div></div>
         <div class="bar" style="margin:12px 0 0"><span class="grow"></span>${v.active===false?`<button class="btn small" data-vactive="1">使用を再開する</button>`:`<button class="btn small" data-vactive="0" title="使わなくなった業者。一覧に出なくなり、業者ページも開けなくなる。記録は残る">使用停止にする</button>`}
           ${vendorRefs(nm)?'':`<button class="btn small danger" data-delv="${esc(nm)}">削除</button>`}</div></div></div>
@@ -3516,7 +3529,7 @@ function vAddDialog(){
     const nm=el.querySelector('#vaName').value.trim(); if(!nm){ toast('名前を入れてください'); return; }
     if(DB.vendors.some(x=>x.name===nm)){ toast(`「${nm}」は既にある`); return; }
     snap(); const id='V'+Math.random().toString(36).slice(2,10);
-    DB.vendors.unshift({id,name:nm,full:'',inv:'',type:el.querySelector('#vaType').value,defKind:el.querySelector('#vaKind').value,close:30,site:30,bank:'',src:'手で追加',taxable:true,active:true});
+    DB.vendors.unshift({id,name:nm,full:'',inv:'',type:el.querySelector('#vaType').value,defKind:el.querySelector('#vaKind').value,close:30,site:30,src:'手で追加',taxable:true,active:true});
     el.remove(); vpId=id; vpTab='基本情報'; save(); render(); toast(`${nm} を登録した。連絡先や取引条件を入れて、「招待する」で業者ページの案内を送る`); });
   document.body.appendChild(el); setTimeout(()=>{ const i=el.querySelector('#vaName'); if(i)i.focus(); },0);
 }
@@ -4937,6 +4950,7 @@ document.addEventListener('change',e=>{
   if(el.id==='cpPh'){cpUpPh=el.value;return;}
   if(el.id==='cpFiles'){cpAddFiles(el.files); el.value=''; return;}
   if(el.id==='mTab'){mTab=el.value;mQ='';render();return;}
+  if(el.id==='vBank'&&vpId){ saveBank(vpId,el.value).then(ok=>{ if(ok)toast('振込先を保存した'); }); return; }
   if(el.id==='vQ'){ vQ=el.value; renderSoon(); return; }
   if(el.id==='vKind'){ vKind=el.value; render(); return; }
   if(el.id==='vSt'){ vSt=el.value; render(); return; }

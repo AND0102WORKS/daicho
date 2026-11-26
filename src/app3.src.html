@@ -112,6 +112,7 @@ tr.vrow{cursor:pointer}tr.vrow td{padding:9px 10px}tr.vrow .nm b{font-size:13.5p
 .vgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}.vgrid .card{margin:0}@media(max-width:1000px){.vgrid{grid-template-columns:1fr}}
 .vpact{float:right;display:flex;gap:6px;align-items:center}.cphead .vst{vertical-align:3px}
 .vgrid .cpform{grid-template-columns:1fr 1fr}.vpact a.btn{text-decoration:none}
+.vlock{background:var(--card2);border:1px dashed var(--line);border-radius:8px;padding:8px 12px;color:var(--sub);font-size:12.5px}
 .vname{display:flex;align-items:center;gap:10px}.vname b{font-size:15px}
 .chk{display:flex;align-items:center;gap:6px;font-size:13px;height:34px}
 .pldrill{margin-top:10px;border-left:4px solid var(--acc)}
@@ -3400,7 +3401,9 @@ function vVendorPage(v){
         ${F('消費税',`<select data-vf="taxable"${v.taxable===false?' style="border-color:var(--warn)"':''}><option value="1"${v.taxable!==false?' selected':''}>課税（発注書に10%を足す）</option><option value="0"${v.taxable===false?' selected':''}>免税（消費税なし）</option></select>`,1)}
         ${F('登録番号（インボイス）'+(v.inv||v.taxable===false||v.type==='専属'?'':' <span style="color:var(--warn)">未入力</span>'),T('inv','T＋13桁'),1)}
         ${F('締日',`<input type="number" data-vf="close" value="${v.close||30}" min="1" max="31">`)}${F('支払サイト（日）',`<input type="number" data-vf="site" value="${v.site||30}" min="0" max="120">`)}
-        ${F('振込先',T('bank','銀行・支店・種別・口座番号・名義'),1)}
+        ${F('振込先'+(ME&&ME.fin?'':' <span class="note" style="margin:0;font-weight:400">経理の担当だけが見られる</span>'),
+          ME&&ME.fin?`<input type="text" id="vBank" value="${esc((DB.bank||{})[v.id]||'')}" placeholder="銀行・支店・種別・口座番号・名義">`
+            :'<div class="vlock">この欄は、経理の担当と管理者だけが見られる</div>',1)}
         <div class="full note" style="margin:0">${esc(payTerm(v))}。月末締めは 31。${v.taxable===false?'免税の業者には、発注書・請求書に消費税を足さない。':''}</div></div>
         <div class="bar" style="margin:12px 0 0"><span class="grow"></span>${v.active===false?`<button class="btn small" data-vactive="1">使用を再開する</button>`:`<button class="btn small" data-vactive="0" title="使わなくなった業者。一覧に出なくなり、業者ページも開けなくなる。記録は残る">使用停止にする</button>`}
           ${vendorRefs(nm)?'':`<button class="btn small danger" data-delv="${esc(nm)}">削除</button>`}</div></div></div>
@@ -3471,7 +3474,7 @@ function vAddDialog(){
     const nm=el.querySelector('#vaName').value.trim(); if(!nm){ toast('名前を入れてください'); return; }
     if(DB.vendors.some(x=>x.name===nm)){ toast(`「${nm}」は既にある`); return; }
     snap(); const id='V'+Math.random().toString(36).slice(2,10);
-    DB.vendors.unshift({id,name:nm,full:'',inv:'',type:el.querySelector('#vaType').value,defKind:el.querySelector('#vaKind').value,close:30,site:30,bank:'',src:'手で追加',taxable:true,active:true});
+    DB.vendors.unshift({id,name:nm,full:'',inv:'',type:el.querySelector('#vaType').value,defKind:el.querySelector('#vaKind').value,close:30,site:30,src:'手で追加',taxable:true,active:true});
     el.remove(); vpId=id; vpTab='基本情報'; save(); render(); toast(`${nm} を登録した。連絡先や取引条件を入れて、「招待する」で業者ページの案内を送る`); });
   document.body.appendChild(el); setTimeout(()=>{ const i=el.querySelector('#vaName'); if(i)i.focus(); },0);
 }
@@ -4894,6 +4897,7 @@ document.addEventListener('change',e=>{
   if(el.id==='cpPh'){cpUpPh=el.value;return;}
   if(el.id==='cpFiles'){cpAddFiles(el.files); el.value=''; return;}
   if(el.id==='mTab'){mTab=el.value;mQ='';render();return;}
+  if(el.id==='vBank'&&vpId){ saveBank(vpId,el.value).then(ok=>{ if(ok)toast('振込先を保存した'); }); return; }
   if(el.id==='vQ'){ vQ=el.value; renderSoon(); return; }
   if(el.id==='vKind'){ vKind=el.value; render(); return; }
   if(el.id==='vSt'){ vSt=el.value; render(); return; }

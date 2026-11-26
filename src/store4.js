@@ -29,7 +29,7 @@ const TABLES={
   orders:{cols:['id','org','no','case_id','who','kind','start_date','end_date','due','naiyo','memo','st','sent','proc_id','taxable','token'],
           map:{case:'case_id',start:'start_date',end:'end_date',proc:'proc_id'}, dates:['start_date','end_date','due','sent'], bools:['taxable']},
   /* seen_at・first_seen_at（業者が業者ページを開いた日時）は DB が入れる。画面は読むだけ */
-  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','bank','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at'],
+  vendors:{cols:['id','org','name','full_name','type','def_kind','inv','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at'],
           map:{full:'full_name',defKind:'def_kind',close:'close_day',invitedAt:'invited_at'}, dates:[], bools:['active','taxable'], ts:['invited_at']},
   clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src','est_mode'],
           map:{full:'full_name',close:'close_day',estMode:'est_mode'}, dates:[], bools:[]},
@@ -102,12 +102,15 @@ async function dbLoad(){
   const [cases,procs,lines,orders,vendors,clients,prices,recv,paid,off,settings,reports,invoices]=await Promise.all([
     fetchAll('cases'),fetchAll('procs'),fetchAll('lines'),fetchAll('orders'),fetchAll('vendors'),fetchAll('clients'),fetchAll('prices'),
     fetchAll('receipts'),fetchAll('payments'),fetchAll('days_off'),fetchAll('settings'),
-    fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[])]);   /* 表がまだ無い DB でも台帳は開けるように */
+    fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[])]);
+  /* 振込先：経理の印（profiles.fin）のある人だけが読める表。印が無ければ DB が1行も返さない */
+  let bankRows=[]; if(ME&&ME.fin){ try{ bankRows=await fetchAll('vendor_bank'); }catch(e){ alog('bank',(e&&e.message)||e); } }   /* 表がまだ無い DB でも台帳は開けるように */
   DB={cases:cases.map(r=>rowToRec('cases',r)),procs:procs.map(r=>rowToRec('procs',r)),lines:lines.map(r=>rowToRec('lines',r)),
       orders:orders.map(r=>rowToRec('orders',r)),vendors:vendors.map(r=>rowToRec('vendors',r)),clients:clients.map(r=>rowToRec('clients',r)),
       prices:prices.map(r=>rowToRec('prices',r)),
       reports:reports.map(r=>rowToRec('reports',r)),invoices:invoices.map(r=>rowToRec('invoices',r)),
       recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
+  DB.bank={}; bankRows.forEach(r=>{ if(r.bank)DB.bank[r.vendor_id]=r.bank; });
   recv.forEach(r=>{ if(+r.amount)DB.recv[r.client+'|'+r.month]=r.amount; });      /* 0 は「消した」の意味 */
   paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
   off.forEach(r=>{ if((r.days||[]).length)(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice(); });
@@ -278,6 +281,13 @@ function renderIdle(){
   const a=document.activeElement, typing=a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!a.closest('.ask');
   if(typing||document.querySelector('.ask')){ idleTimer=setTimeout(renderIdle,3000); return; }
   render();
+}
+/* 振込先を保存する（経理の印のある人だけ。印が無ければ DB が断る） */
+async function saveBank(vid,val){
+  if(!sb||!vid)return false;
+  const {error}=await sb.from('vendor_bank').upsert({vendor_id:vid,org:ORG,bank:String(val||'').trim()},{onConflict:'vendor_id'});
+  if(error){ toast('振込先を保存できなかった（'+error.message+'）'); return false; }
+  DB.bank=DB.bank||{}; DB.bank[vid]=String(val||'').trim(); return true;
 }
 /* 発注番号：サーバーの連番 */
 async function allocOrderNo(){ const {data,error}=await sb.rpc('next_no',{p_org:ORG,p_name:'order'}); if(error)throw error; return +data; }
