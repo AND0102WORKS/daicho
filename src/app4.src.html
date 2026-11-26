@@ -110,6 +110,12 @@ table.plt tr.cnt td{color:var(--sub);font-size:11.5px;border-bottom:none}
 .vst.late{background:#FBE3E0;color:#A32A1E}.vst.late i{background:#C0392B}
 .vst.wait{background:#E4ECF7;color:#2B4C7E}.vst.wait i{background:#3D6DB5}
 .sub2{display:block;color:var(--sub);font-size:11px;margin-top:2px}
+.tpl{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:12px 14px;margin-bottom:10px}
+.tpl h5{margin:0 0 6px;font-size:14px;display:flex;align-items:center;gap:8px}.tpl pre{margin:0;font-family:inherit;font-size:12.5px;line-height:1.75;white-space:pre-wrap;color:var(--sub)}
+.tchip{display:inline-flex;align-items:center;gap:4px;border:1.5px solid var(--acc);color:var(--acc);background:var(--card);border-radius:999px;padding:3px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.tchip::before{content:'＋'}.tchip.on{background:var(--acc);color:#fff}.tchip.on::before{content:'✓'}
+.memota{width:100%;height:120px;font-family:inherit;font-size:13px;line-height:1.7;margin-top:4px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;box-sizing:border-box;resize:vertical}
+.osmemo{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
 .bseg{display:inline-flex;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
 .bseg button{border:none;background:none;padding:0 13px;height:34px;font-weight:700;font-size:13px;font-family:inherit;color:var(--ink);cursor:pointer;opacity:1}
 .bseg button+button{border-left:1px solid var(--line)}
@@ -533,8 +539,8 @@ const TABLES={
   /* seen_at・first_seen_at（業者が業者ページを開いた日時）は DB が入れる。画面は読むだけ */
   vendors:{cols:['id','org','name','full_name','type','def_kind','inv','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at','pay_m','pay_d'],
           map:{full:'full_name',defKind:'def_kind',close:'close_day',invitedAt:'invited_at',payM:'pay_m',payD:'pay_d'}, dates:[], bools:['active','taxable'], ts:['invited_at']},
-  clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src','est_mode'],
-          map:{full:'full_name',close:'close_day',estMode:'est_mode'}, dates:[], bools:[]},
+  clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src','est_mode','contact','phone','addr','pay_m','pay_d','tpls'],
+          map:{full:'full_name',close:'close_day',estMode:'est_mode',payM:'pay_m',payD:'pay_d'}, dates:[], bools:[]},
   prices:{cols:['id','org','name','alias','kind','unit','price','who','client','memo'], map:{}, dates:[], bools:[]},
   /* 完了報告（業者ページから出る）。スタッフは承認・差し戻しだけ書く */
   reports:{cols:['id','org','proc_id','case_id','who','done_date','note','base','extra','extra_note','photos','st','reply','approved_at','invoice_id'],
@@ -977,6 +983,7 @@ function renameClient(old,nw){
   if(!old||!nw||old===nw)return;
   DB.cases.forEach(x=>{if(x.client===old)x.client=nw;});
   (DB.prices||[]).forEach(x=>{if(x.client===old)x.client=nw;});
+  (DB.bills||[]).forEach(x=>{if(x.client===old)x.client=nw;});
   ['recv'].forEach(k=>{const o=DB[k]||{}; Object.keys(o).forEach(key=>{ if(key.indexOf(old+'|')===0){o[nw+key.slice(old.length)]=o[key]; delete o[key];} });});   /* 入金の記録だけ（支払済みは業者の名前なので触らない） */
 }
 /* 参照されている発注先・顧客は消せない */
@@ -1038,6 +1045,7 @@ function cycle(client,m){
 /** 入金予定日＝翌月末＋（サイト−30）日。いまの請求一覧の式と同じ */
 function dueOf(client,m){
   const t=termOf(client), y=+m.slice(0,4), mo=+m.slice(5,7);
+  if(t.payM!==''&&t.payM!=null){ const x=addM(m,+t.payM), yy=+x.slice(0,4), mm=+x.slice(5,7); return iso(yy,mm,Math.min(+t.payD||31,eom(yy,mm))); }
   const d=new Date(y,mo+1,0); d.setDate(d.getDate()+Math.max(0,(+t.site||30)-30));
   return fmtD(d);
 }
@@ -2115,8 +2123,7 @@ function askOrder(cid,who0){
       <div><label class="fl">完工日</label><input type="date" id="oqE" value="${f0.end}"></div>
       <div class="full"><label class="fl">工事内容（明細から作った。直せる）</label>
         <input type="text" id="oqNaiyo" value="${esc(sel.map(l=>l.name).join('、'))}"></div>
-      <div class="full"><label class="fl">伝達事項・備考</label>
-        <input type="text" id="oqMemo" value=""></div>
+      <div class="full">${memoBox(cid,tplDefault(cid),'oqMemo')}</div>
     </div>
     ${kinds.filter(Boolean).length>1?`<p class="note" style="color:var(--warn)">選んだ行の工程区分が ${esc(kinds.filter(Boolean).join('・'))} に分かれている。1つにまとめてよいか確認</p>`:''}
     ${whos.length>1?`<p class="note" style="color:var(--warn)">選んだ行の発注先が ${esc(whos.join('・'))} に分かれている。業者ごとに分けるなら「やめる」で戻り、明細の上の業者ごとのボタンから作る</p>`:''}
@@ -2151,7 +2158,7 @@ async function createOrder(cid,ids,f,quiet){
   const oid='O'+n+DEV, no='AW-H'+String(n).padStart(4,'0');
   const amt=DB.lines.filter(l=>ids.indexOf(l.id)>=0).reduce((a,l)=>a+lineAmt(l),0);
   DB.orders.push({id:oid,no,case:cid,who:f.who,kind:f.kind,start:f.start,end:f.end,due:f.due,taxable:vendorTaxable(f.who),
-    naiyo:f.naiyo,memo:f.memo,st:'下書き',sent:'',
+    naiyo:f.naiyo,memo:f.memo!=null?f.memo:tplDefault(cid),st:'下書き',sent:'',
     token:Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join(''),   /* 発注書のリンク。作ってすぐ送れるように画面で作る */
     name:`${c?c.prop||'':''} ${f.kind}_${f.who||'業者未定'}`.trim()});
   DB.lines.forEach(l=>{ if(ids.indexOf(l.id)>=0){l.order=oid;l.who=f.who;l.kind=f.kind;} });
@@ -2269,7 +2276,7 @@ function orderSheet(oid){
       <b>現場</b><span>${esc(c.prop||'')}</span>
       <b>工期</b><span>${o.start?spanLabel({date:o.start,end:o.end}):'—'}</span>
       <b>工事内容</b><span>${esc(o.naiyo||'—')}</span>
-      <b>伝達事項</b><span>${esc(o.memo||'—')}</span>
+      <b>伝達事項</b><span style="white-space:pre-wrap">${esc(o.memo||'—')}</span>
       <b>回答期限</b><span>${esc(o.due||'—')}</span></div>
     <table><thead><tr><th style="width:30px">No</th><th>明細名</th><th class="r">数量</th><th>単位</th>
       <th class="r">単価</th><th class="r">金額</th><th>備考</th></tr></thead><tbody>
@@ -2280,35 +2287,23 @@ function orderSheet(oid){
     <p class="amt">${orderTaxable(o)?`小計 ${yen(amt)}　消費税 ${yen(Math.round(amt*0.1))}　合計 ${yen(inc(amt))}`
       :`合計 ${yen(amt)}　<small style="font-weight:400">（発注先が免税事業者のため消費税なし）</small>`}</p>
     <p class="note">支払条件：${esc(payTerm(v))}<br>アンドワークス株式会社</p>
-    <div class="askbtn" style="margin-top:14px;flex-wrap:wrap;gap:6px">
-      ${o.token?`<button class="btn small primary" id="oMail" title="${v.email?esc(v.email)+' 宛てのメールを、文面とリンクが入った状態で開く':'発注先マスタにメールが入っていない。宛先は開いたメールで入れる'}">メールで送る${v.email?'':'（宛先なし）'}</button>
-        <button class="btn small primary" id="oLine" title="LINE を、文面とリンクが入った状態で開く。送り先の業者を選んで送る">LINEで送る</button>
-        <button class="btn small" id="oLink">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
-      ${o.st==='下書き'?`<button class="btn small" id="oSent" title="業者に送ったら押す。状態が「送付済」になり、案件が「発注 済」になる。業者ページの発注の一覧にも出る">送付済にする</button>`:''}
-      <span class="grow"></span><button class="btn small" id="askNo">閉じる</button></div>
-    <p class="note" style="margin:6px 0 0">「メールで送る」「LINEで送る」を押すと、文面と発注書のリンクが入った状態で開くので、送信を押す。送ったら「送付済にする」。業者はログイン無しで発注書を見て「承諾」を押せる。承諾すると状態が「承諾」になり日時が残る。送付済にした発注は、業者ページ（マスタの発注先の「リンク」）の一覧にも自動で出る。</p></div>`;
+    ${o.st==='下書き'?`<div class="osmemo">${memoBox(o.case,o.memo||'','osMemo')}<div class="askbtn" style="margin-top:6px"><span class="note" style="margin:0">下書きのあいだは、備考を直せる</span><button class="btn small primary" id="osMemoSave">備考を保存</button></div></div>`:''}
+    <div class="askbtn" style="margin-top:14px"><button class="btn small" id="askNo">閉じる</button></div></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
-  const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderLink(o),'業者用のリンクをコピーした');
-  const after=()=>{ if(o.st==='下書き')toast('送ったら「送付済にする」を押す', ()=>{ el.remove(); nextOrderSt(o.id); }, '送付済にする'); };
-  const om=el.querySelector('#oMail'); if(om)om.onclick=()=>{ const m=orderMessage(o,c,v);
-    const a=document.createElement('a'); a.href='mailto:'+encodeURIComponent(v.email||'')+'?subject='+encodeURIComponent(m.subject)+'&body='+encodeURIComponent(m.body);
-    document.body.appendChild(a); a.click(); a.remove(); after(); };
-  const ol=el.querySelector('#oLine'); if(ol)ol.onclick=()=>{ const m=orderMessage(o,c,v);
-    window.open('https://line.me/R/share?text='+encodeURIComponent(m.body),'_blank','noopener'); after(); };
-  const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ el.remove(); nextOrderSt(o.id); };   /* 案件の発注表の「送る」と同じ処理（案件の 発注＝済・状態も進める） */
+  { const sv=el.querySelector('#osMemoSave'); if(sv)sv.onclick=()=>{ snap(); o.memo=el.querySelector('#osMemo').value.trim(); save(); el.remove(); orderSheet(oid); toast('備考を保存した'); }; }
 }
 
 /* ================= tabs ================= */
 const TABS=[['ledger','案件台帳'],['order','見積・発注'],['proc','工程を組む'],['board','手配ボード'],['kanko','完工予定'],['insp','検査カレンダー'],
-            ['bill','請求'],['pay','支払'],['pl','月次'],['vendor','協力業者'],['master','設定'],['check','要確認']];
+            ['bill','請求'],['pay','支払'],['pl','月次'],['vendor','協力業者'],['client','顧客'],['master','設定'],['check','要確認']];
 let tab='ledger', selCase=null, selProc=null;
 let fClient='すべて', fMonth='すべて', fStatus='すべて', fQ='', bMonth=THIS_M, kMonth=THIS_M;
 let fScope='運用中';
 let iClient='日本財託', iMonth=addM(THIS_M,-1);   /* 請求は前月分を見ることが多い */
 let cMonth=THIS_M, cWho='すべて', pendStart=null, pHide=false;
 let pCase=null, pFilter='発注前（未）', pQ='', pShift=0, kView='すべて', pSort='起算日が近い順';
-let mTab='顧客', mQ='';
+let mTab='事業者情報', mQ='';
 let oMode=(()=>{ try{ const v=localStorage.getItem('aw-omode'); return ['見積','発注','まとめ'].indexOf(v)>=0?v:'発注'; }catch(e){ return '発注'; } })();   /* 明細の表の形 */
 function setOMode(m){ oMode=m; try{ localStorage.setItem('aw-omode',m); }catch(e){} render(); }
 let oCase=null, oFilter='発注前（未）', oQ='', oSel={}, oView='make', oMonth=THIS_M, oSt='未完了';
@@ -2327,6 +2322,7 @@ const TABIC={
   bill:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9.5 8l2.5 3.5L14.5 8M12 11.5V16M9.5 12.5h5M9.5 14.5h5"/>',
   pay:'<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 15h2"/>',
   pl:'<path d="M4 20h16"/><path d="M7 20v-6M12 20V6M17 20v-9"/>',
+  client:'<rect x="4" y="3" width="11" height="18" rx="1.5"/><path d="M15 9h5v12h-5M8 7h3M8 11h3M8 15h3"/>',
   vendor:'<path d="M14.5 5.5l4 4M4 20l1-4L16 5l3 3L8 19z"/><path d="M4 8l4-4 3 3-4 4z"/>',
   master:'<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
   check:'<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>' };
@@ -3103,8 +3099,8 @@ function convertAll(){
 function mBar(oldN){
   const list=mTab==='顧客'||mTab==='単価';
   return `<div class="bar"><h2>設定</h2>
-    <span class="bseg">${[['事業者情報','事業者情報'],['利用者','利用者'],['顧客','顧客'],['単価','発注単価']].map(([v,l])=>`<button class="${mTab===v?'on':''}" data-mtab2="${v}">${l}</button>`).join('')}</span>
-    <button class="btn small" data-gotab="vendor" title="発注先（業者・職人）は、左のメニューの「協力業者」に移した">発注先は「協力業者」へ →</button>
+    <span class="bseg">${[['事業者情報','事業者情報'],['利用者','利用者'],['単価','発注単価']].map(([v,l])=>`<button class="${mTab===v?'on':''}" data-mtab2="${v}">${l}</button>`).join('')}</span>
+    <button class="btn small" data-gotab="vendor" title="発注先（業者・職人）は、左のメニューの「協力業者」に移した">発注先は「協力業者」へ →</button><button class="btn small" data-gotab="client" title="顧客は、左のメニューの「顧客」に移した">顧客は「顧客」へ →</button>
     ${list?`<input type="search" id="mQ" placeholder="名前で探す" value="${esc(mQ)}" style="min-width:160px">
     <button class="btn small" id="addRow">＋ 行を足す</button>`:''}
     ${mTab==='単価'?'<button class="btn small" id="impPrice">貼り付けて取り込む</button>':''}
@@ -3587,6 +3583,112 @@ function vRenameAsk(v){
 }
 
 /* ================= 請求 ================= */
+/* ================= 顧客 =================
+   一覧 → 顧客のページ（基本情報・取引条件／案件／請求・入金／発注書の備考テンプレート） */
+const KLTABS=['基本情報','案件','請求・入金','発注書の備考'];
+const klTerm=nm=>{ const t=termOf(nm); return `${isEom(t)?'月末':t.close+'日'}締め・${(t.payM!==''&&t.payM!=null)?(['当月','翌月','翌々月','3か月後'][+t.payM]||t.payM+'か月後')+((+t.payD||31)>=28?'末':t.payD+'日')+'入金':'サイト'+(t.site||30)+'日'}`; };
+const klOpen=nm=>DB.cases.filter(c=>c.client===nm&&c.live!==false&&!c.done);
+const klUnpaid=nm=>liveBills().filter(b=>b.client===nm&&b.st!=='入金済');
+/* ---- 発注書の備考テンプレート（顧客ごと。clients.tpls＝[{id,title,body,always}]） ---- */
+const tplsOf=cid=>{ const c=DB.cases.find(x=>x.id===cid), cl=c&&clientOf(c.client); return (cl&&Array.isArray(cl.tpls))?cl.tpls:[]; };
+const tplBlock=t=>`【${t.title}】\n${t.body}`;
+const tplDefault=cid=>tplsOf(cid).filter(t=>t.always).map(tplBlock).join('\n\n');
+/* 備考の欄：上に、その案件の顧客のテンプレートがボタンで並ぶ。押すと入り、もう一度押すと外れる */
+function memoBox(cid,val,id){
+  const ts=tplsOf(cid), c=DB.cases.find(x=>x.id===cid)||{};
+  return `<label class="fl" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">伝達事項・備考${ts.length?`<span style="font-weight:400;color:var(--sub);font-size:12px;margin-left:6px">${esc(c.client||'')} のテンプレート：</span>${ts.map((t,i)=>`<button type="button" class="tchip${String(val).includes(tplBlock(t))?' on':''}" data-tpl="${i}" data-for="${id}" data-cid="${esc(cid)}">${esc(t.title)}</button>`).join('')}`:''}</label>
+    <textarea id="${id}" class="memota" placeholder="業者に伝えること">${esc(val)}</textarea>`;
+}
+document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('.tchip[data-tpl]'); if(!b)return;
+  const ta=document.getElementById(b.dataset.for), t=tplsOf(b.dataset.cid)[+b.dataset.tpl]; if(!ta||!t)return; const blk=tplBlock(t);
+  if(ta.value.includes(blk)){ ta.value=ta.value.replace(blk,'').replace(/\n{3,}/g,'\n\n').trim(); b.classList.remove('on'); }
+  else { ta.value=(ta.value.trim()?ta.value.trim()+'\n\n':'')+blk; b.classList.add('on'); } });
+function vClients(){
+  const c0=klId?DB.clients.find(x=>x.id===klId):null; if(c0)return vClientPage(c0); klId='';
+  const q=klQ.toLowerCase(), list=DB.clients.filter(c=>!q||(c.name+(c.full||'')+(c.contact||'')).toLowerCase().includes(q));
+  const mAmt=nm=>DB.cases.filter(c=>c.client===nm&&cycMonth(c)===THIS_M).reduce((a,c)=>a+inc(salesEx(c)),0);
+  const rows=list.map(c=>{ const ub=klUnpaid(c.name), late=ub.filter(b=>billState(b)[0]==='late');
+    return {c,open:klOpen(c.name).length,m:mAmt(c.name),un:ub.reduce((a,b)=>a+(+b.total||0),0),late:late.reduce((a,b)=>a+(+b.total||0),0)}; }).sort((a,b)=>b.open-a.open||b.m-a.m||a.c.name.localeCompare(b.c.name,'ja'));
+  const S=k=>rows.reduce((a,r)=>a+r[k],0);
+  return `<div class="bar"><h2>顧客</h2><input type="search" id="klQ" placeholder="名前で探す" value="${esc(klQ)}" style="min-width:170px"><span class="grow"></span><button class="btn primary" id="klAdd">＋ 顧客を登録</button></div>
+    <div class="kpi"><div class="k"><small>登録</small><b>${DB.clients.length}</b></div><div class="k"><small>進行中の案件</small><b>${S('open')}件</b></div><div class="k"><small>今月の請求（税込）</small><b>${yen(S('m'))}</b></div>
+      <div class="k"><small>未入金（請求済み）</small><b style="color:#2B4C7E">${yen(S('un'))}</b></div><div class="k"><small>うち入金が遅れている</small><b style="color:${S('late')?'#A32A1E':'inherit'}">${yen(S('late'))}</b></div></div>
+    <div class="tw" style="max-height:calc(100vh - 230px)"><table><thead><tr><th>顧客</th><th>締め・入金</th><th class="r">進行中の案件</th><th class="r">今月の請求（税込）</th><th class="r">未入金</th><th>発注書の備考テンプレート</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr class="vrow" data-kl="${esc(r.c.id||'')}" data-kn="${esc(r.c.name)}" style="cursor:pointer"><td class="nm"><b>${esc(r.c.name)}</b>${r.c.full&&r.c.full!==r.c.name?`<small>${esc(r.c.full)}</small>`:''}</td>
+      <td style="font-size:12px;color:var(--sub)">${klTerm(r.c.name)}</td><td class="r">${r.open?r.open+'件':'—'}</td><td class="r">${r.m?yen(r.m):'—'}</td>
+      <td class="r">${r.un?yen(r.un):'—'}${r.late?`<small class="sub2" style="color:#A32A1E">うち遅れ ${yen(r.late)}</small>`:''}</td><td>${(r.c.tpls||[]).length?(r.c.tpls||[]).length+'件':'<span style="color:var(--sub)">—</span>'}</td></tr>`).join('')
+      ||'<tr><td colspan="6" class="note" style="padding:14px">当てはまる顧客はいない。</td></tr>'}</tbody></table></div>
+    <p class="note">行を押すと、その顧客のページが開く（基本情報・取引条件・案件・請求と入金・発注書の備考テンプレート）。</p>`;
+}
+function vClientPage(c){
+  if(KLTABS.indexOf(klTab)<0)klTab='基本情報';
+  const nm=c.name, open=klOpen(nm), ub=klUnpaid(nm), un=ub.reduce((a,b)=>a+(+b.total||0),0), tp=Array.isArray(c.tpls)?c.tpls:[];
+  const F=(l,h,full)=>`<div${full?' class="full"':''}><label class="fl">${l}</label>${h}</div>`, T=(f,ph)=>`<input type="text" data-klf="${f}" value="${esc(c[f]==null?'':c[f])}" placeholder="${ph||''}">`;
+  const t=termOf(nm), pm=(t.payM!==''&&t.payM!=null)?String(+t.payM):'', lateB=ub.some(b=>billState(b)[0]==='late');
+  const head=`<div class="cphead"><a id="klBack" class="cpback" title="顧客の一覧にもどる">← 顧客</a><h2>${esc(nm)}</h2>${un?`<span class="vst ${lateB?'late':'wait'}" style="vertical-align:3px"><i></i>${lateB?'入金が遅れている':'入金待ち'}</span>`:''}
+      <div class="cpsub">${[c.full&&c.full!==nm?esc(c.full):'',klTerm(nm),'進行中の案件 '+open.length+'件',un?'未入金 '+yen(un):''].filter(Boolean).join('　／　')}</div>
+      <div class="cptabs">${KLTABS.map(x=>`<button class="${x===klTab?'on':''}" data-kltab="${x}">${x}${x==='案件'&&open.length?`<i>${open.length}</i>`:x==='発注書の備考'&&tp.length?`<i>${tp.length}</i>`:''}</button>`).join('')}</div></div>`;
+  let body='';
+  if(klTab==='基本情報'){
+    body=`<div class="vgrid">
+      <div class="card"><h3 class="cph">基本情報</h3><div class="fg cpform">
+        ${F('名前（台帳での呼び名）',`<div class="vname"><b>${esc(nm)}</b><button class="btn small" id="klRename" title="案件・単価・請求書・入金の記録も、新しい名前に一緒に変わる">名前を変える</button></div>`,1)}
+        ${F('正式名称（請求書の宛名）',T('full','株式会社◯◯'),1)}${F('担当者',T('contact'))}${F('電話',T('phone'))}
+        ${F('メール',T('mail'),1)}${F('住所',T('addr'),1)}</div></div>
+      <div class="card"><h3 class="cph">取引条件</h3><div class="fg cpform">
+        ${F('締日（月末は31）',`<input type="number" data-klf="close" value="${c.close||31}" min="1" max="31">`)}
+        ${F('入金日',`<span style="display:flex;gap:6px;align-items:center"><select data-klf="payM" style="flex:1"><option value=""${pm===''?' selected':''}>（サイトの日数で決める）</option>${[['0','当月'],['1','翌月'],['2','翌々月'],['3','3か月後']].map(([a,b])=>`<option value="${a}"${pm===a?' selected':''}>${b}</option>`).join('')}</select>
+          ${pm===''?`<input type="number" data-klf="site" value="${c.site||30}" min="0" max="120" style="width:70px" title="支払サイト（日）"><small style="white-space:nowrap;color:var(--sub)">日</small>`:`<input type="number" data-klf="payD" value="${+t.payD||31}" min="1" max="31" style="width:70px"><small style="white-space:nowrap;color:var(--sub)">日（月末は31）</small>`}</span>`)}
+        ${F('請求書の様式',`<select data-klf="method">${opts(['先方規定','弊社仕様'],c.method||'弊社仕様')}</select>`)}${F('見積の作り方',`<select data-klf="estMode">${opts(EST_MODES,c.estMode||EST_MODES[0])}</select>`)}
+        ${F('メモ',T('note'),1)}
+        <div class="full note" style="margin:0">${klTerm(nm)}。例：今月（${mlab(THIS_M)}）締めの入金予定日は ${md(dueOf(nm,THIS_M))}。</div></div>
+        <div class="bar" style="margin:12px 0 0"><span class="grow"></span>${clientRefs(nm)?'<span class="note" style="margin:0">案件・単価のある顧客は消せない</span>':`<button class="btn small danger" data-delc="${esc(nm)}">削除</button>`}</div></div></div>`;
+  } else if(klTab==='案件'){
+    const tbl=(cs,empty)=>cs.length?`<div class="tw" style="max-height:none"><table><thead><tr><th>物件</th><th>区分</th><th>状態</th><th>完工（予定）</th><th class="r">受注額（税抜）</th></tr></thead><tbody>
+      ${cs.map(x=>`<tr><td><a class="cplink" data-cpage="${x.id}" title="案件ページを開く">${esc(x.prop||'（物件未入力）')}</a></td><td>${esc(x.kind||'')}</td><td><span class="st">${esc(x.st||'')}</span></td><td>${md(x.done||x.plan)||'—'}${x.done?'':'<small style="color:var(--sub)"> 予定</small>'}</td><td class="r">${salesEx(x)?yen(salesEx(x)):'—'}</td></tr>`).join('')}</tbody></table></div>`:`<p class="note" style="margin:0">${empty}</p>`;
+    const done=DB.cases.filter(x=>x.client===nm&&x.done).sort((a,b)=>String(b.done).localeCompare(String(a.done))).slice(0,30);
+    body=`<div class="card"><h3 class="cph">進行中（${open.length}件）</h3>${tbl(open.slice().sort((a,b)=>String(a.plan||'9').localeCompare(String(b.plan||'9'))),'進行中の案件は無い。')}</div>
+      <div class="card" style="margin-top:12px"><h3 class="cph">完工した案件（新しい順・30件まで）</h3>${tbl(done,'完工した案件はまだ無い。')}</div>`;
+  } else if(klTab==='請求・入金'){
+    const ms={}; DB.cases.filter(x=>x.client===nm).forEach(x=>{ const m=cycMonth(x); if(!m)return; (ms[m]=ms[m]||{n:0,a:0}); ms[m].n++; ms[m].a+=salesEx(x); });
+    liveBills().filter(b=>b.client===nm).forEach(b=>{ ms[b.month]=ms[b.month]||{n:0,a:0}; });
+    const keys=Object.keys(ms).sort().reverse().slice(0,12);
+    body=`<div class="card"><div class="bar" style="margin:0 0 8px"><h3 class="cph" style="margin:0">月ごとの請求と入金</h3><span class="note" style="margin:0">新しい順・12か月まで</span><span class="grow"></span><button class="btn small" data-gotab="bill">請求のメニューへ</button></div>
+      ${keys.length?`<div class="tw" style="max-height:none"><table><thead><tr><th>月</th><th class="r">案件</th><th class="r">金額（税込）</th><th>請求書</th><th>入金予定日</th><th>状態</th><th class="r">入金</th></tr></thead><tbody>
+        ${keys.map(m=>{ const b=liveBills().find(x=>x.client===nm&&x.month===m), st=billState(b); return `<tr><td>${m.slice(0,4)}年${+m.slice(5,7)}月分</td><td class="r">${b?b.items.length:ms[m].n}件</td><td class="r">${yen(b?b.total:inc(ms[m].a))}</td>
+          <td style="font-size:12px;color:var(--sub)">${b?esc(b.no):'—'}</td><td>${md(b?b.due:dueOf(nm,m))}</td><td><span class="vst ${st[0]}"><i></i>${st[1]}</span></td><td class="r">${b&&b.st==='入金済'?yen(b.paidAmt):'—'}</td></tr>`; }).join('')}</tbody></table></div>`
+        :'<p class="note" style="margin:0">請求する案件はまだ無い。</p>'}
+      <p class="note" style="margin:8px 0 0">請求書を作る・入金済みにするのは「請求」メニューで行う。</p></div>`;
+  } else {
+    body=`<div class="bar" style="margin:0 0 10px"><h3 class="cph" style="margin:0">発注書の備考テンプレート</h3><span class="note" style="margin:0">この顧客の現場で、協力業者に必ず伝えたい完了の仕様や施工の決まり</span><span class="grow"></span><button class="btn small primary" id="klTplAdd">＋ テンプレートを足す</button></div>
+      ${tp.map((x,i)=>`<div class="tpl" data-tpli="${i}"><h5>${esc(x.title)}${x.always?'<span class="st" title="この顧客の発注書を作ると、最初から備考に入る">いつも入れる</span>':''}<span class="grow"></span><button class="btn small" data-tpled="${i}">直す</button><button class="x" data-tpldel="${i}" title="このテンプレートを消す">×</button></h5><pre>${esc(x.body)}</pre></div>`).join('')
+        ||'<p class="note">まだテンプレートは無い。「＋ テンプレートを足す」で、完了の仕様や施工の決まりを登録する。</p>'}
+      <p class="note">テンプレートは、この顧客の案件で発注書を作るときに、備考の上にボタンで出る。押すだけで備考に入る。入れたあとは発注書ごとに書き足せる（テンプレート自体は変わらない）。</p>`;
+  }
+  return head+`<div class="cpbody">${body}</div>`;
+}
+function klTplAsk(c,i){
+  const tp=Array.isArray(c.tpls)?c.tpls:[], x=i>=0?tp[i]:{title:'',body:'',always:false};
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg" style="max-width:640px;width:94vw"><h4>${i>=0?'テンプレートを直す':'テンプレートを足す'}（${esc(c.name)}）</h4>
+    <div class="fg cpform" style="grid-template-columns:1fr"><div class="full"><label class="fl">名前（発注書を作るときのボタンに出る）</label><input type="text" id="tpTitle" value="${esc(x.title)}" placeholder="例：完了の仕様（清掃）"></div>
+      <div class="full"><label class="fl">文面（発注書の備考に入る）</label><textarea id="tpBody" class="memota" style="height:190px" placeholder="・完了写真は…">${esc(x.body)}</textarea></div>
+      <div class="full"><label class="chk"><input type="checkbox" id="tpAlways"${x.always?' checked':''}> いつも入れる（この顧客の発注書を作ると、最初から備考に入る。発注書ごとに外せる）</label></div></div>
+    <div class="askbtn" style="margin-top:12px"><button class="btn small" id="askNo">やめる</button><button class="btn small primary" id="askYes">保存する</button></div></div>`;
+  el.addEventListener('click',e=>{ if(e.target.id==='askNo'){ el.remove(); return; } if(e.target.id!=='askYes')return;
+    const title=el.querySelector('#tpTitle').value.trim(), body=el.querySelector('#tpBody').value.trim(); if(!title||!body){ toast('名前と文面を入れてください'); return; }
+    if(tp.some((y,j)=>j!==i&&y.title===title)){ toast(`「${title}」は既にある`); return; }
+    snap(); const n={id:x.id||'T'+Math.random().toString(36).slice(2,9),title,body,always:el.querySelector('#tpAlways').checked};
+    c.tpls=i>=0?tp.map((y,j)=>j===i?n:y):tp.concat([n]); el.remove(); save(); render(); toast('テンプレートを保存した'); });
+  document.body.appendChild(el); setTimeout(()=>{ const t=el.querySelector('#tpTitle'); if(t&&i<0)t.focus(); },0);
+}
+function klAddAsk(){
+  const nm=(prompt('顧客の名前（台帳での呼び名）')||'').trim(); if(!nm)return;
+  if(DB.clients.some(x=>x.name===nm)){ toast(`「${nm}」は既にある`); return; }
+  snap(); const id='CL'+Math.random().toString(36).slice(2,10);
+  DB.clients.unshift({id,name:nm,full:'',method:'弊社仕様',close:31,site:30,mail:'',note:'',src:'手で追加',tpls:[]}); klId=id; klTab='基本情報'; save(); render(); toast(`${nm} を登録した`);
+}
+
 /* ================= 請求 =================
    ・月で絞る（締め月）／日付の範囲で絞る（完工日）
    ・顧客ごとの合計／物件ごと／年間の表 を切り替える
@@ -3815,11 +3917,12 @@ function vBillYear(){
 /* ================= 支払 ================= */
 /* ================= 案件ページ（物件名から開く。案件の全部を1画面に） ================= */
 let cpCase=null, cpBack='ledger', cpTab='概要';
+let klId='', klTab='基本情報', klQ='';   /* 顧客のメニュー：開いている顧客・タブ・検索 */
 /* 見ていた画面（タブ・開いていた案件）を覚えておき、再読み込みしても同じ画面に戻す（このブラウザのタブの中だけ） */
 (()=>{ try{ const v=JSON.parse(sessionStorage.getItem('aw-view')||'null'); if(!v)return;
   if(typeof v.tab==='string')tab=v.tab; selCase=v.selCase||null; pCase=v.pCase||null; oCase=v.oCase||null;
-  if(v.oView)oView=v.oView; cpCase=v.cpCase||null; if(v.cpBack)cpBack=v.cpBack; if(v.cpTab)cpTab=v.cpTab; if(v.vpId)vpId=v.vpId; if(v.vpTab)vpTab=v.vpTab; }catch(e){} })();
-function keepView(){ try{ sessionStorage.setItem('aw-view',JSON.stringify({tab,selCase,pCase,oCase,oView,cpCase,cpBack,cpTab,vpId,vpTab})); }catch(e){} }
+  if(v.oView)oView=v.oView; cpCase=v.cpCase||null; if(v.cpBack)cpBack=v.cpBack; if(v.cpTab)cpTab=v.cpTab; if(v.vpId)vpId=v.vpId; if(v.vpTab)vpTab=v.vpTab; if(v.klId)klId=v.klId; if(v.klTab)klTab=v.klTab; }catch(e){} })();
+function keepView(){ try{ sessionStorage.setItem('aw-view',JSON.stringify({tab,selCase,pCase,oCase,oView,cpCase,cpBack,cpTab,vpId,vpTab,klId,klTab})); }catch(e){} }
 function openCasePage(id,t){ if(tab!=='case')cpBack=tab; if(cpCase!==id||t)cpTab=t||'概要'; cpCase=id; oSel={}; tab='case'; render(); window.scrollTo(0,0); }
 const RST={'報告済':['確認待ち','wip'],'承認':['承認済み','done'],'差し戻し':['差し戻し','']};
 /* ---- 案件ページ：物件が主役。物件の下にタブ（概要／案件情報／見積・発注／工程／写真／完了報告・請求）。
@@ -4619,7 +4722,7 @@ function withHidden(fn){
 }
 function paint(){
   document.getElementById('main').innerHTML=(tab==='case'?'':hideBar()+inboxBanner())+(
-    tab==='case'?vCase():tab==='vendor'?vVendors():tab==='ledger'?vLedger():tab==='order'?vOrder():tab==='proc'?vProc():tab==='board'?vBoard():tab==='kanko'?vKanko():tab==='insp'?vInsp():
+    tab==='case'?vCase():tab==='vendor'?vVendors():tab==='client'?vClients():tab==='ledger'?vLedger():tab==='order'?vOrder():tab==='proc'?vProc():tab==='board'?vBoard():tab==='kanko'?vKanko():tab==='insp'?vInsp():
     tab==='bill'?vBill():tab==='pay'?vPay():tab==='pl'?vPl():tab==='master'?vMaster():vCheck());
 }
 
@@ -4919,6 +5022,16 @@ document.addEventListener('click',e=>{
   { const pm=tab==='pl'&&e.target.closest&&e.target.closest('[data-plm]'); if(pm){ plMonth=plMonth===pm.dataset.plm?'':pm.dataset.plm; render();
       if(plMonth){ const d=document.querySelector('.pldrill'); if(d&&d.scrollIntoView)d.scrollIntoView({block:'nearest',behavior:'smooth'}); } return; } }
   if(e.target.id==='plEdit'){ plEdit(); return; }
+  if(e.target.id==='klAdd'){ klAddAsk(); return; }
+  if(e.target.id==='klBack'){ klId=''; render(); return; }
+  if(tab==='client'){ const t=e.target, c=q=>t.closest&&t.closest(q), kc=klId?DB.clients.find(x=>x.id===klId):null; let x;
+    if((x=c('[data-kltab]'))){ klTab=x.dataset.kltab; render(); return; }
+    if(kc&&t.id==='klTplAdd'){ klTplAsk(kc,-1); return; }
+    if(kc&&(x=c('[data-tpled]'))){ klTplAsk(kc,+x.dataset.tpled); return; }
+    if(kc&&(x=c('[data-tpldel]'))){ const i=+x.dataset.tpldel, tp=kc.tpls||[]; if(!confirm(`テンプレート「${(tp[i]||{}).title||''}」を消す？\nもう発注書に入れた文面は、そのまま残る。`))return; snap(); kc.tpls=tp.filter((y,j)=>j!==i); save(); render(); return; }
+    if(kc&&t.id==='klRename'){ const nw=(prompt('新しい名前（案件・単価・請求書・入金の記録も一緒に変わる）',kc.name)||'').trim(); if(!nw||nw===kc.name)return;
+      if(DB.clients.some(y=>y!==kc&&y.name===nw)){ toast(`「${nw}」は既にある`); return; } snap(); const old=kc.name; kc.name=nw; renameClient(old,nw); save(); render(); toast(`名前を ${nw} に変えた`); return; }
+    if(!klId&&!c('button')&&(x=c('tr[data-kl]'))){ const cl=DB.clients.find(y=>y.id===x.dataset.kl)||clientOf(x.dataset.kn); if(cl){ if(!cl.id){ toast('保存中…少し待ってからもう一度'); return; } klId=cl.id; klTab='基本情報'; render(); window.scrollTo(0,0); } return; } }
   if(e.target.id==='pBank'){ payBankList(); return; }
   if(tab==='pay'){ const t=e.target, c=q=>t.closest&&t.closest(q); let x;
     if((x=c('[data-pmode]'))){ pMode=x.dataset.pmode; if(pMode==='range'&&pView==='year')pView='vendor'; render(); return; }
@@ -4944,7 +5057,7 @@ document.addEventListener('click',e=>{
     const va=t.closest&&t.closest('[data-vactive]'); if(va){ const v=DB.vendors.find(x=>x.id===vpId); if(v){ const on=va.dataset.vactive==='1';
       if(!on&&!confirm(`${v.name} を使用停止にしますか？\n一覧に出なくなり、業者ページも開けなくなります。記録は残り、あとで再開できます。`))return;
       snap(); v.active=on; save(); render(); toast(on?`${v.name} の使用を再開した`:`${v.name} を使用停止にした`,undo); } return; }
-    const gt=t.closest&&t.closest('[data-gotab]'); if(gt){ tab=gt.dataset.gotab; if(gt.dataset.mtab)mTab=gt.dataset.mtab; vpId=''; render(); return; }
+    const gt=t.closest&&t.closest('[data-gotab]'); if(gt){ tab=gt.dataset.gotab; if(gt.dataset.mtab)mTab=gt.dataset.mtab; vpId=''; if(tab==='client')klId=''; render(); return; }
     const vr=tab==='vendor'&&!vpId&&t.closest&&t.closest('tr[data-vp]'); if(vr&&!t.closest('button,a,input,select')){ const v=DB.vendors.find(x=>x.name===vr.dataset.vn); if(v){ if(!v.id){ toast('保存中。少し待ってから開いてください'); return; } vpId=v.id; vpTab='基本情報'; render(); window.scrollTo(0,0); } return; } }
   if(e.target.dataset&&e.target.dataset.plall){ plAll=e.target.dataset.plall==='1'; render(); return; }
   if(e.target.dataset&&e.target.dataset.plsga){ plSga=e.target.dataset.plsga==='1'; render(); return; }
@@ -5264,6 +5377,12 @@ document.addEventListener('change',e=>{
     if(el.dataset.uf==='role'&&role==='none'&&!confirm(`${u.name||u.email} さんを停止する？\n台帳に入れなくなる（記録は残る。あとで戻せる）。`)){ render(); return; }
     userSave(u.email,nm,role,fin); return; }
   if(el.id==='vBank'&&vpId){ saveBank(vpId,el.value).then(ok=>{ if(ok)toast('振込先を保存した'); }); return; }
+  if(el.id==='klQ'){ klQ=el.value; renderSoon(); return; }
+  if(el.dataset&&el.dataset.klf&&tab==='client'&&klId){ const c=DB.clients.find(x=>x.id===klId); if(!c)return; const f=el.dataset.klf; snap('client:'+c.id+':'+f);
+    if(f==='close')c.close=+el.value||31; else if(f==='site')c.site=+el.value||30;
+    else if(f==='payM'){ if(el.value===''){ c.payM=''; c.payD=''; } else { c.payM=+el.value; c.payD=+c.payD||31; } }
+    else if(f==='payD')c.payD=Math.min(31,Math.max(1,+el.value||31)); else c[f]=String(el.value).trim();
+    save(); renderSoon(); return; }
   if(el.id==='vQ'){ vQ=el.value; renderSoon(); return; }
   if(el.id==='vKind'){ vKind=el.value; render(); return; }
   if(el.id==='vSt'){ vSt=el.value; render(); return; }

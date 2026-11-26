@@ -12,7 +12,7 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   ok('左のメニューが「設定」になっている', (await T('#tabs [data-t="master"]')).includes('設定'));
   await p.click('#tabs [data-t="master"]'); await w();
   let t=await T('#main');
-  ok('設定の中に 事業者情報・利用者・顧客・発注単価', ['事業者情報','利用者','顧客','発注単価'].every(x=>t.includes(x)));
+  ok('設定の中に 事業者情報・利用者・発注単価（顧客は左のメニューへ）', ['事業者情報','利用者','発注単価','顧客は「顧客」へ'].every(x=>t.includes(x)));
   // 事業者情報
   await p.click('[data-mtab2="事業者情報"]'); await w();
   await p.fill('#co_name','見本株式会社'); await p.fill('#co_addr','東京都見本区1-2-3'); await p.fill('#co_inv','T0000000000000'); await p.click('#coSave'); await saved();

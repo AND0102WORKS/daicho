@@ -31,8 +31,8 @@ const TABLES={
   /* seen_at・first_seen_at（業者が業者ページを開いた日時）は DB が入れる。画面は読むだけ */
   vendors:{cols:['id','org','name','full_name','type','def_kind','inv','close_day','site','phone','email','taxable','kinds','active','src','contact','addr','invited_at','pay_m','pay_d'],
           map:{full:'full_name',defKind:'def_kind',close:'close_day',invitedAt:'invited_at',payM:'pay_m',payD:'pay_d'}, dates:[], bools:['active','taxable'], ts:['invited_at']},
-  clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src','est_mode'],
-          map:{full:'full_name',close:'close_day',estMode:'est_mode'}, dates:[], bools:[]},
+  clients:{cols:['id','org','name','full_name','mail','method','close_day','site','note','src','est_mode','contact','phone','addr','pay_m','pay_d','tpls'],
+          map:{full:'full_name',close:'close_day',estMode:'est_mode',payM:'pay_m',payD:'pay_d'}, dates:[], bools:[]},
   prices:{cols:['id','org','name','alias','kind','unit','price','who','client','memo'], map:{}, dates:[], bools:[]},
   /* 完了報告（業者ページから出る）。スタッフは承認・差し戻しだけ書く */
   reports:{cols:['id','org','proc_id','case_id','who','done_date','note','base','extra','extra_note','photos','st','reply','approved_at','invoice_id'],
