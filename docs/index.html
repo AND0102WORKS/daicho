@@ -3643,7 +3643,7 @@ const tplDefault=cid=>tplsOf(cid).filter(t=>t.always).map(tplBlock).join('\n\n')
 /* 備考の欄：上に、その案件の顧客のテンプレートがボタンで並ぶ。押すと入り、もう一度押すと外れる */
 function memoBox(cid,val,id){
   const ts=tplsOf(cid), c=DB.cases.find(x=>x.id===cid)||{};
-  return `<label class="fl" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">伝達事項・備考${ts.length?`<span style="font-weight:400;color:var(--sub);font-size:12px;margin-left:6px">${esc(c.client||'')} のテンプレート：</span>${ts.map((t,i)=>`<button type="button" class="tchip${String(val).includes(tplBlock(t))?' on':''}" data-tpl="${i}" data-for="${id}" data-cid="${esc(cid)}">${esc(t.title)}</button>`).join('')}`:''}</label>
+  return `<label class="fl" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">伝達事項・備考${ts.length?`<span style="font-weight:400;color:var(--sub);font-size:12px;margin-left:6px">${esc(c.client||'')} のテンプレート：</span>${ts.map((t,i)=>`<button type="button" class="tchip${String(val).includes(tplBlock(t))?' on':''}" data-tpl="${i}" data-for="${id}" data-cid="${esc(cid)}">${esc(t.title)}</button>`).join('')}`:(c.client?`<span style="font-weight:400;color:var(--sub);font-size:12px;margin-left:6px">${esc(c.client)} のテンプレートはまだ無い（左のメニュー「顧客」→ ${esc(c.client)} →「発注書の備考」で登録すると、ここにボタンで出る）</span>`:'')}</label>
     <textarea id="${id}" class="memota" placeholder="業者に伝えること">${esc(val)}</textarea>`;
 }
 document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('.tchip[data-tpl]'); if(!b)return;
