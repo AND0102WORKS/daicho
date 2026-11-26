@@ -622,6 +622,8 @@ async function dbLoad(){
     fetchAll('cases'),fetchAll('procs'),fetchAll('lines'),fetchAll('orders'),fetchAll('vendors'),fetchAll('clients'),fetchAll('prices'),
     fetchAll('receipts'),fetchAll('payments'),fetchAll('days_off'),fetchAll('settings'),
     fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[]),fetchAll('bills').catch(()=>[])]);
+  /* 業者への通知：通知を受け取る端末の数（業者ごと）と、知らせた記録。表がまだ無い DB でも台帳は開けるように */
+  let pushRows=[], nlog=[]; try{ pushRows=await fetchAll('vendor_push','vendor_id'); }catch(e){} try{ nlog=await fetchAll('notify_log'); }catch(e){}
   /* 振込先：経理の印（profiles.fin）のある人だけが読める表。印が無ければ DB が1行も返さない */
   let bankRows=[]; if(ME&&ME.fin){ try{ bankRows=await fetchAll('vendor_bank'); }catch(e){ alog('bank',(e&&e.message)||e); } }   /* 表がまだ無い DB でも台帳は開けるように */
   DB={cases:cases.map(r=>rowToRec('cases',r)),procs:procs.map(r=>rowToRec('procs',r)),lines:lines.map(r=>rowToRec('lines',r)),
@@ -629,6 +631,7 @@ async function dbLoad(){
       prices:prices.map(r=>rowToRec('prices',r)),
       reports:reports.map(r=>rowToRec('reports',r)),invoices:invoices.map(r=>rowToRec('invoices',r)),bills:bills.map(r=>rowToRec('bills',r)),
       recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
+  DB.pushN={}; pushRows.forEach(r=>{ DB.pushN[r.vendor_id]=(DB.pushN[r.vendor_id]||0)+1; }); DB.nlog=nlog;
   DB.bank={}; bankRows.forEach(r=>{ if(r.bank)DB.bank[r.vendor_id]=r.bank; });
   recv.forEach(r=>{ if(+r.amount)DB.recv[r.client+'|'+r.month]=r.amount; });      /* 0 は「消した」の意味 */
   paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
@@ -802,6 +805,17 @@ function renderIdle(){
   const a=document.activeElement, typing=a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!a.closest('.ask');
   if(typing||document.querySelector('.ask')){ idleTimer=setTimeout(renderIdle,3000); return; }
   render();
+}
+/* 発注を業者に知らせる（携帯の通知とメール）。保存が DB に届いてから送るので、まだ下書きと言われたら少し待ってやり直す */
+async function notifyOrder(oid,tries){
+  if(!sb||!sb.functions)return null;
+  for(let i=0;i<(tries||5);i++){
+    let r=null; try{ const x=await sb.functions.invoke('notify-order',{body:{order_id:oid}}); r=x&&x.data; }catch(e){ r=null; }
+    if(r&&r.ok){ try{ DB.nlog=await fetchAll('notify_log'); }catch(e){} return r; }
+    if(r&&r.reason&&r.reason!=='draft'&&r.reason!=='no_order')return r;
+    await new Promise(z=>setTimeout(z,1500));
+  }
+  return null;
 }
 /* 振込先を保存する（経理の印のある人だけ。印が無ければ DB が断る） */
 async function saveBank(vid,val){
@@ -2218,6 +2232,21 @@ function nextOrderSt(oid,seen){
   if(o.st==='送付済') o.sent=fmtD(new Date());
   markOrdered(o);
   save(); render(); toast(`${o.no} を ${o.st} にした`, undo);
+  if(o.st==='送付済')tellVendor(o);
+}
+/* 発注したら、業者に知らせる（携帯の通知・メール）。どちらも届かない業者は、リンクをコピーして知らせるよう案内する */
+const vReach=v=>{ const n=v&&v.id?((DB.pushN||{})[v.id]||0):0; return {n,mail:!!(v&&v.email)}; };
+const vReachLabel=v=>{ const r=vReach(v); return `携帯の通知 ${r.n?'設定済み（'+r.n+'台）':'未設定'}・メール ${r.mail?'登録あり':'未登録'}`; };
+function tellVendor(o){
+  if(typeof notifyOrder!=='function')return;
+  notifyOrder(o.id).then(r=>{ if(!r||!r.ok)return; const got=[]; if(r.push)got.push(`携帯の通知（${r.push}台）`); if(r.mail==='sent')got.push('メール');
+    toast(got.length?`${o.no}：${o.who} さんに ${got.join('・')} で知らせた`:`${o.no}：${o.who} さんは携帯の通知もメールも未設定。「リンクをコピー」で知らせてください`); if(tab==='order'||tab==='case')renderIdle(); });
+}
+function orderNotifyNote(o){
+  const l=(DB.nlog||[]).filter(x=>x.order_id===o.id&&x.ok).sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+  if(!l.length)return ''; const d=new Date(l[0].at), at=`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const ks=[...new Set(l.filter(x=>String(x.at).slice(0,16)===String(l[0].at).slice(0,16)).map(x=>x.kind==='push'?'携帯の通知':'メール'))];
+  return `${at} に ${ks.join('・')} で知らせた`;
 }
 /* 他の端末・業者ページから発注の状態が変わった時（store4.js の Realtime から呼ばれる）。
    送付前のリンクで業者が承諾した場合も、案件側の「発注」を済にする */
@@ -2300,12 +2329,12 @@ function orderSheet(oid){
       ${o.st==='下書き'?`<button class="btn small primary" id="oSent" title="発注書を業者ページに出す。業者が見て「承諾」を押せるようになる。状態が「送付済」になる">発注</button>`:''}
       ${o.token?`<button class="btn small" id="oLink" title="発注No・現場・工期・金額と、発注書のリンクをコピーする。LINE やメールに貼って業者に知らせる">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
       <span class="grow"></span><button class="btn small" id="askNo">閉じる</button></div>
-    <p class="note" style="margin:6px 0 0">${o.st==='下書き'?'「発注」を押すと、業者ページに出て、業者が承諾できるようになる。':'この発注書は業者ページに出ている。'}業者に知らせるときは「リンクをコピー」して、LINE やメールに貼る。</p></div>`;
+    <p class="note" style="margin:6px 0 0">${o.st==='下書き'?'「発注」を押すと、業者ページに出て、業者が承諾できるようになる。':'この発注書は業者ページに出ている。'}${o.st==='下書き'?'押すと自動で業者に知らせる（'+vReachLabel(v)+'）。':''}${orderNotifyNote(o)?'<b>'+orderNotifyNote(o)+'。</b>':''}届かない業者には「リンクをコピー」して、LINE やメールに貼る。</p></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
   const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderMessage(o,c,v).body,'文面とリンクをコピーした。LINE やメールに貼って知らせる');
   const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ el.remove(); nextOrderSt(o.id);
-    toast(`${o.no} を発注した（業者ページに出した）。業者に知らせるときは「リンクをコピー」`); };
+    };
 }
 
 /* ================= tabs ================= */
@@ -3508,7 +3537,8 @@ function vVendorPage(v){
         ${F('区分',`<select data-vf="type">${opts(VTYPES,v.type||'外注')}</select>`)}${F('職種（既定の工程区分）',`<select data-vf="defKind">${opts(PKINDS,v.defKind||'内装')}</select>`)}
         ${F('検査もする',isInsp(v.defKind)?'<div class="note" style="margin:6px 0 0">検査担当</div>':`<label class="chk"><input type="checkbox" data-vf="insp"${canInspect(v)?' checked':''}> AW検査も頼む</label>`)}${F('担当者',T('contact'))}
         ${F('電話',T('phone'))}${F('メール（発注書の送り先）',T('email','未登録'))}
-        ${F('住所',T('addr'),1)}</div></div>
+        ${F('住所',T('addr'),1)}
+        <div class="full note" style="margin:0">発注したときの知らせ方：${vReachLabel(v)}。携帯の通知は、業者が業者ページで「通知を受け取る」を押すと設定される。メールはここのアドレスに届く。</div></div></div>
       <div class="card"><h3 class="cph">取引条件</h3><div class="fg cpform">
         ${F('消費税',`<select data-vf="taxable"${v.taxable===false?' style="border-color:var(--warn)"':''}><option value="1"${v.taxable!==false?' selected':''}>課税（発注書に10%を足す）</option><option value="0"${v.taxable===false?' selected':''}>免税（消費税なし）</option></select>`,1)}
         ${F('登録番号（インボイス）'+(v.inv||v.taxable===false||v.type==='専属'?'':' <span style="color:var(--warn)">未入力</span>'),T('inv','T＋13桁'),1)}

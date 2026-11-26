@@ -2181,6 +2181,21 @@ function nextOrderSt(oid,seen){
   if(o.st==='送付済') o.sent=fmtD(new Date());
   markOrdered(o);
   save(); render(); toast(`${o.no} を ${o.st} にした`, undo);
+  if(o.st==='送付済')tellVendor(o);
+}
+/* 発注したら、業者に知らせる（携帯の通知・メール）。どちらも届かない業者は、リンクをコピーして知らせるよう案内する */
+const vReach=v=>{ const n=v&&v.id?((DB.pushN||{})[v.id]||0):0; return {n,mail:!!(v&&v.email)}; };
+const vReachLabel=v=>{ const r=vReach(v); return `携帯の通知 ${r.n?'設定済み（'+r.n+'台）':'未設定'}・メール ${r.mail?'登録あり':'未登録'}`; };
+function tellVendor(o){
+  if(typeof notifyOrder!=='function')return;
+  notifyOrder(o.id).then(r=>{ if(!r||!r.ok)return; const got=[]; if(r.push)got.push(`携帯の通知（${r.push}台）`); if(r.mail==='sent')got.push('メール');
+    toast(got.length?`${o.no}：${o.who} さんに ${got.join('・')} で知らせた`:`${o.no}：${o.who} さんは携帯の通知もメールも未設定。「リンクをコピー」で知らせてください`); if(tab==='order'||tab==='case')renderIdle(); });
+}
+function orderNotifyNote(o){
+  const l=(DB.nlog||[]).filter(x=>x.order_id===o.id&&x.ok).sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+  if(!l.length)return ''; const d=new Date(l[0].at), at=`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const ks=[...new Set(l.filter(x=>String(x.at).slice(0,16)===String(l[0].at).slice(0,16)).map(x=>x.kind==='push'?'携帯の通知':'メール'))];
+  return `${at} に ${ks.join('・')} で知らせた`;
 }
 /* 他の端末・業者ページから発注の状態が変わった時（store4.js の Realtime から呼ばれる）。
    送付前のリンクで業者が承諾した場合も、案件側の「発注」を済にする */
@@ -3445,7 +3460,8 @@ function vVendorPage(v){
         ${F('区分',`<select data-vf="type">${opts(VTYPES,v.type||'外注')}</select>`)}${F('職種（既定の工程区分）',`<select data-vf="defKind">${opts(PKINDS,v.defKind||'内装')}</select>`)}
         ${F('検査もする',isInsp(v.defKind)?'<div class="note" style="margin:6px 0 0">検査担当</div>':`<label class="chk"><input type="checkbox" data-vf="insp"${canInspect(v)?' checked':''}> AW検査も頼む</label>`)}${F('担当者',T('contact'))}
         ${F('電話',T('phone'))}${F('メール（発注書の送り先）',T('email','未登録'))}
-        ${F('住所',T('addr'),1)}</div></div>
+        ${F('住所',T('addr'),1)}
+        <div class="full note" style="margin:0">発注したときの知らせ方：${vReachLabel(v)}。携帯の通知は、業者が業者ページで「通知を受け取る」を押すと設定される。メールはここのアドレスに届く。</div></div></div>
       <div class="card"><h3 class="cph">取引条件</h3><div class="fg cpform">
         ${F('消費税',`<select data-vf="taxable"${v.taxable===false?' style="border-color:var(--warn)"':''}><option value="1"${v.taxable!==false?' selected':''}>課税（発注書に10%を足す）</option><option value="0"${v.taxable===false?' selected':''}>免税（消費税なし）</option></select>`,1)}
         ${F('登録番号（インボイス）'+(v.inv||v.taxable===false||v.type==='専属'?'':' <span style="color:var(--warn)">未入力</span>'),T('inv','T＋13桁'),1)}

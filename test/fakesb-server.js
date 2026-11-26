@@ -15,6 +15,13 @@ async function handle(body){
     const p=await q('select case_id from procs where id=$1 and who=$2',[b.proc,v.rows[0].name]); if(!p.rows.length)return {photos:[]};
     const ph=await q('select id,cat,phase,who from photos where case_id=$1 order by created_at',[p.rows[0].case_id]);
     return {photos:ph.rows.map(r=>({id:r.id,cat:r.cat,phase:r.phase,mine:r.who===v.rows[0].name}))}; }
+  if(op==='fn'&&body.name==='notify-order'){   // src/functions/notify-order のまね：送ったことにして記録だけ残す（携帯の通知は登録のある台数、メールはアドレスがあれば）
+    const o=(await q('select id,org,who,st,token from orders where id=$1',[(body.body||{}).order_id])).rows[0]; if(!o)return {ok:false,reason:'no_order'}; if(o.st==='下書き'||!o.token)return {ok:false,reason:'draft'};
+    const v=(await q('select id,email from vendors where name=$1 and active',[o.who])).rows[0]; if(!v)return {ok:false,reason:'no_vendor'};
+    const n=(await q('select count(*)::int n from vendor_push where vendor_id=$1',[v.id])).rows[0].n, mail=v.email?'sent':'no_address';
+    if(n)await q("insert into notify_log(org,order_id,vendor_id,kind,ok,detail) values ($1,$2,$3,'push',true,$4)",[o.org,o.id,v.id,n+'/'+n+'台']);
+    if(v.email)await q("insert into notify_log(org,order_id,vendor_id,kind,ok) values ($1,$2,$3,'mail',true)",[o.org,o.id,v.id]);
+    return {ok:true,push:n,pushTotal:n,mail}; }
   if(op==='select'){ const r=await q(`select * from ${ident(table)} order by 1 offset $1 limit $2`,[range[0],range[1]-range[0]+1]); return r.rows; }
   if(op==='rpc'){ Object.keys(args).forEach(k=>{ if(args[k]!==null&&typeof args[k]==='object')args[k]=JSON.stringify(args[k]); });   // jsonb の引数
     const names=Object.keys(args); const r=await q(`select * from ${ident(fn)}(${names.map(n=>ident(n)+' => $'+(names.indexOf(n)+1)).join(',')})`,names.map(n=>args[n]));
@@ -45,6 +52,8 @@ pg.connect().then(()=>pg.query("select set_config('request.jwt.claim.sub','00000
       return; }
     if(req.method==='GET'&&req.url.startsWith('/vendor/')){   // 台帳と一緒に置く部品（pdf.js など）
       const f=path.join(__dirname,'..','docs',decodeURIComponent(req.url.split('?')[0])); if(f.indexOf('..')<0||true){ if(fs.existsSync(f)&&fs.statSync(f).isFile()){ res.setHeader('Content-Type',/\.js$/.test(f)?'text/javascript':'application/octet-stream'); res.end(fs.readFileSync(f)); } else { res.statusCode=404; res.end(); } } return; }
+    if(req.method==='GET'&&/^\/(sw\.js|manifest\.webmanifest|icon-\d+\.png|apple-touch-icon\.png)(\?|$)/.test(req.url)){ const f=path.join(__dirname,'..','docs',req.url.split('?')[0]);   // 業者ページの通知の部品
+      res.setHeader('Content-Type',/\.js$/.test(f)?'text/javascript':/\.png$/.test(f)?'image/png':'application/manifest+json'); res.end(fs.readFileSync(f)); return; }
     if(req.method==='GET'&&req.url.startsWith('/storage/')){ const f=path.join(STORE,decodeURIComponent(req.url.slice(9).split('?')[0]));
       if(fs.existsSync(f)){ res.setHeader('Content-Type','image/jpeg'); res.end(fs.readFileSync(f)); } else { res.statusCode=404; res.end(); } return; }
     if(req.method==='GET'){ const file=/^\/(me|order)\.html/.test(req.url)?req.url.split('?')[0].slice(1):'index.html'; let h=fs.readFileSync(DOCS+file,'utf8').split('https://stcvyehefqnrxibanlxg.supabase.co').join('http://localhost:8787').replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^"]*"><\/script>/,'<script src="/fake.js"></script>');

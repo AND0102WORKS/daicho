@@ -107,6 +107,8 @@ async function dbLoad(){
     fetchAll('cases'),fetchAll('procs'),fetchAll('lines'),fetchAll('orders'),fetchAll('vendors'),fetchAll('clients'),fetchAll('prices'),
     fetchAll('receipts'),fetchAll('payments'),fetchAll('days_off'),fetchAll('settings'),
     fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[]),fetchAll('bills').catch(()=>[])]);
+  /* 業者への通知：通知を受け取る端末の数（業者ごと）と、知らせた記録。表がまだ無い DB でも台帳は開けるように */
+  let pushRows=[], nlog=[]; try{ pushRows=await fetchAll('vendor_push','vendor_id'); }catch(e){} try{ nlog=await fetchAll('notify_log'); }catch(e){}
   /* 振込先：経理の印（profiles.fin）のある人だけが読める表。印が無ければ DB が1行も返さない */
   let bankRows=[]; if(ME&&ME.fin){ try{ bankRows=await fetchAll('vendor_bank'); }catch(e){ alog('bank',(e&&e.message)||e); } }   /* 表がまだ無い DB でも台帳は開けるように */
   DB={cases:cases.map(r=>rowToRec('cases',r)),procs:procs.map(r=>rowToRec('procs',r)),lines:lines.map(r=>rowToRec('lines',r)),
@@ -114,6 +116,7 @@ async function dbLoad(){
       prices:prices.map(r=>rowToRec('prices',r)),
       reports:reports.map(r=>rowToRec('reports',r)),invoices:invoices.map(r=>rowToRec('invoices',r)),bills:bills.map(r=>rowToRec('bills',r)),
       recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
+  DB.pushN={}; pushRows.forEach(r=>{ DB.pushN[r.vendor_id]=(DB.pushN[r.vendor_id]||0)+1; }); DB.nlog=nlog;
   DB.bank={}; bankRows.forEach(r=>{ if(r.bank)DB.bank[r.vendor_id]=r.bank; });
   recv.forEach(r=>{ if(+r.amount)DB.recv[r.client+'|'+r.month]=r.amount; });      /* 0 は「消した」の意味 */
   paid.forEach(r=>{ if(+r.amount)DB.paid[r.who+'|'+r.month]=r.amount; });
@@ -287,6 +290,17 @@ function renderIdle(){
   const a=document.activeElement, typing=a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!a.closest('.ask');
   if(typing||document.querySelector('.ask')){ idleTimer=setTimeout(renderIdle,3000); return; }
   render();
+}
+/* 発注を業者に知らせる（携帯の通知とメール）。保存が DB に届いてから送るので、まだ下書きと言われたら少し待ってやり直す */
+async function notifyOrder(oid,tries){
+  if(!sb||!sb.functions)return null;
+  for(let i=0;i<(tries||5);i++){
+    let r=null; try{ const x=await sb.functions.invoke('notify-order',{body:{order_id:oid}}); r=x&&x.data; }catch(e){ r=null; }
+    if(r&&r.ok){ try{ DB.nlog=await fetchAll('notify_log'); }catch(e){} return r; }
+    if(r&&r.reason&&r.reason!=='draft'&&r.reason!=='no_order')return r;
+    await new Promise(z=>setTimeout(z,1500));
+  }
+  return null;
 }
 /* 振込先を保存する（経理の印のある人だけ。印が無ければ DB が断る） */
 async function saveBank(vid,val){

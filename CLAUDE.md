@@ -11,6 +11,8 @@
 - `src/build4.py` … `app3.src.html` + `store4.js` + `config.json` → `docs/index.html`
 - `src/schema.sql` … DB の表・権限（RLS）・関数。変更は Supabase の migration として適用する
 - `src/functions/case-photos/` … 業者ページに案件の写真を渡す Edge Function（Supabase に deploy。service_role は Supabase 側の環境変数だけ。verify_jwt は切り、vendors.token で確かめる）
+- `src/functions/notify-order/` … 発注を業者に知らせる Edge Function（携帯の通知＝Web Push、メール＝Resend）。鍵（VAPID_PRIVATE_KEY・RESEND_API_KEY など）は Supabase 側の環境変数だけ。台帳のログイン（verify_jwt）で呼ぶ
+- `docs/sw.js`・`docs/manifest.webmanifest`・`docs/icon-*.png` … 業者ページの通知（ホーム画面に追加・通知を受ける）の部品
 - `docs/vendor/` … 発注書・見積書をブラウザの中だけで読む部品（外に送らない）。`pdfjs/`＝PDF の文字（pdf.js 3.11.174・日本語用 cmaps つき）、`xlsx/`＝Excel・CSV（SheetJS 0.18.5）、`tesseract/`＝写真・スキャンの OCR（tesseract.js 5.1.1＋日本語データ）。いずれも Apache-2.0
 - `src/config.json` … Supabase の URL と公開キー（anon/publishable）。秘密鍵は置かない
 - `test/` … 手元の PostgreSQL ＋ supabase-js もどきで動かすテスト（Playwright）
@@ -22,7 +24,7 @@
 ## 直し方
 1. `src/app3.src.html` または `src/store4.js` を直す
 2. `python3 src/build4.py` で `docs/index.html` を作り直す
-3. `cd test && ./reset.sh && node run.js`（台帳）／`node pages.js`（業者ページ・発注書）／`node report.js`（完了報告〜請求）／`node ask.js`（日程の打診）／`node fix5.js`（新しい案件・発注書の確認・業者ページの発注書リンク・再読み込み）／`node hide.js`（今までの案件を隠す）／`node est.js`（見積の段）／`node modes.js`（明細の表の切り替え・原価の数量と単位）／`node drag.js`（明細の行の並べ替え）／`node kfocus.js`（区分のボタンで工程を足す）／`node site.js`（住所・鍵情報）／`node info.js`（業者ページの案件の詳細・写真）／`node cpage.js`（案件ページのタブ）／`node e2e.js`（新しい案件から請求書までの通し）／`node pdf.js`（発注書の読み取り：PDF・Excel・写真）／`node fix6.js`（洗い出しの直し：取り直し・発注済みの工程・追加金額・受注額・元に戻す・登録の無いメール）／`node pl.js`（月次：損益の表・月の案件・粗利率の低い案件・科目の編集）／`node ids.js`（業者・顧客を番号でつなぐ土台）／`node vendor.js`（協力業者のメニュー：一覧・業者のページ・招待・利用中・使用停止）／`node bill.js`（請求：月・日付の範囲・顧客ごと／物件ごと・請求書を作る・入金）／`node pay.js`（支払：月・日付の範囲・業者ごと／物件ごと・支払明細書・振込の一覧・業者ごとの支払日）／`node settei.js`（設定：事業者情報・利用者）／`node kokyaku.js`（顧客のメニュー：一覧・顧客のページ・入金日・発注書の備考テンプレート）／`node pre.js`（鍵情報は日付で絞らない・下書きの発注書・承諾の取り消し・発注の取り消しの歯止め）が通ること。テストごとに `./reset.sh` からやり直す。まとめて流すなら `./all.sh`
+3. `cd test && ./reset.sh && node run.js`（台帳）／`node pages.js`（業者ページ・発注書）／`node report.js`（完了報告〜請求）／`node ask.js`（日程の打診）／`node fix5.js`（新しい案件・発注書の確認・業者ページの発注書リンク・再読み込み）／`node hide.js`（今までの案件を隠す）／`node est.js`（見積の段）／`node modes.js`（明細の表の切り替え・原価の数量と単位）／`node drag.js`（明細の行の並べ替え）／`node kfocus.js`（区分のボタンで工程を足す）／`node site.js`（住所・鍵情報）／`node info.js`（業者ページの案件の詳細・写真）／`node cpage.js`（案件ページのタブ）／`node e2e.js`（新しい案件から請求書までの通し）／`node pdf.js`（発注書の読み取り：PDF・Excel・写真）／`node fix6.js`（洗い出しの直し：取り直し・発注済みの工程・追加金額・受注額・元に戻す・登録の無いメール）／`node pl.js`（月次：損益の表・月の案件・粗利率の低い案件・科目の編集）／`node ids.js`（業者・顧客を番号でつなぐ土台）／`node vendor.js`（協力業者のメニュー：一覧・業者のページ・招待・利用中・使用停止）／`node bill.js`（請求：月・日付の範囲・顧客ごと／物件ごと・請求書を作る・入金）／`node pay.js`（支払：月・日付の範囲・業者ごと／物件ごと・支払明細書・振込の一覧・業者ごとの支払日）／`node settei.js`（設定：事業者情報・利用者）／`node kokyaku.js`（顧客のメニュー：一覧・顧客のページ・入金日・発注書の備考テンプレート）／`node notify.js`（発注を業者に知らせる：端末の登録・発注したときの知らせと記録。実際の携帯・メールへの配信は確かめられない）／`node pre.js`（鍵情報は日付で絞らない・下書きの発注書・承諾の取り消し・発注の取り消しの歯止め）が通ること。テストごとに `./reset.sh` からやり直す。まとめて流すなら `./all.sh`
 4. commit → push。GitHub Pages（`docs/`）が数十秒で更新される
 5. DB の表を変えるときは `src/schema.sql` を直し、同じ SQL を Supabase の migration として適用（Claude の Supabase コネクタ `apply_migration`、または SQL Editor）
 

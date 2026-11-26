@@ -156,12 +156,12 @@ src2=src2.replace('''    <div class="askbtn" style="margin-top:14px"><button cla
       ${o.st==='下書き'?`<button class="btn small primary" id="oSent" title="発注書を業者ページに出す。業者が見て「承諾」を押せるようになる。状態が「送付済」になる">発注</button>`:''}
       ${o.token?`<button class="btn small" id="oLink" title="発注No・現場・工期・金額と、発注書のリンクをコピーする。LINE やメールに貼って業者に知らせる">リンクをコピー</button><a class="btn small" href="${esc(orderLink(o))}" target="_blank" rel="noopener">業者の画面を見る</a>`:''}
       <span class="grow"></span><button class="btn small" id="askNo">閉じる</button></div>
-    <p class="note" style="margin:6px 0 0">${o.st==='下書き'?'「発注」を押すと、業者ページに出て、業者が承諾できるようになる。':'この発注書は業者ページに出ている。'}業者に知らせるときは「リンクをコピー」して、LINE やメールに貼る。</p></div>`;
+    <p class="note" style="margin:6px 0 0">${o.st==='下書き'?'「発注」を押すと、業者ページに出て、業者が承諾できるようになる。':'この発注書は業者ページに出ている。'}${o.st==='下書き'?'押すと自動で業者に知らせる（'+vReachLabel(v)+'）。':''}${orderNotifyNote(o)?'<b>'+orderNotifyNote(o)+'。</b>':''}届かない業者には「リンクをコピー」して、LINE やメールに貼る。</p></div>`;
   document.body.appendChild(el);
   el.querySelector('#askNo').onclick=()=>el.remove();
   const lk=el.querySelector('#oLink'); if(lk)lk.onclick=()=>copyText(orderMessage(o,c,v).body,'文面とリンクをコピーした。LINE やメールに貼って知らせる');
   const sn=el.querySelector('#oSent'); if(sn)sn.onclick=()=>{ el.remove(); nextOrderSt(o.id);
-    toast(`${o.no} を発注した（業者ページに出した）。業者に知らせるときは「リンクをコピー」`); };
+    };
 }''')
 src2=src2.replace('''        <th class="r">使用</th><th class="r">旧区分</th><th></th></tr></thead>''','''        <th class="r">使用</th><th class="r">旧区分</th><th title="業者・職人が自分への発注と工程を見るページ（ログイン無し）">業者ページ</th><th></th></tr></thead>''')
 src2=src2.replace('''        <td class="r">${old?`<b style="color:var(--warn)">${old}</b>`:'—'}</td>
