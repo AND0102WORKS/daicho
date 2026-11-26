@@ -112,6 +112,14 @@ table.plt tr.cnt td{color:var(--sub);font-size:11.5px;border-bottom:none}
 .vst.use{background:var(--ok-bg);color:var(--ok)}.vst.use i{background:var(--ok)}
 .vst.inv{background:#FFF1D6;color:#7A5200}.vst.inv i{background:#C98A00}
 .vst.non{background:var(--line2);color:var(--sub)}.vst.non i{background:#9AA}
+.vst.late{background:#FBE3E0;color:#A32A1E}.vst.late i{background:#C0392B}
+.vst.wait{background:#E4ECF7;color:#2B4C7E}.vst.wait i{background:#3D6DB5}
+.sub2{display:block;color:var(--sub);font-size:11px;margin-top:2px}
+.bseg{display:inline-flex;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
+.bseg button{border:none;background:none;padding:0 13px;height:34px;font-weight:700;font-size:13px;font-family:inherit;color:var(--ink);cursor:pointer;opacity:1}
+.bseg button+button{border-left:1px solid var(--line)}
+.bseg button.on{background:var(--acc);color:#fff}
+.billdoc{background:#fff;border:1px solid var(--line);border-radius:10px;padding:26px 30px;max-width:780px;margin:0 auto;color:#111}.billdoc th{border-bottom:2px solid #222;background:none}
 tr.vrow{cursor:pointer}tr.vrow td{padding:9px 10px}tr.vrow .nm b{font-size:13.5px}tr.vrow .nm small,.vnote{display:block;color:var(--sub);font-size:11px;margin-top:2px}
 .miss{color:var(--warn);font-weight:700}
 .vgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}.vgrid .card{margin:0}@media(max-width:1000px){.vgrid{grid-template-columns:1fr}}
@@ -541,6 +549,9 @@ const TABLES={
   /* 業者の請求書（業者ページで発行）／支払明細書（台帳で発行） */
   invoices:{cols:['id','org','who','kind','month','period_from','period_to','items','subtotal','tax','total','taxable','inv','st','issued_at','confirmed_at','paid_date'],
           map:{from:'period_from',to:'period_to',issuedAt:'issued_at',confirmedAt:'confirmed_at',paidDate:'paid_date'}, dates:['period_from','period_to','paid_date'], bools:['taxable'], ts:['issued_at','confirmed_at']},
+  /* 顧客への請求書（台帳で作る）。作った時点の中身（items）を写して固定する */
+  bills:{cols:['id','org','no','client','client_id','month','period_from','period_to','items','subtotal','tax','total','issued_date','due_date','st','paid_date','paid_amt','memo'],
+          map:{clientId:'client_id',from:'period_from',to:'period_to',issued:'issued_date',due:'due_date',paidDate:'paid_date',paidAmt:'paid_amt'}, dates:['period_from','period_to','issued_date','due_date','paid_date'], bools:[]},
 };
 const REV={}; Object.keys(TABLES).forEach(t=>{ REV[t]={}; Object.entries(TABLES[t].map).forEach(([j,c])=>{REV[t][c]=j;}); });
 /* 行（DBの列）→ JS のレコード */
@@ -578,16 +589,16 @@ const vendorLink=v=>v&&v.token?siteBase()+'me.html?t='+v.token:'';
 const orderLink=o=>o&&o.token?siteBase()+'order.html?t='+o.token:'';
 function copyText(t,msg){ navigator.clipboard.writeText(t).then(()=>toast(msg||'コピーした')).catch(()=>prompt('コピーできなかった。手で選んでコピー：',t)); }
 let recLast={};   /* 'table:id' → sig。変わった行を見つけるため */
-const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1,reports:1,invoices:1};
+const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1,reports:1,invoices:1,bills:1};
 function rememberAll(){ recLast={}; Object.keys(COLS).forEach(t=>(DB[t]||[]).forEach(r=>{ if(r.id)recLast[t+':'+r.id]=sig(r); })); kvSaved=kvFlat(); }
 /* 入金・支払済・休み・計上基準・見送り：最後に保存した値（キーごと）。
    全件をまとめて書くと、古い画面の人が他の人の入力を古い値で上書きしてしまうので、変わったキーだけ書く */
-let kvSaved={recv:{},paid:{},off:{},skip:{},basis:'完工',pl:'null'};
+let kvSaved={recv:{},paid:{},off:{},skip:{},basis:'完工',pl:'null',co:'null'};
 function kvFlat(){
   const num=o=>{ const r={}; Object.entries(o||{}).forEach(([k,v])=>{ const n=Math.round(+v||0); if(n)r[k]=n; }); return r; };
   const off={}; Object.entries(DB.off||{}).forEach(([who,m])=>Object.entries(m||{}).forEach(([month,days])=>{ const d=(days||[]).map(Number).join(','); if(d)off[who+'|'+month]=d; }));
   const skip={}; Object.keys(DB.skip||{}).forEach(k=>{ if(DB.skip[k])skip[k]=1; });
-  return {recv:num(DB.recv),paid:num(DB.paid),off,skip,basis:DB.basis||'完工',pl:JSON.stringify(DB.plItems||null)};
+  return {recv:num(DB.recv),paid:num(DB.paid),off,skip,basis:DB.basis||'完工',pl:JSON.stringify(DB.plItems||null),co:JSON.stringify(DB.co||null)};
 }
 const kvChanged=(cur,old)=>[...new Set([...Object.keys(cur),...Object.keys(old)])].filter(k=>cur[k]!==old[k]);
 const kvSplit=k=>{ const i=k.lastIndexOf('|'); return [k.slice(0,i),k.slice(i+1)]; };
@@ -600,16 +611,16 @@ async function fetchAll(t,select){
   return out;
 }
 async function dbLoad(){
-  const [cases,procs,lines,orders,vendors,clients,prices,recv,paid,off,settings,reports,invoices]=await Promise.all([
+  const [cases,procs,lines,orders,vendors,clients,prices,recv,paid,off,settings,reports,invoices,bills]=await Promise.all([
     fetchAll('cases'),fetchAll('procs'),fetchAll('lines'),fetchAll('orders'),fetchAll('vendors'),fetchAll('clients'),fetchAll('prices'),
     fetchAll('receipts'),fetchAll('payments'),fetchAll('days_off'),fetchAll('settings'),
-    fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[])]);
+    fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[]),fetchAll('bills').catch(()=>[])]);
   /* 振込先：経理の印（profiles.fin）のある人だけが読める表。印が無ければ DB が1行も返さない */
   let bankRows=[]; if(ME&&ME.fin){ try{ bankRows=await fetchAll('vendor_bank'); }catch(e){ alog('bank',(e&&e.message)||e); } }   /* 表がまだ無い DB でも台帳は開けるように */
   DB={cases:cases.map(r=>rowToRec('cases',r)),procs:procs.map(r=>rowToRec('procs',r)),lines:lines.map(r=>rowToRec('lines',r)),
       orders:orders.map(r=>rowToRec('orders',r)),vendors:vendors.map(r=>rowToRec('vendors',r)),clients:clients.map(r=>rowToRec('clients',r)),
       prices:prices.map(r=>rowToRec('prices',r)),
-      reports:reports.map(r=>rowToRec('reports',r)),invoices:invoices.map(r=>rowToRec('invoices',r)),
+      reports:reports.map(r=>rowToRec('reports',r)),invoices:invoices.map(r=>rowToRec('invoices',r)),bills:bills.map(r=>rowToRec('bills',r)),
       recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
   DB.bank={}; bankRows.forEach(r=>{ if(r.bank)DB.bank[r.vendor_id]=r.bank; });
   recv.forEach(r=>{ if(+r.amount)DB.recv[r.client+'|'+r.month]=r.amount; });      /* 0 は「消した」の意味 */
@@ -617,6 +628,7 @@ async function dbLoad(){
   off.forEach(r=>{ if((r.days||[]).length)(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice(); });
   settings.forEach(r=>{ if(r.key==='basis')DB.basis=r.value;
     else if(r.key==='cfg'&&r.value&&typeof r.value==='object')DB.cfg=r.value;
+    else if(r.key==='co'&&r.value&&typeof r.value==='object')DB.co=r.value;   /* 請求書に載せる自社の情報 */
     else if(r.key==='pl_items'&&r.value&&typeof r.value==='object')DB.plItems=r.value;   /* 月次の科目（売上原価の内訳・販管費）。無ければ画面の既定 */   /* 会社ごとの設定（ボリュームの点数など）。無ければ画面の既定 */
     else if(String(r.key).indexOf(SKIP_KEY)===0&&r.value===true)DB.skip[String(r.key).slice(SKIP_KEY.length)]=1; });   /* 見送った受注受付 */
   /* 案件は新しいものが上。採番は既存の最大＋1 から */
@@ -637,7 +649,7 @@ function migrate(){
     if(c.st==='新規案件')c.st='受付'; });   /* v4 の状態一覧に「新規案件」は無い */
 }
 function reset(){ toast('v4 では「元データに戻す」は無い（データベースが正）'); }
-function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],reports:[],invoices:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
+function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],reports:[],invoices:[],bills:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
 
 /* ---- 保存：変わった行だけ ---- */
 function save(){ if(typeof syncOrdersFromProcs==='function'){ try{ syncOrdersFromProcs(); }catch(e){} } dbSaveSoon(); }
@@ -673,10 +685,11 @@ async function dbSaveNow(){
     const sets=kvChanged(cur.skip,kvSaved.skip).map(k=>({org:ORG,key:SKIP_KEY+k,value:!!cur.skip[k]}));
     if(cur.basis!==kvSaved.basis)sets.push({org:ORG,key:'basis',value:cur.basis});
     if(cur.pl!==kvSaved.pl&&DB.plItems)sets.push({org:ORG,key:'pl_items',value:DB.plItems});
+    if(cur.co!==kvSaved.co&&DB.co)sets.push({org:ORG,key:'co',value:DB.co});
     if(recv.length){const {error}=await sb.from('receipts').upsert(recv); if(error)throw error; kvSaved.recv=cur.recv;}
     if(paid.length){const {error}=await sb.from('payments').upsert(paid); if(error)throw error; kvSaved.paid=cur.paid;}
     if(off.length){const {error}=await sb.from('days_off').upsert(off); if(error)throw error; kvSaved.off=cur.off;}
-    if(sets.length){const {error}=await sb.from('settings').upsert(sets); if(error)throw error; kvSaved.skip=cur.skip; kvSaved.basis=cur.basis; kvSaved.pl=cur.pl;}
+    if(sets.length){const {error}=await sb.from('settings').upsert(sets); if(error)throw error; kvSaved.skip=cur.skip; kvSaved.basis=cur.basis; kvSaved.pl=cur.pl; kvSaved.co=cur.co;}
     dbState='保存した '+new Date().toTimeString().slice(0,5);
   }catch(e){
     dbDirty=true; dbState='保存できていない：'+String((e&&e.message)||e); alog('save ERR',(e&&e.message)||e);
@@ -791,6 +804,8 @@ async function saveBank(vid,val){
   DB.bank=DB.bank||{}; DB.bank[vid]=String(val||'').trim(); return true;
 }
 /* 発注番号：サーバーの連番 */
+/* 請求書番号：月ごとの連番（R-2611-001）。サーバーが数えるので、2人が同時に作っても重ならない */
+async function allocBillNo(m){ const {data,error}=await sb.rpc('next_no',{p_org:ORG,p_name:'bill-'+m}); if(error)throw error; return 'R-'+m.slice(2,4)+m.slice(5,7)+'-'+String(+data).padStart(3,'0'); }
 async function allocOrderNo(){ const {data,error}=await sb.rpc('next_no',{p_org:ORG,p_name:'order'}); if(error)throw error; return +data; }
 function purgeShared(){ /* v4 では不要（行単位の delete で消える） */ }
 function known(){ }
@@ -3547,7 +3562,191 @@ function vRenameAsk(v){
 }
 
 /* ================= 請求 ================= */
+/* ================= 請求 =================
+   ・月で絞る（締め月）／日付の範囲で絞る（完工日）
+   ・顧客ごとの合計／物件ごと／年間の表 を切り替える
+   ・請求書は「作る」と番号が付き、中身を写して固定する（bills）。あとから案件を直しても、出した請求書は変わらない */
+let bMode='month', bFrom='', bTo='', bView='client', bSt='', bCl='', bOpen='';
+const liveBills=()=>(DB.bills||[]).filter(b=>b.st!=='取消');
+function billOfCase(){ const m={}; liveBills().forEach(b=>(b.items||[]).forEach(i=>{ m[i.case_id]=b; })); return m; }
+const billDate=c=>c.done||c.plan||'';
+const bKey=c=>c.client||'（未設定）';
+/* 請求書の状態 → [色, 文字] */
+function billState(b){
+  if(!b)return ['non','未請求'];
+  if(b.st==='入金済')return ['use','入金済み'+(b.paidDate?' '+md(b.paidDate):'')];
+  if(b.due&&b.due<fmtD(new Date()))return ['late','入金が遅れている'];
+  return ['wait','請求済み'];
+}
+const BST={non:'未請求',wait:'請求済み・入金待ち',late:'入金が遅れている',use:'入金済み'};
+function billCases(){
+  if(bMode==='range'){ if(!bFrom||!bTo)return []; return DB.cases.filter(c=>{ const d=billDate(c); return d&&d>=bFrom&&d<=bTo; }); }
+  return DB.cases.filter(c=>cycMonth(c)===iMonth);
+}
+/* まだ請求書に入っていない案件から、請求書の下書きを作る */
+function billDraft(nm,m){
+  const bc=billOfCase();
+  const list=DB.cases.filter(c=>bKey(c)===nm&&cycMonth(c)===m&&!bc[c.id]).sort((a,b)=>billDate(a).localeCompare(billDate(b)));
+  const items=list.filter(c=>salesEx(c)>0).map(c=>({case_id:c.id,date:billDate(c),prop:c.prop||'',kind:c.kind||'',amt:salesEx(c)}));
+  const sub=items.reduce((a,i)=>a+i.amt,0), [f,t]=cycle(nm,m);
+  return {client:nm,month:m,from:f,to:t,items,subtotal:sub,tax:Math.round(sub*0.1),total:sub+Math.round(sub*0.1),due:dueOf(nm,m),zero:list.length-items.length};
+}
+/* 請求書の紙面（画面でも印刷でも同じもの）。消費税は請求書の合計に対して1回だけ計算する */
+function billDoc(d){
+  const co=DB.co||{}, cl=clientOf(d.client), td='border-top:1px solid #ccc;padding:5px 6px';
+  const jp=x=>x?`${+x.slice(0,4)}年${+x.slice(5,7)}月${+x.slice(8,10)}日`:'';
+  return `<h2 style="text-align:center;letter-spacing:.5em;margin:0 0 16px;font-size:22px">請求書</h2>
+    <div style="display:flex;justify-content:space-between;gap:20px;align-items:flex-start">
+      <div><b style="font-size:15px;display:block">${esc((cl&&cl.full)||d.client)} 御中</b>
+        <p style="font-size:19px;font-weight:800;border-bottom:2px solid #222;display:inline-block;padding:2px 18px 4px 2px;margin:14px 0 10px">ご請求金額　${yen(d.total)}<span style="font-size:12px;font-weight:400">（税込）</span></p>
+        <div style="font-size:12.5px">対象期間　${md(d.from)} 〜 ${md(d.to)}（${d.items.length}件）<br>お支払期限　${jp(d.due)}</div></div>
+      <div style="text-align:right;font-size:12px;line-height:1.75">${d.no?`請求書番号　${esc(d.no)}<br>発行日　${jp(d.issued)}<br>`:'<span style="color:#A32A1E">（下書き：まだ番号が付いていない）</span><br>'}
+        <b style="font-size:13.5px">${esc(co.name||(DB.cfg&&DB.cfg.company)||'アンドワークス株式会社')}</b><br>${co.addr?esc(co.addr)+'<br>':''}${co.tel?'TEL '+esc(co.tel)+'<br>':''}${co.inv?'登録番号 '+esc(co.inv):''}</div></div>
+    <table style="width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px"><thead><tr><th style="text-align:left;padding:5px 6px">完工日</th><th style="text-align:left;padding:5px 6px">物件</th><th style="text-align:left;padding:5px 6px">内容</th><th style="text-align:right;padding:5px 6px">金額（税抜）</th></tr></thead><tbody>
+      ${d.items.map(i=>`<tr><td style="${td}">${md(i.date)}</td><td style="${td}">${esc(i.prop||'（物件未入力）')}</td><td style="${td}">${esc(i.kind||'')}</td><td style="${td};text-align:right">${yen(i.amt)}</td></tr>`).join('')}
+    </tbody></table>
+    <div style="margin:10px 0 0 auto;width:300px;font-size:13px"><div style="display:flex;justify-content:space-between"><span>小計（10%対象・税抜）</span><span>${yen(d.subtotal)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>消費税（10%）</span><span>${yen(d.tax)}</span></div>
+      <div style="display:flex;justify-content:space-between;font-weight:700;border-top:2px solid #000;margin-top:4px;padding-top:4px"><span>合計（税込）</span><span>${yen(d.total)}</span></div></div>
+    ${co.bank?`<p style="margin:16px 0 0;font-size:12.5px;white-space:pre-wrap"><b>お振込先</b>　${esc(co.bank)}</p>`:''}${co.note?`<p style="margin:6px 0 0;font-size:12px;white-space:pre-wrap;color:#444">${esc(co.note)}</p>`:''}`;
+}
 function vBill(){
+  if(!bFrom){ const y=+iMonth.slice(0,4), mo=+iMonth.slice(5,7); bFrom=iso(y,mo,1); bTo=iso(y,mo,eom(y,mo)); }
+  if(bOpen&&bMode==='month'&&bView!=='year')return vBillPage(bOpen);
+  const seg=(k,cur,list)=>`<span class="bseg">${list.map(([v,l])=>`<button class="${cur===v?'on':''}" data-${k}="${v}">${l}</button>`).join('')}</span>`;
+  const head=`<div class="bar"><h2>請求</h2>${seg('bmode',bMode,[['month','月で選ぶ'],['range','日付で選ぶ']])}
+      ${bMode==='month'?`<select id="iMonth" title="請求月">${MONTHS.map(m=>`<option value="${m}"${m===iMonth?' selected':''}>${m.slice(0,4)}年 ${+m.slice(5,7)}月分</option>`).join('')}</select>`
+        :`<input type="date" id="bFrom" value="${bFrom}" title="完工日がこの日から"><span class="note" style="margin:0">〜</span><input type="date" id="bTo" value="${bTo}" title="この日まで">`}
+      <span class="grow"></span>${seg('bview',bView,[['client','顧客ごと'],['case','物件ごと'],['year','年間の表']])}
+      <button class="btn small" id="bCo" title="請求書に載せる自社の住所・登録番号・振込先">自社の情報</button></div>`;
+  if(bView==='year')return head+vBillYear();
+  const all=billCases(), bc=billOfCase(), stOf=c=>billState(bc[c.id])[0];
+  const names=[...new Set(all.map(bKey))].sort((a,b)=>a.localeCompare(b,'ja'));
+  if(bCl&&names.indexOf(bCl)<0)bCl='';
+  const cs=all.filter(c=>(!bCl||bKey(c)===bCl));
+  /* 顧客ごとの行 */
+  const by={}; cs.forEach(c=>{ (by[bKey(c)]=by[bKey(c)]||[]).push(c); });
+  if(bMode==='month')liveBills().filter(b=>b.month===iMonth&&(!bCl||b.client===bCl)).forEach(b=>{ by[b.client]=by[b.client]||[]; });
+  let rows=Object.keys(by).map(nm=>{ const list=by[nm], ex=list.reduce((a,c)=>a+salesEx(c),0);
+    const b=bMode==='month'?liveBills().find(x=>x.client===nm&&x.month===iMonth):null;
+    const part={non:0,wait:0,late:0,use:0}; list.forEach(c=>{ part[stOf(c)]+=inc(salesEx(c)); });
+    const out=b?list.filter(c=>bc[c.id]!==b&&salesEx(c)>0):[];
+    return {nm,list,b,ex:b?b.subtotal:ex,total:b?b.total:inc(ex),st:billState(b),part,out}; })
+    .sort((a,b)=>b.total-a.total);
+  const K={non:0,wait:0,late:0,use:0};
+  if(bMode==='month')rows.forEach(r=>{ K[r.st[0]]+=r.total; }); else rows.forEach(r=>Object.keys(K).forEach(k=>{ K[k]+=r.part[k]; }));
+  const TOT=bMode==='month'?rows.reduce((a,r)=>a+r.total,0):Object.values(K).reduce((a,b)=>a+b,0);
+  if(bSt&&bMode==='month')rows=rows.filter(r=>r.st[0]===bSt);
+  const list2=cs.filter(c=>!bSt||stOf(c)===bSt).sort((a,b)=>billDate(a).localeCompare(billDate(b)));
+  const kpi=`<div class="kpi"><div class="k"><small>${bMode==='month'?mlab(iMonth)+'分の請求':md(bFrom)+'〜'+md(bTo)+' の完工'}（税込）</small><b>${yen(TOT)}</b><small>${cs.length}件</small></div>
+      <div class="k"><small>未請求</small><b>${yen(K.non)}</b></div><div class="k"><small>請求済み・入金待ち</small><b style="color:#2B4C7E">${yen(K.wait)}</b></div>
+      <div class="k"><small>入金が遅れている</small><b style="color:${K.late?'#A32A1E':'inherit'}">${yen(K.late)}</b></div><div class="k"><small>入金済み</small><b style="color:var(--ok)">${yen(K.use)}</b></div></div>`;
+  const filt=`<div class="bar" style="margin-top:0"><select id="bCl" title="顧客で絞る">${opts(names,bCl,'顧客：すべて')}</select>
+      <select id="bSt" title="状態で絞る"><option value="">状態：すべて</option>${Object.keys(BST).map(k=>`<option value="${k}"${bSt===k?' selected':''}>${BST[k]}</option>`).join('')}</select>
+      <span class="note" style="margin:0">${bMode==='month'?'顧客ごとの締日で、その月の請求に入る案件':'完工日（無ければ完工予定日）がこの期間に入る案件'}</span></div>`;
+  const stc=s=>`<span class="vst ${s[0]}"><i></i>${s[1]}</span>`;
+  let body;
+  if(bView==='case'){
+    const sx=list2.reduce((a,c)=>a+salesEx(c),0), si=list2.reduce((a,c)=>a+inc(salesEx(c)),0);
+    body=list2.length?`<div class="tw" style="max-height:none"><table><thead><tr><th>完工日</th><th>物件</th><th>顧客</th><th>区分</th><th class="r">金額（税抜）</th><th class="r">金額（税込）</th><th>請求書</th><th>状態</th></tr></thead><tbody>
+      ${list2.map(c=>{ const b=bc[c.id]; return `<tr class="vrow"><td>${md(billDate(c))||'<span class="flag">日付なし</span>'}${c.done?'':'<small class="sub2">予定</small>'}</td>
+        <td><a class="cplink" data-cpage="${c.id}" title="案件ページを開く">${esc(c.prop||'（物件未入力）')}</a></td><td>${esc(bKey(c))}</td><td>${esc(c.kind||'')}</td>
+        <td class="r">${salesEx(c)?yen(salesEx(c)):'<span class="flag">¥0</span>'}</td><td class="r">${yen(inc(salesEx(c)))}</td>
+        <td style="font-size:12px;color:var(--sub)">${b?esc(b.no):'—'}</td><td>${stc(billState(b))}</td></tr>`; }).join('')}
+      <tr class="sumrow"><td colspan="4"><b>合計（${list2.length}件）</b></td><td class="r"><b>${yen(sx)}</b></td><td class="r"><b>${yen(si)}</b></td><td colspan="2"></td></tr></tbody></table></div>`
+      :'<p class="note">この条件に合う案件はない。</p>';
+  }else if(bMode==='month'){
+    body=rows.length?`<div class="tw" style="max-height:none"><table><thead><tr><th>顧客</th><th>締め・入金</th><th class="r">案件</th><th class="r">請求額（税抜）</th><th class="r">請求額（税込）</th><th>請求書番号</th><th>入金予定日</th><th>状態</th><th></th></tr></thead><tbody>
+      ${rows.map(r=>{ const t=termOf(r.nm); return `<tr class="vrow" data-bopen="${esc(r.nm)}" style="cursor:pointer"><td class="nm"><b>${esc(r.nm)}</b>${isClient(r.nm)?'':'<span class="flag" style="margin-left:5px">マスタ外</span>'}</td>
+        <td style="font-size:12px;color:var(--sub)">${isEom(t)?'月末締め':t.close+'日締め'}・サイト${t.site}日</td><td class="r">${r.b?r.b.items.length:r.list.length}件</td>
+        <td class="r">${yen(r.ex)}</td><td class="r"><b>${yen(r.total)}</b></td><td style="font-size:12px;color:var(--sub)">${r.b?esc(r.b.no):'—'}</td><td>${md(r.b?r.b.due:dueOf(r.nm,iMonth))}</td>
+        <td>${stc(r.st)}${r.out.length?`<small class="sub2" style="color:var(--warn)">請求書に入っていない案件 ${r.out.length}件</small>`:''}</td>
+        <td>${r.b?(r.b.st==='入金済'?'':'<button class="btn small primary" data-bact="paid" data-id="'+r.b.id+'">入金済みにする</button>'):'<button class="btn small primary">請求書を作る</button>'}</td></tr>`; }).join('')}
+      <tr class="sumrow"><td colspan="2"><b>合計（${rows.length}社）</b></td><td class="r"><b>${rows.reduce((a,r)=>a+(r.b?r.b.items.length:r.list.length),0)}件</b></td><td class="r"><b>${yen(rows.reduce((a,r)=>a+r.ex,0))}</b></td><td class="r"><b>${yen(rows.reduce((a,r)=>a+r.total,0))}</b></td><td colspan="4"></td></tr></tbody></table></div>
+      <p class="note">行を押すと、その顧客の月の内訳と請求書が開く。「請求書を作る」で番号が付き、中身が固定される（あとから案件を直しても、出した請求書は変わらない）。</p>`
+      :'<p class="note">この月に請求する案件はない。</p>';
+  }else{
+    body=rows.length?`<div class="tw" style="max-height:none"><table><thead><tr><th>顧客</th><th class="r">案件</th><th class="r">金額（税抜）</th><th class="r">金額（税込）</th><th class="r">未請求</th><th class="r">請求済み・入金待ち</th><th class="r">入金済み</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr class="vrow" data-bcl="${esc(r.nm)}" style="cursor:pointer" title="この顧客の物件ごとの内訳を見る"><td class="nm"><b>${esc(r.nm)}</b></td><td class="r">${r.list.length}件</td><td class="r">${yen(r.ex)}</td><td class="r"><b>${yen(r.total)}</b></td>
+        <td class="r">${r.part.non?yen(r.part.non):'—'}</td><td class="r">${r.part.wait+r.part.late?yen(r.part.wait+r.part.late):'—'}${r.part.late?'<small class="sub2" style="color:#A32A1E">うち遅れ '+yen(r.part.late)+'</small>':''}</td><td class="r">${r.part.use?yen(r.part.use):'—'}</td></tr>`).join('')}
+      <tr class="sumrow"><td><b>合計（${rows.length}社）</b></td><td class="r"><b>${cs.length}件</b></td><td class="r"><b>${yen(rows.reduce((a,r)=>a+r.ex,0))}</b></td><td class="r"><b>${yen(rows.reduce((a,r)=>a+r.total,0))}</b></td>
+        <td class="r"><b>${yen(K.non)}</b></td><td class="r"><b>${yen(K.wait+K.late)}</b></td><td class="r"><b>${yen(K.use)}</b></td></tr></tbody></table></div>
+      <p class="note">行を押すと、その顧客の物件ごとの内訳に切り替わる。請求書を作るのは「月で選ぶ」から（顧客ごとの締日で区切るため）。</p>`
+      :'<p class="note">この期間に完工した（する）案件はない。</p>';
+  }
+  return head+kpi+filt+body;
+}
+/* 顧客の月のページ：内訳と請求書 */
+function vBillPage(nm){
+  const m=iMonth, b=liveBills().find(x=>x.client===nm&&x.month===m), d=b||billDraft(nm,m), st=billState(b), dr=b?billDraft(nm,m):null;
+  const t=termOf(nm), ed=ME&&ME.role!=='viewer';
+  return `<div class="cphead"><a class="cpback" id="bBack">← 請求</a><h2>${esc(nm)}　${mlab(m)}分</h2><span class="vst ${st[0]}" style="vertical-align:3px"><i></i>${st[1]}</span>
+      <span style="float:right;display:flex;gap:6px;flex-wrap:wrap">${b?`<button class="btn small" data-bact="print" data-id="${b.id}">印刷・PDF</button>
+        ${ed?(b.st==='入金済'?`<button class="btn small" data-bact="unpaid" data-id="${b.id}">入金を取り消す</button>`
+          :`<button class="btn small" data-bact="cancel" data-id="${b.id}" title="番号は欠番になる。直してから作り直す">請求書を取り消す</button><button class="btn small primary" data-bact="paid" data-id="${b.id}">入金済みにする</button>`):''}`
+        :(ed?`<button class="btn small primary" data-bact="make" ${d.items.length?'':'disabled'}>請求書を作る（番号を付けて固定）</button>`:'')}</span>
+      <div class="cpsub">${isEom(t)?'月末締め':t.close+'日締め'}（${md(d.from)}〜${md(d.to)}）　／　入金予定日 ${md(d.due)}${b?`　／　請求書番号 ${esc(b.no)}　／　発行日 ${md(b.issued)}`:''}${b&&b.st==='入金済'?`　／　入金 ${md(b.paidDate)} ${yen(b.paidAmt)}${b.paidAmt!==b.total?`（差 ${yen(b.paidAmt-b.total)}）`:''}`:''}</div></div>
+    <div class="cpbody">
+      ${!b&&d.zero?`<p class="note" style="color:var(--warn)">受注額が ¥0 の案件が ${d.zero}件ある。請求書には入らない（案件に受注額を入れると入る）。</p>`:''}
+      ${dr&&dr.items.length?`<p class="note" style="color:var(--warn)">この月に、まだ請求書に入っていない案件が ${dr.items.length}件（税抜 ${yen(dr.subtotal)}）：${dr.items.map(i=>esc(i.prop)).join('、')}。入れるには、請求書を取り消して作り直す。</p>`:''}
+      ${!(DB.co&&DB.co.inv)?`<p class="note">請求書に載せる自社の住所・登録番号・振込先がまだ入っていない。<a class="cplink" id="bCo">自社の情報を入れる</a></p>`:''}
+      ${d.items.length?`<div class="billdoc">${billDoc(d)}</div>`:'<p class="note">この月に請求する案件はない。</p>'}
+      ${d.items.length?`<p class="note" style="text-align:center">物件を開く：${d.items.map(i=>`<a class="cplink" data-cpage="${i.case_id}">${esc(i.prop||'（物件未入力）')}</a>`).join('　')}</p>`:''}</div>`;
+}
+async function billMake(nm){
+  const d=billDraft(nm,iMonth); if(!d.items.length)return;
+  if(liveBills().some(x=>x.client===nm&&x.month===iMonth)){ toast('この月の請求書は既にある'); return; }
+  let no; try{ no=await allocBillNo(iMonth); }catch(e){ toast('請求書番号を取れなかった（'+((e&&e.message)||e)+'）'); return; }
+  const cl=clientOf(nm);
+  DB.bills=DB.bills||[]; DB.bills.push({id:'B'+Math.random().toString(36).slice(2,12),no,client:nm,clientId:(cl&&cl.id)||'',month:iMonth,from:d.from,to:d.to,items:d.items,
+    subtotal:d.subtotal,tax:d.tax,total:d.total,issued:fmtD(new Date()),due:d.due,st:'請求済',paidDate:'',paidAmt:0,memo:''});
+  save(); render(); toast(`請求書 ${no} を作った（${yen(d.total)}）`);
+}
+function billPrint(b){
+  const w=window.open('','_blank'); if(!w)return;
+  w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>${esc('請求書_'+b.client+'_'+b.no)}</title><style>body{font-family:sans-serif;font-size:13px;margin:28px;color:#111}th{border-bottom:2px solid #222}</style></head><body>${billDoc(b)}</body></html>`);
+  w.document.close(); w.focus(); w.print();
+}
+function billPaidAsk(b){
+  const el=document.createElement('div'); el.className='ask';
+  el.innerHTML=`<div class="dlg" style="max-width:440px;width:94vw"><h4>入金済みにする</h4>
+    <p class="note" style="margin:0 0 10px">${esc(b.client)}　${mlab(b.month)}分　請求書 ${esc(b.no)}　${yen(b.total)}</p>
+    <div class="fg cpform" style="grid-template-columns:1fr 1fr"><div><label class="fl">入金日</label><input type="date" id="bpDate" value="${fmtD(new Date())}"></div>
+      <div><label class="fl">入金額</label><input type="number" id="bpAmt" value="${b.total}" step="1"></div>
+      <div class="full"><label class="fl">メモ（振込手数料の差し引きなど）</label><input type="text" id="bpMemo" value="${esc(b.memo||'')}"></div></div>
+    <div class="askbtn" style="margin-top:12px"><button class="btn small" id="askNo">やめる</button><button class="btn small primary" id="askYes">入金済みにする</button></div></div>`;
+  el.addEventListener('click',e=>{ if(e.target.id==='askNo'){ el.remove(); return; } if(e.target.id!=='askYes')return;
+    const dt=el.querySelector('#bpDate').value, am=Math.round(+el.querySelector('#bpAmt').value||0); if(!dt||!am){ toast('入金日と入金額を入れてください'); return; }
+    b.st='入金済'; b.paidDate=dt; b.paidAmt=am; b.memo=el.querySelector('#bpMemo').value.trim(); DB.recv[b.client+'|'+b.month]=am;
+    el.remove(); save(); render(); toast(`${b.client} ${mlab(b.month)}分を入金済みにした`); });
+  document.body.appendChild(el);
+}
+function billCoAsk(){
+  const co=Object.assign({name:(DB.cfg&&DB.cfg.company)||'アンドワークス株式会社',addr:'',tel:'',inv:'',bank:'',note:''},DB.co||{});
+  const el=document.createElement('div'); el.className='ask';
+  const F=(k,l,ph,ta)=>`<div class="full"><label class="fl">${l}</label>${ta?`<textarea id="co_${k}" style="width:100%;height:58px;font-family:inherit;font-size:13px" placeholder="${ph}">${esc(co[k]||'')}</textarea>`:`<input type="text" id="co_${k}" value="${esc(co[k]||'')}" placeholder="${ph}">`}</div>`;
+  el.innerHTML=`<div class="dlg" style="max-width:520px;width:94vw"><h4>請求書に載せる自社の情報</h4>
+    <div class="fg cpform" style="grid-template-columns:1fr">${F('name','会社名','')}${F('addr','住所','〒・住所')}${F('tel','電話','')}${F('inv','登録番号（インボイス）','T＋13桁')}${F('bank','お振込先','銀行・支店・種別・口座番号・名義',1)}${F('note','請求書の下に入れる一言','例：振込手数料はご負担をお願いいたします。',1)}</div>
+    <p class="note" style="margin:8px 0 0">ここに入れた内容は、これから作る・印刷する請求書に載る。全員の画面に反映される。</p>
+    <div class="askbtn" style="margin-top:12px"><button class="btn small" id="askNo">やめる</button><button class="btn small primary" id="askYes">保存する</button></div></div>`;
+  el.addEventListener('click',e=>{ if(e.target.id==='askNo'){ el.remove(); return; } if(e.target.id!=='askYes')return;
+    const o={}; ['name','addr','tel','inv','bank','note'].forEach(k=>{ o[k]=el.querySelector('#co_'+k).value.trim(); });
+    DB.co=o; el.remove(); save(); render(); toast('自社の情報を保存した'); });
+  document.body.appendChild(el);
+}
+function billAct(act,id,nm){
+  const b=(DB.bills||[]).find(x=>x.id===id);
+  if(act==='make'){ billMake(nm); return; }
+  if(!b)return;
+  if(act==='print'){ billPrint(b); return; }
+  if(act==='paid'){ billPaidAsk(b); return; }
+  if(act==='unpaid'){ if(!confirm(`${b.client} ${mlab(b.month)}分の入金を取り消す？`))return; b.st='請求済'; b.paidDate=''; b.paidAmt=0; DB.recv[b.client+'|'+b.month]=0; save(); render(); return; }
+  if(act==='cancel'){ if(b.st==='入金済'){ toast('入金済みの請求書は取り消せない。先に入金を取り消す'); return; }
+    if(!confirm(`請求書 ${b.no} を取り消す？\n番号は欠番になる。もう相手に送っているなら、取り消したことを伝えてください。`))return;
+    b.st='取消'; save(); render(); toast(`請求書 ${b.no} を取り消した。直してから作り直せる`); return; }
+}
+
+function vBillYear(){
   const rows={}, tot={}, bucket={};
   DB.cases.forEach(c=>{const m=cycMonth(c); if(!m)return;
     const k=c.client||'（未設定）'; rows[k]=rows[k]||{};
@@ -3562,39 +3761,9 @@ function vBill(){
     (a.done||a.plan||'').localeCompare(b.done||b.plan||''));
   const sum=items.reduce((a,c)=>a+salesOf(c),0);
   const noTerm=names.filter(n=>!isClient(n));
-  return `<div class="bar"><h2>請求</h2>
-      <span class="note" style="margin:0">計上基準</span>
+  return `<div class="bar" style="margin-top:0"><span class="note" style="margin:0">計上基準</span>
       <select id="basisSel" title="売上をどの日付で月に乗せるか">${optsL(['完工','請求'],DB.basis,{'完工':'計上：完工基準','請求':'計上：請求月基準'})}</select>
-      <span class="note" style="margin:0">${DB.basis==='完工'
-        ?'完工日が顧客ごとの締日のどちら側に入るかで請求月を決める'
-        :'案件管理のH列（請求月）をそのまま使う＝いまのシートと同じ'}</span></div>
-
-    <div class="card" style="margin-bottom:14px">
-      <div class="bar" style="margin-top:0">
-        <h3 style="font-size:15px;margin:0">請求書の中身</h3>
-        <select id="iClient" title="請求先">${optsL(names,iClient,{})}</select>
-        <select id="iMonth" title="請求月">${MONTHS.map(m=>`<option value="${m}"${m===iMonth?' selected':''}>${mlab(m)}分</option>`).join('')}</select>
-        <span class="st">${isEom(t)?'月末締め':`${t.close}日締め`}　サイト${t.site}日</span>
-      </div>
-      <div class="kpi">
-        <div class="k"><small>対象</small><b style="font-size:15px">${DB.basis==='完工'
-          ?`${md(f)} 〜 ${md(to)}`:`請求月 ${mlab(iMonth)}`}</b></div>
-        <div class="k"><small>件数</small><b>${items.length}</b></div>
-        <div class="k"><small>請求額（税込）</small><b>${yen(sum)}</b></div>
-        <div class="k"><small>入金予定日</small><b style="font-size:15px">${md(dueOf(iClient,iMonth))}</b></div>
-      </div>
-      ${items.length?`<div class="tw" style="max-height:340px"><table>
-        <thead><tr><th>${DB.basis==='完工'?'完工日':'請求月'}</th><th>物件</th><th>区分</th>
-          <th class="r">金額（税込）</th></tr></thead>
-        <tbody>${items.map(c=>`<tr data-c="${c.id}"><td>${
-          DB.basis==='完工'?(md(c.done||c.plan)||'<span class="flag">日付なし</span>'):(c.bill?mlabel(c.bill):'—')}</td>
-          <td>${esc(c.prop||'（物件未入力）')}</td><td>${esc(c.kind)}</td>
-          <td class="r">${yen(salesOf(c))}</td></tr>`).join('')}
-        <tr><td colspan="3"><b>合計</b></td><td class="r"><b>${yen(sum)}</b></td></tr></tbody></table></div>`
-        :'<p class="note">この期間に対象の案件がない。</p>'}
-      <p class="note">締日を変えると対象期間と拾う案件がその場で変わる。ステップ・スリー（5日締め）を選ぶと 9/6〜10/5 のように切られる。</p>
-    </div>
-
+      <span class="note" style="margin:0">${DB.basis==='完工'?'完工日が顧客ごとの締日のどちら側に入るかで請求月を決める':'案件の「請求月」をそのまま使う'}</span></div>
     <div class="tw"><table><thead><tr><th>顧客</th><th>締日</th><th>サイト</th>
       ${MS.map(m=>`<th class="r">${mlab(m)}</th>`).join('')}<th class="r">合計</th></tr></thead>
       <tbody>${names.map(nm=>{const tt=termOf(nm), s2=MS.reduce((a,m)=>a+(rows[nm][m]||0),0);
@@ -4637,6 +4806,14 @@ document.addEventListener('click',e=>{
   { const pm=tab==='pl'&&e.target.closest&&e.target.closest('[data-plm]'); if(pm){ plMonth=plMonth===pm.dataset.plm?'':pm.dataset.plm; render();
       if(plMonth){ const d=document.querySelector('.pldrill'); if(d&&d.scrollIntoView)d.scrollIntoView({block:'nearest',behavior:'smooth'}); } return; } }
   if(e.target.id==='plEdit'){ plEdit(); return; }
+  if(e.target.id==='bCo'){ billCoAsk(); return; }
+  if(e.target.id==='bBack'){ bOpen=''; render(); return; }
+  if(tab==='bill'){ const t=e.target, c=q=>t.closest&&t.closest(q); let x;
+    if((x=c('[data-bmode]'))){ bMode=x.dataset.bmode; bOpen=''; if(bMode==='range'&&bView==='year')bView='client'; render(); return; }
+    if((x=c('[data-bview]'))){ bView=x.dataset.bview; bOpen=''; render(); return; }
+    if((x=c('[data-bact]'))){ billAct(x.dataset.bact,x.dataset.id,bOpen); return; }
+    if((x=c('tr[data-bopen]'))){ bOpen=x.dataset.bopen; render(); window.scrollTo(0,0); return; }
+    if((x=c('tr[data-bcl]'))){ bCl=x.dataset.bcl; bView='case'; render(); return; } }
   if(e.target.id==='vAdd'){ vAddDialog(); return; }
   if(e.target.id==='vpBack'){ vpId=''; render(); return; }
   if(e.target.id==='vRename'){ const v=DB.vendors.find(x=>x.id===vpId); if(v)vRenameAsk(v); return; }
@@ -5004,6 +5181,9 @@ document.addEventListener('change',e=>{
   if(el.id==='basisSel'){DB.basis=el.value;save();render();return;}
   if(el.id==='iClient'){iClient=el.value;render();return;}
   if(el.id==='iMonth'){iMonth=el.value;render();return;}
+  if(el.id==='bFrom'||el.id==='bTo'){ if(el.id==='bFrom')bFrom=el.value; else bTo=el.value; if(bFrom&&bTo&&bFrom>bTo){ const x=bFrom; bFrom=bTo; bTo=x; } render(); return; }
+  if(el.id==='bCl'){ bCl=el.value; render(); return; }
+  if(el.id==='bSt'){ bSt=el.value; render(); return; }
   if(el.classList.contains('tm')){
     const c=clientOf(el.dataset.c);
     if(c){snap('term:'+c.name+':'+el.dataset.f); c[el.dataset.f]=+el.value||(el.dataset.f==='close'?31:30);}

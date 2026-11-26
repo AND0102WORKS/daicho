@@ -40,6 +40,9 @@ const TABLES={
   /* 業者の請求書（業者ページで発行）／支払明細書（台帳で発行） */
   invoices:{cols:['id','org','who','kind','month','period_from','period_to','items','subtotal','tax','total','taxable','inv','st','issued_at','confirmed_at','paid_date'],
           map:{from:'period_from',to:'period_to',issuedAt:'issued_at',confirmedAt:'confirmed_at',paidDate:'paid_date'}, dates:['period_from','period_to','paid_date'], bools:['taxable'], ts:['issued_at','confirmed_at']},
+  /* 顧客への請求書（台帳で作る）。作った時点の中身（items）を写して固定する */
+  bills:{cols:['id','org','no','client','client_id','month','period_from','period_to','items','subtotal','tax','total','issued_date','due_date','st','paid_date','paid_amt','memo'],
+          map:{clientId:'client_id',from:'period_from',to:'period_to',issued:'issued_date',due:'due_date',paidDate:'paid_date',paidAmt:'paid_amt'}, dates:['period_from','period_to','issued_date','due_date','paid_date'], bools:[]},
 };
 const REV={}; Object.keys(TABLES).forEach(t=>{ REV[t]={}; Object.entries(TABLES[t].map).forEach(([j,c])=>{REV[t][c]=j;}); });
 /* 行（DBの列）→ JS のレコード */
@@ -77,16 +80,16 @@ const vendorLink=v=>v&&v.token?siteBase()+'me.html?t='+v.token:'';
 const orderLink=o=>o&&o.token?siteBase()+'order.html?t='+o.token:'';
 function copyText(t,msg){ navigator.clipboard.writeText(t).then(()=>toast(msg||'コピーした')).catch(()=>prompt('コピーできなかった。手で選んでコピー：',t)); }
 let recLast={};   /* 'table:id' → sig。変わった行を見つけるため */
-const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1,reports:1,invoices:1};
+const COLS={cases:1,procs:1,lines:1,orders:1,vendors:1,clients:1,prices:1,reports:1,invoices:1,bills:1};
 function rememberAll(){ recLast={}; Object.keys(COLS).forEach(t=>(DB[t]||[]).forEach(r=>{ if(r.id)recLast[t+':'+r.id]=sig(r); })); kvSaved=kvFlat(); }
 /* 入金・支払済・休み・計上基準・見送り：最後に保存した値（キーごと）。
    全件をまとめて書くと、古い画面の人が他の人の入力を古い値で上書きしてしまうので、変わったキーだけ書く */
-let kvSaved={recv:{},paid:{},off:{},skip:{},basis:'完工',pl:'null'};
+let kvSaved={recv:{},paid:{},off:{},skip:{},basis:'完工',pl:'null',co:'null'};
 function kvFlat(){
   const num=o=>{ const r={}; Object.entries(o||{}).forEach(([k,v])=>{ const n=Math.round(+v||0); if(n)r[k]=n; }); return r; };
   const off={}; Object.entries(DB.off||{}).forEach(([who,m])=>Object.entries(m||{}).forEach(([month,days])=>{ const d=(days||[]).map(Number).join(','); if(d)off[who+'|'+month]=d; }));
   const skip={}; Object.keys(DB.skip||{}).forEach(k=>{ if(DB.skip[k])skip[k]=1; });
-  return {recv:num(DB.recv),paid:num(DB.paid),off,skip,basis:DB.basis||'完工',pl:JSON.stringify(DB.plItems||null)};
+  return {recv:num(DB.recv),paid:num(DB.paid),off,skip,basis:DB.basis||'完工',pl:JSON.stringify(DB.plItems||null),co:JSON.stringify(DB.co||null)};
 }
 const kvChanged=(cur,old)=>[...new Set([...Object.keys(cur),...Object.keys(old)])].filter(k=>cur[k]!==old[k]);
 const kvSplit=k=>{ const i=k.lastIndexOf('|'); return [k.slice(0,i),k.slice(i+1)]; };
@@ -99,16 +102,16 @@ async function fetchAll(t,select){
   return out;
 }
 async function dbLoad(){
-  const [cases,procs,lines,orders,vendors,clients,prices,recv,paid,off,settings,reports,invoices]=await Promise.all([
+  const [cases,procs,lines,orders,vendors,clients,prices,recv,paid,off,settings,reports,invoices,bills]=await Promise.all([
     fetchAll('cases'),fetchAll('procs'),fetchAll('lines'),fetchAll('orders'),fetchAll('vendors'),fetchAll('clients'),fetchAll('prices'),
     fetchAll('receipts'),fetchAll('payments'),fetchAll('days_off'),fetchAll('settings'),
-    fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[])]);
+    fetchAll('reports').catch(()=>[]),fetchAll('invoices').catch(()=>[]),fetchAll('bills').catch(()=>[])]);
   /* 振込先：経理の印（profiles.fin）のある人だけが読める表。印が無ければ DB が1行も返さない */
   let bankRows=[]; if(ME&&ME.fin){ try{ bankRows=await fetchAll('vendor_bank'); }catch(e){ alog('bank',(e&&e.message)||e); } }   /* 表がまだ無い DB でも台帳は開けるように */
   DB={cases:cases.map(r=>rowToRec('cases',r)),procs:procs.map(r=>rowToRec('procs',r)),lines:lines.map(r=>rowToRec('lines',r)),
       orders:orders.map(r=>rowToRec('orders',r)),vendors:vendors.map(r=>rowToRec('vendors',r)),clients:clients.map(r=>rowToRec('clients',r)),
       prices:prices.map(r=>rowToRec('prices',r)),
-      reports:reports.map(r=>rowToRec('reports',r)),invoices:invoices.map(r=>rowToRec('invoices',r)),
+      reports:reports.map(r=>rowToRec('reports',r)),invoices:invoices.map(r=>rowToRec('invoices',r)),bills:bills.map(r=>rowToRec('bills',r)),
       recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0};
   DB.bank={}; bankRows.forEach(r=>{ if(r.bank)DB.bank[r.vendor_id]=r.bank; });
   recv.forEach(r=>{ if(+r.amount)DB.recv[r.client+'|'+r.month]=r.amount; });      /* 0 は「消した」の意味 */
@@ -116,6 +119,7 @@ async function dbLoad(){
   off.forEach(r=>{ if((r.days||[]).length)(DB.off[r.who]=DB.off[r.who]||{})[r.month]=(r.days||[]).slice(); });
   settings.forEach(r=>{ if(r.key==='basis')DB.basis=r.value;
     else if(r.key==='cfg'&&r.value&&typeof r.value==='object')DB.cfg=r.value;
+    else if(r.key==='co'&&r.value&&typeof r.value==='object')DB.co=r.value;   /* 請求書に載せる自社の情報 */
     else if(r.key==='pl_items'&&r.value&&typeof r.value==='object')DB.plItems=r.value;   /* 月次の科目（売上原価の内訳・販管費）。無ければ画面の既定 */   /* 会社ごとの設定（ボリュームの点数など）。無ければ画面の既定 */
     else if(String(r.key).indexOf(SKIP_KEY)===0&&r.value===true)DB.skip[String(r.key).slice(SKIP_KEY.length)]=1; });   /* 見送った受注受付 */
   /* 案件は新しいものが上。採番は既存の最大＋1 から */
@@ -136,7 +140,7 @@ function migrate(){
     if(c.st==='新規案件')c.st='受付'; });   /* v4 の状態一覧に「新規案件」は無い */
 }
 function reset(){ toast('v4 では「元データに戻す」は無い（データベースが正）'); }
-function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],reports:[],invoices:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
+function load(){ DB={cases:[],procs:[],lines:[],orders:[],vendors:[],clients:[],prices:[],reports:[],invoices:[],bills:[],recv:{},paid:{},off:{},skip:{},basis:'完工',seed:'db',seq:0,pseq:0,lseq:0,oseq:0,prseq:0}; }
 
 /* ---- 保存：変わった行だけ ---- */
 function save(){ if(typeof syncOrdersFromProcs==='function'){ try{ syncOrdersFromProcs(); }catch(e){} } dbSaveSoon(); }
@@ -172,10 +176,11 @@ async function dbSaveNow(){
     const sets=kvChanged(cur.skip,kvSaved.skip).map(k=>({org:ORG,key:SKIP_KEY+k,value:!!cur.skip[k]}));
     if(cur.basis!==kvSaved.basis)sets.push({org:ORG,key:'basis',value:cur.basis});
     if(cur.pl!==kvSaved.pl&&DB.plItems)sets.push({org:ORG,key:'pl_items',value:DB.plItems});
+    if(cur.co!==kvSaved.co&&DB.co)sets.push({org:ORG,key:'co',value:DB.co});
     if(recv.length){const {error}=await sb.from('receipts').upsert(recv); if(error)throw error; kvSaved.recv=cur.recv;}
     if(paid.length){const {error}=await sb.from('payments').upsert(paid); if(error)throw error; kvSaved.paid=cur.paid;}
     if(off.length){const {error}=await sb.from('days_off').upsert(off); if(error)throw error; kvSaved.off=cur.off;}
-    if(sets.length){const {error}=await sb.from('settings').upsert(sets); if(error)throw error; kvSaved.skip=cur.skip; kvSaved.basis=cur.basis; kvSaved.pl=cur.pl;}
+    if(sets.length){const {error}=await sb.from('settings').upsert(sets); if(error)throw error; kvSaved.skip=cur.skip; kvSaved.basis=cur.basis; kvSaved.pl=cur.pl; kvSaved.co=cur.co;}
     dbState='保存した '+new Date().toTimeString().slice(0,5);
   }catch(e){
     dbDirty=true; dbState='保存できていない：'+String((e&&e.message)||e); alog('save ERR',(e&&e.message)||e);
@@ -290,6 +295,8 @@ async function saveBank(vid,val){
   DB.bank=DB.bank||{}; DB.bank[vid]=String(val||'').trim(); return true;
 }
 /* 発注番号：サーバーの連番 */
+/* 請求書番号：月ごとの連番（R-2611-001）。サーバーが数えるので、2人が同時に作っても重ならない */
+async function allocBillNo(m){ const {data,error}=await sb.rpc('next_no',{p_org:ORG,p_name:'bill-'+m}); if(error)throw error; return 'R-'+m.slice(2,4)+m.slice(5,7)+'-'+String(+data).padStart(3,'0'); }
 async function allocOrderNo(){ const {data,error}=await sb.rpc('next_no',{p_org:ORG,p_name:'order'}); if(error)throw error; return +data; }
 function purgeShared(){ /* v4 では不要（行単位の delete で消える） */ }
 function known(){ }
