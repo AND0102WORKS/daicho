@@ -22,7 +22,7 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   await p.screenshot({path:__dirname+'/kfocus.png'});
   // 2社目：國吉さんの日付を押すと、空いている方（2本目）に入る
   const day=await p.$eval('.avwrap td.av[data-ask^="國吉|"]',x=>x.dataset.ask);
-  await p.click(`td.av[data-ask="${day}"]`); await p.waitForTimeout(300); await p.click('[data-askgo="no"]'); await p.waitForTimeout(400);
+  await p.click(`td.av[data-ask="${day}"]`); await p.waitForTimeout(250); await p.click(`td.av[data-ask="${day}"]`); await p.waitForTimeout(300); await p.click('[data-askgo="ok"]'); await p.waitForTimeout(400);
   const whos=await p.evaluate(()=>DB.procs.filter(x=>x.case==='C1302'&&x.kind==='清掃').map(x=>x.who).sort());
   ok('清掃が2社（長沼俊介・國吉）になる', whos.join(',')==='國吉,長沼俊介', whos);
   ok('ページのエラーなし', errs.length===0, errs);

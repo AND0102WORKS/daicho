@@ -16,6 +16,11 @@ async function handle(body){
     const ph=await q('select id,cat,phase,who from photos where case_id=$1 order by created_at',[p.rows[0].case_id]);
     return {photos:ph.rows.map(r=>({id:r.id,cat:r.cat,phase:r.phase,mine:r.who===v.rows[0].name}))}; }
   if(op==='fn'&&body.name==='notify-order'){   // src/functions/notify-order のまね：送ったことにして記録だけ残す（携帯の通知は登録のある台数、メールはアドレスがあれば）
+    if((body.body||{}).proc_id){ const p=(await q('select id,org,who,ask from procs where id=$1',[body.body.proc_id])).rows[0]; if(!p||p.ask!=='打診中'||!p.who)return {ok:false,reason:'not_ready'};
+      const v=(await q('select id,email from vendors where name=$1 and active',[p.who])).rows[0]; if(!v)return {ok:false,reason:'no_vendor'};
+      const n=(await q('select count(*)::int n from vendor_push where vendor_id=$1',[v.id])).rows[0].n;
+      if(n)await q("insert into notify_log(org,proc_id,vendor_id,kind,ok,detail) values ($1,$2,$3,'push',true,$4)",[p.org,p.id,v.id,n+'/'+n+'台']);
+      return {ok:true,push:n,pushTotal:n,mail:v.email?'sent':'no_address'}; }
     const o=(await q('select id,org,who,st,token from orders where id=$1',[(body.body||{}).order_id])).rows[0]; if(!o)return {ok:false,reason:'no_order'}; if(o.st==='下書き'||!o.token)return {ok:false,reason:'draft'};
     const v=(await q('select id,email from vendors where name=$1 and active',[o.who])).rows[0]; if(!v)return {ok:false,reason:'no_vendor'};
     const n=(await q('select count(*)::int n from vendor_push where vendor_id=$1',[v.id])).rows[0].n, mail=v.email?'sent':'no_address';

@@ -34,7 +34,7 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   // 工程：日付を押して工程に入れる
   await p.click('.cptabs [data-cptab="工程"]'); await p.waitForTimeout(500);
   const day=await p.$eval('.avwrap td.av[data-ask^="國吉|"]',x=>x.dataset.ask);
-  await p.click(`td.av[data-ask="${day}"]`); await p.waitForTimeout(300); await p.click('[data-askgo="no"]'); await p.waitForTimeout(400);
+  await p.click(`td.av[data-ask="${day}"]`); await p.waitForTimeout(250); await p.click(`td.av[data-ask="${day}"]`); await p.waitForTimeout(300); await p.click('[data-askgo="ok"]'); await p.waitForTimeout(400);
   ok('工程：予定表の日付を押すと、この物件の工程に入る（案件ページのまま）', await p.evaluate(()=>tab==='case'&&DB.procs.find(x=>x.id==='P1').who==='國吉'));
   await p.screenshot({path:__dirname+'/cpage4.png'});
   await p.click('[data-ocopen="C1302"]'); await p.waitForTimeout(400);

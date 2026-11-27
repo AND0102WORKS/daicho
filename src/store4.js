@@ -257,6 +257,8 @@ async function dbResync(why){
   resyncBusy=true;
   try{
     const ts=Object.keys(COLS), got=await Promise.all(ts.map(t=>fetchAll(t).catch(()=>null)));
+    /* 業者が通知を設定した・外した台数も合わせる */
+    try{ const pr=await fetchAll('vendor_push','vendor_id'); DB.pushN={}; pr.forEach(r=>{ DB.pushN[r.vendor_id]=(DB.pushN[r.vendor_id]||0)+1; }); }catch(e){}
     const same=(t,a,b)=>JSON.stringify(recToRow(t,a))===JSON.stringify(recToRow(t,b));
     let n=0;
     ts.forEach((t,ix)=>{ const rows=got[ix]; if(!rows)return; const arr=DB[t]||(DB[t]=[]), seen=new Set();
@@ -298,6 +300,16 @@ async function notifyOrder(oid,tries){
     let r=null; try{ const x=await sb.functions.invoke('notify-order',{body:{order_id:oid}}); r=x&&x.data; }catch(e){ r=null; }
     if(r&&r.ok){ try{ DB.nlog=await fetchAll('notify_log'); }catch(e){} return r; }
     if(r&&r.reason&&r.reason!=='draft'&&r.reason!=='no_order')return r;
+    await new Promise(z=>setTimeout(z,1500));
+  }
+  return null;
+}
+/* 打診を業者に知らせる。保存が DB に届いてから送るので、まだ届いていないと言われたら少し待ってやり直す */
+async function notifyAsk(pid,tries){
+  if(!sb||!sb.functions)return null;
+  for(let i=0;i<(tries||5);i++){
+    let r=null; try{ const x=await sb.functions.invoke('notify-order',{body:{proc_id:pid}}); r=x&&x.data; }catch(e){ r=null; }
+    if(r&&r.ok)return r; if(r&&r.reason&&r.reason!=='not_ready')return r;
     await new Promise(z=>setTimeout(z,1500));
   }
   return null;

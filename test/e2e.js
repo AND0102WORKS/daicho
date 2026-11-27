@@ -39,9 +39,9 @@ const VT='toke2e00000000000000001';
   // 3) 工程を足して、予定表から打診
   await tabTo('工程'); await L.click(`.kk[data-addkind="${cid}|清掃"]`); await L.waitForTimeout(500);
   const day=await L.evaluate(()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; });
-  await L.click(`td.av[data-ask="長沼俊介|${day}"]`); await L.waitForTimeout(400);
+  await L.click(`td.av[data-ask="長沼俊介|${day}"]`); await L.waitForTimeout(250); await L.click(`td.av[data-ask="長沼俊介|${day}"]`); await L.waitForTimeout(400);
   ok('3 日付を押すと、業者に伝わる内容（ルームクリーニング）が出る', (await L.textContent('.askits')).includes('ルームクリーニング'));
-  await L.click('[data-askgo="only"]'); await L.waitForTimeout(1800);
+  await L.click('[data-askgo="ask"]'); await L.waitForTimeout(1800);
   await tabTo('概要'); ok('3 次にやること＝打診の返事待ち', (await todo()).some(t=>t.includes('打診中')), await todo());
 
   // 4) 業者：打診を見て、詳細を確かめて、受ける

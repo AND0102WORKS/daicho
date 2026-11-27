@@ -37,7 +37,7 @@ const sp=__dirname+'/';
   // 日付を何度押しても、同じ区分の工程が増えない（入れ替わる）
   const np0=await p.evaluate(()=>DB.procs.filter(q=>q.case==='C1302').length);
   const days=await p.$$eval('.avwrap td.av[data-ask^="長沼俊介|"]',a=>a.slice(0,3).map(x=>x.dataset.ask));
-  for(const d of days){ await p.click(`td.av[data-ask="${d}"]`); await p.waitForTimeout(250); await p.click('[data-askgo="only"]'); await p.waitForTimeout(250); }
+  for(const d of days){ await p.click(`td.av[data-ask="${d}"]`); await p.waitForTimeout(250); await p.click(`td.av[data-ask="${d}"]`); await p.waitForTimeout(250); await p.click('[data-askgo="ask"]'); await p.waitForTimeout(250); }
   const np1=await p.evaluate(()=>DB.procs.filter(q=>q.case==='C1302').length);
   ok('日付を3回押しても工程は増えない', np1===np0, [np0,np1]);
   await p.click('.askline [data-askclr]'); await p.waitForTimeout(300);

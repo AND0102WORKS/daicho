@@ -14,12 +14,12 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   await p.evaluate(()=>{tab='proc';pCase='C1302';pHide=true;render();}); await p.waitForTimeout(800);
   const sp=__dirname+'/';
   // 清掃：國吉さん 11/25 に打診
-  await p.click('td.av[data-ask="國吉|2026-11-25"]'); await p.waitForTimeout(300);
+  await p.click('td.av[data-ask="國吉|2026-11-25"]'); await p.waitForTimeout(250); await p.click('td.av[data-ask="國吉|2026-11-25"]'); await p.waitForTimeout(300);
   await p.screenshot({path:sp+'ask1.png'});
-  await p.click('[data-askgo="only"]'); await p.waitForTimeout(400);
+  await p.click('[data-askgo="ask"]'); await p.waitForTimeout(400);
   // 検査：検査Bさん 11/27 に打診
   await p.click('[data-avk="AW検査"]'); await p.waitForTimeout(200);
-  await p.click('td.av[data-ask="検査B|2026-11-27"]'); await p.waitForTimeout(200); await p.click('[data-askgo="only"]');
+  await p.click('td.av[data-ask="検査B|2026-11-27"]'); await p.waitForTimeout(250); await p.click('td.av[data-ask="検査B|2026-11-27"]'); await p.waitForTimeout(200); await p.click('[data-askgo="ask"]');
   await p.waitForTimeout(2500);
   const r1=(await q("select id,kind,who,start_date::text,ask from procs where case_id='C1302' order by id")).rows;
   // 業者ページ（國吉）：受ける

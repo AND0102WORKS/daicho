@@ -471,7 +471,8 @@ button.kk.has small{margin-left:6px;font-weight:400;font-size:10.5px;background:
 .seg{display:inline-flex;border:1px solid #8A9792;border-radius:8px;overflow:hidden;margin-right:14px;vertical-align:middle}
 .seg button{all:unset;cursor:pointer;padding:5px 14px;font-size:13px;font-weight:700;color:#DDE3E1;border-left:1px solid #8A9792;white-space:nowrap}
 .seg button:first-child{border-left:0}.seg button:hover{background:#56635E}.seg button.on{background:#fff;color:var(--ink)}
-.avhelp{font-size:11.5px;color:#C9D1CE;white-space:nowrap}
+.avhelp{font-size:11.5px;color:#C9D1CE;white-space:nowrap}.avhelp.pick{color:#FFE08A;font-weight:700;font-size:12.5px}
+td.av.sel1{outline:3px solid #E0A21B;outline-offset:-3px;background:#FFF3CC!important}
 table.bd tbody tr.avrow th.nm{background:#E6EBEA;border-left:4px solid #3E4A46}
 
 td.av{height:34px;text-align:center;vertical-align:middle;font-size:11px;padding:1px}
@@ -770,6 +771,8 @@ async function dbResync(why){
   resyncBusy=true;
   try{
     const ts=Object.keys(COLS), got=await Promise.all(ts.map(t=>fetchAll(t).catch(()=>null)));
+    /* 業者が通知を設定した・外した台数も合わせる */
+    try{ const pr=await fetchAll('vendor_push','vendor_id'); DB.pushN={}; pr.forEach(r=>{ DB.pushN[r.vendor_id]=(DB.pushN[r.vendor_id]||0)+1; }); }catch(e){}
     const same=(t,a,b)=>JSON.stringify(recToRow(t,a))===JSON.stringify(recToRow(t,b));
     let n=0;
     ts.forEach((t,ix)=>{ const rows=got[ix]; if(!rows)return; const arr=DB[t]||(DB[t]=[]), seen=new Set();
@@ -811,6 +814,16 @@ async function notifyOrder(oid,tries){
     let r=null; try{ const x=await sb.functions.invoke('notify-order',{body:{order_id:oid}}); r=x&&x.data; }catch(e){ r=null; }
     if(r&&r.ok){ try{ DB.nlog=await fetchAll('notify_log'); }catch(e){} return r; }
     if(r&&r.reason&&r.reason!=='draft'&&r.reason!=='no_order')return r;
+    await new Promise(z=>setTimeout(z,1500));
+  }
+  return null;
+}
+/* 打診を業者に知らせる。保存が DB に届いてから送るので、まだ届いていないと言われたら少し待ってやり直す */
+async function notifyAsk(pid,tries){
+  if(!sb||!sb.functions)return null;
+  for(let i=0;i<(tries||5);i++){
+    let r=null; try{ const x=await sb.functions.invoke('notify-order',{body:{proc_id:pid}}); r=x&&x.data; }catch(e){ r=null; }
+    if(r&&r.ok)return r; if(r&&r.reason&&r.reason!=='not_ready')return r;
     await new Promise(z=>setTimeout(z,1500));
   }
   return null;
@@ -2629,7 +2642,7 @@ const avMatch=(v,k)=>isInsp(k)?canInspect(v):vendorKinds(v).indexOf(k)>=0;
 const askLink=v=>(typeof vendorLink==='function'&&v&&v.token)?vendorLink(v):'';
 /* 打診する工程で、その業者が受け持つ工事：その区分の明細（検査の人は自社施工）。金額は出さない（数量・単位は発注する側のもの） */
 function askItems(p){
-  return linesOf(p.case).filter(l=>!l.cut&&+l.qty>0&&(isInsp(p.kind)?l.kind==='自社施工':l.kind===p.kind))
+  return linesOf(p.case).filter(l=>!l.cut&&+l.qty>0&&String((l.name||'')+(l.spec||'')).trim()&&(isInsp(p.kind)?l.kind==='自社施工':l.kind===p.kind))
     .map(l=>`${l.spec?l.spec+' ':''}${l.name}　${costQty(l)}${costUnit(l)}`);
 }
 function askMessage(c,p,v){
@@ -2641,8 +2654,23 @@ function askMessage(c,p,v){
     (DB.cfg&&DB.cfg.company)||'アンドワークス株式会社'].join('\n');
   return {subject:`【日程の打診】${md(p.date)} ${p.kind} ${c.prop||''}`,body};
 }
-function askSheet(cid,who,ds){
-  const c=byId()[cid], v=vendorOf(who); if(!c||!v)return;
+/* 予定表のマスは2回押す：1回目＝開始日、2回目＝完了日（同じマスをもう一度で1日だけ）。そのあと確かめの窓。
+   窓のボタンを押すまで、工程にも打診にも何も入れない */
+let avSel=null;   /* {cid,who,ds}：1回目に押したマス */
+function avMark(){
+  document.querySelectorAll('td.av.sel1').forEach(x=>x.classList.remove('sel1'));
+  const h=document.querySelector('.avhelp');
+  if(avSel){ const td=[...document.querySelectorAll('td.av[data-ask]')].find(x=>x.dataset.ask===avSel.who+'|'+avSel.ds); if(td)td.classList.add('sel1'); }
+  if(h){ h.classList.toggle('pick',!!avSel); h.textContent=avSel?`${avSel.who} さん ${md(avSel.ds)} から。終わりの日を押してください（同じ日をもう一度押すと1日だけ）。やり直しは Esc`:AVHELP; }
+}
+const AVHELP='日付のマスを2回押す（開始日 → 完了日。1日だけなら同じマスを2回）。札に乗せると作業量。名前に乗せるとその月の量';
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&avSel){ avSel=null; avMark(); } });
+function avPick(cid,who,ds){
+  if(avSel&&avSel.cid===cid&&avSel.who===who){ const s1=avSel.ds<ds?avSel.ds:ds, e1=avSel.ds<ds?ds:avSel.ds; avSel=null; avMark(); askSheet(cid,who,s1,e1); return; }
+  avSel={cid,who,ds}; avMark();
+}
+function askSheet(cid,who,ds,de){
+  const c=byId()[cid], v=vendorOf(who); if(!c||!v)return; if(!de||de<ds)de=ds;
   const want=avCur==='全部'?(isInsp(v.defKind)?'AW検査':v.defKind):avCur;
   const same=p=>p.case===cid&&(isInsp(want)?isInsp(p.kind):p.kind===want);
   /* 入れる先：同じ区分でまだ発注していない工程（業者が空のものを先に）。押し直すたびに工程が増えないように、ある工程を入れ替える */
@@ -2650,37 +2678,40 @@ function askSheet(cid,who,ds){
   let tgt=free.find(p=>!p.who)||free.find(p=>p.ask)||free[0]||null;
   if(tgt&&tgt.who&&tgt.who!==who&&!tgt.ask&&
      !confirm(`この案件の「${tgt.kind}」は ${tgt.who} さん（${tgt.date?md(tgt.date):'日未定'}）に入っています。\n${who} さん・${md(ds)} に入れ替えますか？\n\n「キャンセル」にすると、入れ替えずに「${want}」の工程をもう1本足します。`))tgt=null;
-  /* 先に工程へ入れる（業者・開始日）。打診を送るかはこのあと選ぶ */
-  snap('ask:'+cid);
-  const made=!tgt;
-  let p=tgt; if(!p){ DB.pseq++; p={id:'Q'+DB.pseq+DEV,case:cid,kind:want,who:'',date:'',amt:0,month:'',prog:'',askNew:1}; DB.procs.push(p); }
-  const prev={who:p.who,date:p.date,end:p.end,month:p.month,ask:p.ask,askAt:p.askAt};
-  p.who=who; p.date=ds; p.end=''; p.month=''; p.ask=''; p.askAt=null; recalcPlan(c);
-  save(); render();
+  const draft={case:cid,kind:tgt?tgt.kind:want,date:ds,end:de!==ds?de:''};
+  /* この期間の、その人の別の現場と休み（止めはしない。知らせるだけ） */
+  const B=byId(), clash=[]; for(let d=new Date(ds+'T00:00:00'), e=new Date(de+'T00:00:00'); d<=e; d.setDate(d.getDate()+1)){ const x=fmtD(d);
+    if(isOff(who,x))clash.push(`${md(x)} は休み`);
+    DB.procs.filter(p=>p.who===who&&p.date&&p!==tgt&&onDay(p,x)).forEach(p=>clash.push(`${md(x)} に別の現場（${(B[p.case]||{}).prop||''}・${p.kind}）`)); }
+  const its=askItems(draft), reach=vReach(v);
   const el=document.createElement('div'); el.className='ask';
-  el.innerHTML=`<div class="askbox" style="max-width:440px"><h4>工程に入れました</h4>
-    <p style="margin:4px 0 10px;font-size:14px;line-height:1.7">${esc(p.kind)}　<b>${esc(who)}</b> さん　<b>${md(ds)}</b><br>${esc(c.prop||'')}</p>
-    ${(its=>its.length?`<div class="askits"><b>${esc(who)} さんに伝わる内容（${esc(p.kind)}の明細 ${its.length}件）</b>${its.slice(0,8).map(x=>`<div>・${esc(x)}</div>`).join('')}${its.length>8?`<div>ほか${its.length-8}件</div>`:''}</div>`
-      :`<p class="note" style="margin:0 0 8px;color:var(--warn)">この案件には「${esc(p.kind)}」の明細がまだ無い。業者には日程と物件だけが伝わる。先に「見積・発注」で明細に区分を付けると、内容も伝わる。</p>`)(askItems(p))}
-    <p class="note" style="margin:0 0 12px">続けて ${esc(who)} さんに日程を聞くときは、送り方を選んでください。「打診中」の印が付き、業者ページに「受けられる／都合が悪い」が出ます。
-      もう決まっている日なら「送らない」。期間が2日以上なら、下の工程の終了日を入れてください。</p>
-    <div class="askbtn" style="flex-wrap:wrap;gap:6px">
-      ${askLink(v)?`<button class="btn small primary" data-askgo="line">LINEで送る</button>
-      <button class="btn small primary" data-askgo="mail">メールで送る${v.email?'':'（宛先なし）'}</button>
-      <button class="btn small" data-askgo="copy">文面をコピー</button>`:`<span class="note">この業者は業者ページのリンクがまだありません（発注先マスタ）</span>`}
-      <button class="btn small" data-askgo="only" title="電話などで聞くとき。打診中の印だけ付ける">打診中の印だけ</button>
-      <span class="grow"></span><button class="btn small" data-askgo="undo" title="押し間違えたとき。工程を押す前に戻す">やめる（工程に入れない）</button><button class="btn small" data-askgo="no">送らない</button></div></div>`;
+  el.innerHTML=`<div class="askbox" style="max-width:460px"><h4>この内容で工程に入れますか</h4>
+    <p style="margin:4px 0 10px;font-size:14px;line-height:1.7">${esc(draft.kind)}　<b>${esc(who)}</b> さん　<b>${spanLabel(draft)}</b><br>${esc(c.prop||'')}</p>
+    ${clash.length?`<p class="note" style="margin:0 0 8px;color:var(--warn)">${[...new Set(clash)].slice(0,4).map(esc).join('<br>')}${clash.length>4?'<br>ほか':''}</p>`:''}
+    ${its.length?`<div class="askits"><b>${esc(who)} さんに伝わる内容（${esc(draft.kind)}の明細 ${its.length}件）</b>${its.slice(0,8).map(x=>`<div>・${esc(x)}</div>`).join('')}${its.length>8?`<div>ほか${its.length-8}件</div>`:''}</div>`
+      :`<p class="note" style="margin:0 0 8px;color:var(--warn)">この案件には「${esc(draft.kind)}」の明細がまだ無い（または名前が空）。業者には日程と物件だけが伝わる。先に「見積・発注」で明細に名前と区分を付けると、内容も伝わる。</p>`}
+    <p class="note" style="margin:0 0 12px"><b>まだ何も入っていません。</b>「打診する」で工程に入り、業者ページに「受けられる／都合が悪い」が出ます${reach.n?`（${esc(who)} さんの携帯に通知が出ます）`:`（${esc(who)} さんは携帯の通知が未設定。押したあとに文面をコピーして知らせます）`}。
+      電話などでもう話が付いているときは「承諾済み」。</p>
+    <div class="askbtn" style="gap:6px"><button class="btn small" data-askgo="undo">やめる</button><span class="grow"></span>
+      <button class="btn small" data-askgo="ok" title="打診は送らず、確定の工程として入れる">承諾済み</button><button class="btn primary" data-askgo="ask">打診する</button></div></div>`;
   document.body.appendChild(el);
   el.onclick=e=>{ const b=e.target.closest('[data-askgo]'); if(!b)return; const g=b.dataset.askgo; el.remove();
-    if(g==='no'){ toast(`${p.kind}：${who} さん ${md(ds)} を工程に入れた`); return; }
-    if(g==='undo'){ if(made)DB.procs=DB.procs.filter(x=>x!==p); else Object.assign(p,prev); recalcPlan(c); save(); render(); toast('元に戻した'); return; }
-    p.ask='打診中'; p.askAt=new Date().toISOString();
-    save(); render();
-    const m=askMessage(c,p,v);
-    if(g==='line')window.open('https://line.me/R/share?text='+encodeURIComponent(m.body),'_blank','noopener');
-    else if(g==='mail'){ const a=document.createElement('a'); a.href='mailto:'+encodeURIComponent(v.email||'')+'?subject='+encodeURIComponent(m.subject)+'&body='+encodeURIComponent(m.body); document.body.appendChild(a); a.click(); a.remove(); }
-    else if(g==='copy')copyText(m.body,'打診の文面をコピーした');
-    toast(`${who} さんに ${md(ds)} ${p.kind} を打診中にした`); };
+    if(g==='undo')return;   /* 何も入れていないので、閉じるだけ */
+    snap('ask:'+cid);
+    let p=tgt; if(!p){ DB.pseq++; p={id:'Q'+DB.pseq+DEV,case:cid,kind:want,who:'',date:'',amt:0,month:'',prog:'',askNew:1}; DB.procs.push(p); }
+    p.who=who; p.date=ds; p.end=de!==ds?de:''; p.month='';
+    if(g==='ask'){ p.ask='打診中'; p.askAt=new Date().toISOString(); } else { p.ask='受諾'; p.askAt=null; }
+    recalcPlan(c); save(); render();
+    if(g==='ask'){ toast(`${who} さんに ${spanLabel(p)} ${p.kind} を打診中にした`, undo); tellAsk(p); }
+    else toast(`${p.kind}：${who} さん ${spanLabel(p)} を承諾済みで工程に入れた`, undo); };
+}
+/* 打診を業者に知らせる（携帯の通知・メール）。届かない業者には、文面をコピーして知らせるよう案内する */
+function tellAsk(p){
+  const c=byId()[p.case], v=vendorOf(p.who); if(!c||!v||typeof notifyAsk!=='function')return;
+  const copy=()=>copyText(askMessage(c,p,v).body,'打診の文面をコピーした。LINE やメールに貼って知らせる');
+  notifyAsk(p.id).then(r=>{ const got=[]; if(r&&r.ok){ if(r.push)got.push(`携帯の通知（${r.push}台）`); if(r.mail==='sent')got.push('メール'); }
+    if(got.length)toast(`${p.who} さんに ${got.join('・')} で打診を知らせた`);
+    else toast(`${p.who} さんは携帯の通知もメールも未設定。文面をコピーして知らせてください`, copy, '文面をコピー'); });
 }
 /* 打診の印。押すと取り消す（打診中なら業者ページからも消える。工程の業者・日付はそのまま） */
 const askBadge=p=>{ const b=(cls,t,tip)=>`<button type="button" class="askst ${cls}" data-askclr="${p.id}" title="${tip}">${t} ×</button>`;
@@ -2689,27 +2720,17 @@ const askBadge=p=>{ const b=(cls,t,tip)=>`<button type="button" class="askst ${c
 function askLine(p){
   if(!p.ask)return '';
   if(p.ask==='打診中')return `<div class="askline wait"><b>打診中</b>　${esc(p.who)} さんに ${p.date?md(p.date):''} を聞いています。業者ページで「受けられる／都合が悪い」を押すと、ここに返事が出ます。
-    <button class="btn small" data-askre="${p.id}">もう一度送る</button><button class="btn small" data-askclr="${p.id}">打診を取り消す</button></div>`;
+    <button class="btn small" data-askre="${p.id}" title="業者の携帯にもう一度通知する（通知が未設定なら、文面をコピーできる）">もう一度知らせる</button><button class="btn small" data-askclr="${p.id}">打診を取り消す</button></div>`;
   if(p.ask==='受諾')return `<div class="askline ok"><b>受けてもらえた</b>　${esc(p.who)} さん ${p.date?md(p.date):''}。次は発注書を送る。
     ${p.order?'':`<button class="btn small primary" data-ocopen="${p.case}">発注書を作る →</button>`}<button class="btn small" data-askclr="${p.id}">印を外す</button></div>`;
   if(String(p.ask).startsWith('辞退'))return `<div class="askline ng"><b>${esc(p.ask.slice(3))} さんは都合が悪い</b>　予定表で別の人の日付を押して、もう一度打診する。
     <button class="btn small" data-askclr="${p.id}">印を外す</button></div>`;
   return '';
 }
-/* 打診中のものを、もう一度 LINE・メールで送る */
+/* 打診中のものを、もう一度知らせる（携帯の通知。届かない業者には文面をコピー） */
 function askResend(pid){
-  const p=DB.procs.find(x=>x.id===pid); if(!p)return; const c=byId()[p.case], v=vendorOf(p.who); if(!c||!v)return;
-  const m=askMessage(c,p,v);
-  const el=document.createElement('div'); el.className='ask';
-  el.innerHTML=`<div class="askbox" style="max-width:420px"><h4>${esc(p.who)} さんにもう一度送る</h4>
-    <div class="askbtn" style="flex-wrap:wrap;gap:6px"><button class="btn small primary" data-g="line">LINEで送る</button>
-    <button class="btn small primary" data-g="mail">メールで送る</button><button class="btn small" data-g="copy">文面をコピー</button>
-    <span class="grow"></span><button class="btn small" data-g="no">閉じる</button></div></div>`;
-  document.body.appendChild(el);
-  el.onclick=e=>{ const b=e.target.closest('[data-g]'); if(!b)return; const g=b.dataset.g; el.remove();
-    if(g==='line')window.open('https://line.me/R/share?text='+encodeURIComponent(m.body),'_blank','noopener');
-    else if(g==='mail'){ const a=document.createElement('a'); a.href='mailto:'+encodeURIComponent(v.email||'')+'?subject='+encodeURIComponent(m.subject)+'&body='+encodeURIComponent(m.body); document.body.appendChild(a); a.click(); a.remove(); }
-    else if(g==='copy')copyText(m.body,'打診の文面をコピーした'); };
+  const p=DB.procs.find(x=>x.id===pid); if(!p||p.ask!=='打診中')return;
+  tellAsk(p);
 }
 function clearAsk(pid){
   const p=DB.procs.find(x=>x.id===pid); if(!p||!p.ask)return;
@@ -2751,19 +2772,19 @@ function availRows(c,ps,m,D,y,mo){
   const B=byId();
   const cell=(who,d)=>{ const ds=iso(y,mo,d), js=DB.procs.filter(p=>p.who===who&&p.date&&onDay(p,ds));
     if(isOff(who,ds))return `<td class="av off" title="休み">休</td>`;
-    const ak=` data-ask="${esc(who)}|${ds}"`;
-    if(!js.length)return `<td class="av free"${ak} title="${esc(who)} ${md(ds)}：空き。押すと下の工程に入る"></td>`;
+    const ak=` data-ask="${esc(who)}|${ds}"`, s1=avSel&&avSel.who===who&&avSel.ds===ds?' sel1':'';
+    if(!js.length)return `<td class="av free${s1}"${ak} title="${esc(who)} ${md(ds)}：空き。押すと開始日、もう一度押す（または別の日を押す）と完了日"></td>`;
     const mine=js.some(p=>p.case===c.id);
     const one=p=>{ const k=B[p.case]||{};
       return `<span class="chip avc${p.case===c.id?' me':''}${p.ask==='打診中'?' q':''}" data-tp="${p.id}" style="background:${col(k.client)}">
         <span class="p">${p.ask==='打診中'?'<span class="tentb">打診</span>':''}${esc(k.prop||'（物件未入力）')}${p.date===ds?'':'<span class="cont">続</span>'}</span>
         <span class="y">${esc(clientShort(k.client))}${k.client?'・':''}${esc(p.kind)}</span></span>`; };
-    return `<td class="av busy${mine?' mine':''}"${ak}><span class="avn"><b>${js.length}件</b></span>${js.slice(0,2).map(one).join('')}${js.length>2?`<div class="avmore">＋${js.length-2}件</div>`:''}</td>`; };
+    return `<td class="av busy${mine?' mine':''}${s1}"${ak}><span class="avn"><b>${js.length}件</b></span>${js.slice(0,2).map(one).join('')}${js.length>2?`<div class="avmore">＋${js.length-2}件</div>`:''}</td>`; };
   const days=Array.from({length:D},(_,i)=>i+1);
   return {head:`<div class="avhead"><b>職人の予定表</b>
     <span class="seg">${[...all,'全部'].map(k=>`<button type="button" class="${k===one?'on':''}" data-avk="${esc(k)}">${esc(k)}</button>`).join('')}</span>
     <input type="search" id="avQ" class="avq" placeholder="名前で探す" value="${esc(avQ)}" title="業者・職人の名前で探す。入れている間は区分に関係なく全員から探す">
-    <span class="avhelp">日付のマスを押すと下の工程に入る（打診も送れる）。札に乗せると作業量。名前に乗せるとその月の量</span></div>`,
+    <span class="avhelp${avSel?' pick':''}">${avSel?`${esc(avSel.who)} さん ${md(avSel.ds)} から。終わりの日を押してください（同じ日をもう一度押すと1日だけ）。やり直しは Esc`:AVHELP}</span></div>`,
     rows:(people.length?'':`<tr class="avrow"><th class="nm"></th><td colspan="${D}" class="note" style="padding:8px 10px;text-align:left">${qk?'その名前の業者・職人はいません':'この区分の業者は発注先マスタにいません'}</td></tr>`)+
     people.map(n=>{ const v=vendorOf(n), off=offDays(n,m), kd=[v.defKind,canInspect(v)&&!isInsp(v.defKind)?'検査も':''].filter(Boolean).join('・');
       return `<tr class="avrow"><th class="nm" data-tw="${esc(n)}|${m}">${esc(n)}<small>${v.type==='専属'?`<button class="lnk" data-avoff="${esc(n)}|${m}" title="この月の休みを入れる">休み${off.length}日 ✎</button>`:esc(kd||'外注')}</small></th>${days.map(d=>cell(n,d)).join('')}</tr>`; }).join('')};
@@ -5128,7 +5149,8 @@ document.addEventListener('click',e=>{
   /* 予定表の「打診」の札（この案件のもの）を押したら、取り消すか聞く */
   const aq=e.target.closest('.chip.q[data-tp]'); if(aq){ const p=DB.procs.find(x=>x.id===aq.dataset.tp); if(p&&p.case===pCase){ e.stopPropagation(); clearAsk(p.id); return; } }
   const avo=e.target.closest('[data-avoff]'); if(avo){ const [n,mm]=avo.dataset.avoff.split('|'); askOff(n,mm); return; }
-  const ask=e.target.closest('[data-ask]'); if(ask&&pCase){ const i=ask.dataset.ask.lastIndexOf('|'); askSheet(pCase,ask.dataset.ask.slice(0,i),ask.dataset.ask.slice(i+1)); return; }
+  const ask=e.target.closest('[data-ask]'); if(ask&&pCase){ const i=ask.dataset.ask.lastIndexOf('|'); avPick(pCase,ask.dataset.ask.slice(0,i),ask.dataset.ask.slice(i+1)); return; }
+  if(avSel&&!e.target.closest('.ask')){ avSel=null; avMark(); }   /* 予定表の外を押したら、選びかけをやめる */
   const avk=e.target.closest('[data-avk]'); if(avk){ avOne=avk.dataset.avk; avRedraw(); return; }
   if(e.target.id==='cpBack'){ tab=cpBack||'ledger'; render(); return; }
   const est=e.target.closest('[data-estimate]'); if(est){ showEstimate(est.dataset.estimate); return; }
