@@ -18,7 +18,7 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   const T=s=>p.textContent(s).then(t=>t.replace(/\s+/g,' ')), saved=()=>p.waitForTimeout(1800), w=()=>p.waitForTimeout(400);
   await p.goto('http://localhost:8787/'); await p.waitForTimeout(2200);
   const n0=(await one("select count(*)::int n from cases")).n;
-  ok('開いただけでは、勝手にくっつけない・案件も増えない', (await one("select coalesce(recv,'') r, sales from cases where id='CN1'")).r===''&&n0===5, n0);
+  ok('開いただけでは、勝手にくっつけない・案件も増えない', (await one("select coalesce(recv,'') r, sales from cases where id='CN1'")).r===''&&n0===4, n0);
   ok('上の帯に「依頼元の発注書が3件 届いている」と「確かめて取り込む」', (await T('.selbar')).includes('依頼元の発注書が 3件 届いている')&&(await T('#impInbox')).includes('確かめて取り込む'));
   await p.click('#impInbox'); await w();
   const cards=await p.$$eval('.ibx',a=>a.map(x=>({t:x.querySelector('.ibh').textContent.replace(/\s+/g,' '),v:x.querySelector('.ibsel').value,opts:[...x.querySelectorAll('.ibsel option')].map(o=>o.value)})));

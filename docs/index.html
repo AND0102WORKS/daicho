@@ -115,6 +115,7 @@ table.plt tr.cnt td{color:var(--sub);font-size:11.5px;border-bottom:none}
 .vst.late{background:#FBE3E0;color:#A32A1E}.vst.late i{background:#C0392B}
 .vst.wait{background:#E4ECF7;color:#2B4C7E}.vst.wait i{background:#3D6DB5}
 .sub2{display:block;color:var(--sub);font-size:11px;margin-top:2px}
+.ibx{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 8px;background:var(--card2)}.ibx .ibh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}.ibx .ibh b{font-size:14.5px}.ibx .ibsel{width:100%;height:34px;font-size:13px}
 .tpl{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:12px 14px;margin-bottom:10px}
 .tpl h5{margin:0 0 6px;font-size:14px;display:flex;align-items:center;gap:8px}.tpl pre{margin:0;font-family:inherit;font-size:12.5px;line-height:1.75;white-space:pre-wrap;color:var(--sub)}
 .tchip{display:inline-flex;align-items:center;gap:4px;border:1.5px solid var(--acc);color:var(--acc);background:var(--card);border-radius:999px;padding:3px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
@@ -1376,41 +1377,68 @@ function healAllPO(){
   if(n){ save(); toast(`二重に入っていた依頼元の明細 ${n}行（${cs}案件）を片づけた`); }
   return n;
 }
-function autoMergeInbox(){
-  healAllPO();
-  const rows=pendingInbox().filter(r=>inboxMatch(r,true));
-  if(!rows.length)return 0;
-  snap();
-  rows.forEach(r=>mergeInboxRow(r,inboxMatch(r,true)));
-  save();
-  toast(`受注受付 ${rows.length}件を、同じ物件名の案件に自動で合流させた（金額・起算日・希望日・明細）`, undo);
-  return rows.length;
+/* 以前は、物件名がぴったり同じ案件に自動でくっつけていた。今は自動ではくっつけない：
+   依頼元の発注書は「いまある案件に金額と明細を確定させるもの」。届いたら、人が確かめてからくっつける（inboxSheet） */
+function autoMergeInbox(){ healAllPO(); return 0; }
+/* 届いた発注書が、どの案件のものか：候補を強い順に。sc 3＝物件名がぴったり同じ／2＝名前が近い。
+   完工済みの案件と、もう別の発注書が付いている案件は候補にしない（同じ部屋の2回目が前回に吸われるのを防ぐ） */
+function inboxCands(r){
+  const key=nkey(inboxProp(r))||nkey(r.prop); if(!key)return [];
+  const cl=r.client||'';
+  return DB.cases.filter(x=>x.live&&!x.done&&!x.recv).map(x=>{ const k=nkey(x.prop); if(!k)return null;
+    const sameCl=!cl||!x.client||x.client===cl;
+    const sc=k===key?3:(k.length>=4&&key.length>=4&&(k.indexOf(key)>=0||key.indexOf(k)>=0)&&sameCl?2:0);
+    return sc?{c:x,sc,sameCl}:null; }).filter(Boolean).sort((a,b)=>b.sc-a.sc||(b.sameCl-a.sameCl));
 }
-function importInbox(){
-  const rows=pendingInbox(); if(!rows.length){toast('新しい行は無い');return;}
-  snap();
-  let add=0, mrg=0;
-  rows.forEach(r=>{
-    const prop=inboxProp(r);
-    const memo=inboxMemo(r);
-    let c=inboxMatch(r,false);
-    if(c){
-      mergeInboxRow(r,c);
-      mrg++;
-    }else{
-      DB.seq++;
-      DB.cases.unshift({id:'R'+DB.seq+DEV,client:r.client||'',prop:prop||'（物件未入力）',
-        kind:inboxKind((r.items||'')+' '+(r.memo||'')),st:'受注',ord:'未',live:true,
-        src:'受注受付',recv:r.key,caseNo:r.caseNo||'',
-        sales:+r.net||0,add:0,bill:r.recvDate?r.recvDate.slice(0,7)+'-01':'',
-        kisan:r.moveIn||'',want:r.plan||'',plan:'',done:'',
-        keyx:/鍵交換/.test(memo)?'有':'',warr:/設備保証/.test(memo)?'有':'',
-        report:'',photo:'',memo,items:r.items||''});
-      add++;
-    }
-  });
-  save(); render();
-  toast(`受注受付から ${add}件を新規、${mrg}件を既存に合流させた`, undo);
+function inboxNewCase(r){
+  const prop=inboxProp(r), memo=inboxMemo(r);
+  DB.seq++;
+  const c={id:'R'+DB.seq+DEV,client:r.client||'',prop:prop||'（物件未入力）',
+    kind:inboxKind((r.items||'')+' '+(r.memo||'')),st:'受注',ord:'未',live:true,
+    src:'受注受付',recv:r.key,caseNo:r.caseNo||'',
+    sales:+r.net||0,add:0,bill:r.recvDate?r.recvDate.slice(0,7)+'-01':'',
+    kisan:r.moveIn||'',want:r.plan||'',plan:'',done:'',
+    keyx:/鍵交換/.test(memo)?'有':'',warr:/設備保証/.test(memo)?'有':'',
+    report:'',photo:'',memo,items:r.items||''};
+  DB.cases.unshift(c); return c;
+}
+function importInbox(){ inboxSheet(); }
+/* 確かめの窓：届いた発注書ごとに、くっつける案件を選ぶ（ぴったり同じ案件があればそれを最初に選んでおく）。
+   無ければ「新しい案件として作る」。分からないものは「あとで」で残せる */
+function inboxSheet(){
+  const rows=pendingInbox(); if(!rows.length){ toast('新しい発注書は無い'); return; }
+  const el=document.createElement('div'); el.className='ask';
+  const live=DB.cases.filter(x=>x.live&&!x.done&&!x.recv);
+  const lab=x=>`${x.prop||'（物件未入力）'}（${[x.client,x.st,x.want?'希望 '+md(x.want):''].filter(Boolean).join('・')}）`;
+  const card=(r,i)=>{ const cs=inboxCands(r), top=cs[0], ids=cs.map(x=>x.c.id);
+    const others=live.filter(x=>ids.indexOf(x.id)<0&&(!r.client||!x.client||x.client===r.client)).sort((a,b)=>String(a.prop).localeCompare(String(b.prop),'ja')).slice(0,60);
+    const tag=top?(top.sc===3&&top.sameCl?'<span class="vst use"><i></i>同じ物件の案件がある</span>':top.sc===3?'<span class="vst inv"><i></i>物件名は同じだが、顧客が違う。確かめてください</span>':'<span class="vst inv"><i></i>名前が近い案件がある。確かめてください</span>')
+      :'<span class="vst late"><i></i>台帳に同じ物件が見つからない</span>';
+    return `<div class="ibx" data-i="${i}"><div class="ibh"><b>${esc(inboxProp(r)||'（物件未入力）')}</b><span class="note" style="margin:0">${esc(r.client||'顧客なし')}${+r.net?'　受注額 '+yen(r.net)+'（税抜）':''}${r.plan?'　希望 '+md(r.plan):''}${(r.poLines||[]).length?'　明細 '+r.poLines.length+'行':''}</span><span class="grow"></span>${tag}</div>
+      ${r.items||r.memo?`<div class="note" style="margin:2px 0 6px">${esc([r.items,r.memo].filter(Boolean).join(' / ')).slice(0,160)}</div>`:''}
+      <select class="ibsel">${cs.map(x=>`<option value="m:${esc(x.c.id)}">この案件の発注書：${esc(lab(x.c))}${x.sc===3?'':'　※名前が近い'}</option>`).join('')}
+        <option value="new"${top?'':' selected'}>新しい案件として作る${top?'':'（立会依頼や一覧表から、まだ案件を立てていない物件）'}</option>
+        <option value="later">あとで（今回は取り込まない）</option>
+        ${others.length?`<optgroup label="ほかの案件から選ぶ（${esc(r.client||'すべての顧客')}の進行中）">${others.map(x=>`<option value="m:${esc(x.id)}">${esc(lab(x))}</option>`).join('')}</optgroup>`:''}</select></div>`; };
+  el.innerHTML=`<div class="dlg" style="max-width:860px;width:95vw;max-height:90vh;overflow:auto"><h4>届いた発注書を、案件にくっつける（${rows.length}件）</h4>
+    <p class="note" style="margin:0 0 10px">依頼元の発注書は、<b>いまある案件に金額と明細を確定させるもの</b>です。発注書ごとに、どの案件のものかを確かめてください。同じ物件の案件が台帳にあれば、最初からそれを選んであります。くっつけると、その案件に受注額・希望日・明細が入り、状態が「受注」に進みます。</p>
+    ${rows.map(card).join('')}
+    <div class="askbtn" style="margin-top:12px"><button class="btn small" id="askNo">やめる</button><span class="grow"></span><span class="note" id="ibsum" style="margin:0 8px 0 0"></span><button class="btn primary" id="askYes">この内容で取り込む</button></div></div>`;
+  const sum=()=>{ const v=[...el.querySelectorAll('.ibsel')].map(x=>x.value), m=v.filter(x=>x.startsWith('m:')).length, n=v.filter(x=>x==='new').length, l=v.filter(x=>x==='later').length;
+    const dup=v.filter(x=>x.startsWith('m:')).some((x,i,a)=>a.indexOf(x)!==i);
+    el.querySelector('#ibsum').innerHTML=`くっつける ${m}件・新しい案件 ${n}件${l?'・あとで '+l+'件':''}${dup?'　<b style="color:var(--warn)">同じ案件を2回選んでいます</b>':''}`; el.querySelector('#askYes').disabled=dup||!(m+n); };
+  el.addEventListener('change',e=>{ if(e.target.classList.contains('ibsel'))sum(); });
+  el.addEventListener('click',e=>{ if(e.target.id==='askNo'){ el.remove(); return; } if(e.target.id!=='askYes')return;
+    const picks=[...el.querySelectorAll('.ibsel')].map(x=>x.value); let add=0, mrg=0, adv=0;
+    snap();
+    rows.forEach((r,i)=>{ const v=picks[i]; if(v==='later')return;
+      if(v==='new'){ inboxNewCase(r); add++; return; }
+      const c=DB.cases.find(x=>x.id===v.slice(2)); if(!c||c.recv)return;
+      mergeInboxRow(r,c); mrg++;
+      if(stIdx(c.st)<stIdx('受注')){ c.st='受注'; adv++; } });   /* 発注書が付いたら「受注」に進める（人が選び直さなくてよい） */
+    el.remove(); save(); render();
+    toast(`発注書を取り込んだ：いまある案件にくっつけた ${mrg}件${adv?`（うち ${adv}件を「受注」に進めた）`:''}・新しい案件 ${add}件`, undo); });
+  document.body.appendChild(el); sum();
 }
 function inboxBanner(){
   if(tab!=='ledger'&&tab!=='order')return '';
@@ -1421,9 +1449,9 @@ function inboxBanner(){
   else if(!p.length){ if(tab==='order'&&!skippedInbox().length)return '';   /* 発注画面では、取り込むものが無ければ帯ごと出さない（明細を広く見せる） */
     msg=`受注受付 ${INBOX.length}件：未取り込みなし`; sty+=';background:var(--card2);border-color:var(--line)'; }
   else{
-    msg=`受注受付から ${p.length}件 未取り込み`;
+    msg=`依頼元の発注書が ${p.length}件 届いている`;
     sub=`<span class="grow note" style="margin:0">${esc(p.slice(0,3).map(r=>[r.client,r.prop,r.room].filter(Boolean).join(' ')).join('／'))}${p.length>3?' ほか':''}</span>`;
-    btn='<button class="btn small primary" id="impInbox">取り込む</button>';
+    btn='<button class="btn small primary" id="impInbox" title="発注書ごとに、どの案件のものかを確かめてから取り込む">確かめて取り込む</button>';
   }
   const sk=skippedInbox().length;
   return `<div class="selbar" style="${sty}"><b>${esc(msg)}</b>${sub||'<span class="grow"></span>'}${btn}
