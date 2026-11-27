@@ -11,10 +11,16 @@ const VT='aa11bb22cc33dd44ee55ff66';
   const b=await chromium.launch({args:['--no-proxy-server']});
   const errs=[]; const res=[]; const ok=(n,cnd,x)=>{ res.push(cnd); console.log((cnd?'OK  ':'NG  ')+n+(x!==undefined?'  '+JSON.stringify(x):'')); };
   // 業者ページ
-  const vc=await b.newContext({viewport:{width:390,height:800},permissions:['notifications']}); const v=await vc.newPage();   /* 何もしないと「ブロック」の扱いになるので、許可できる状態にして開く */ v.on('pageerror',e=>errs.push('me:'+e.message));
+  const vc=await b.newContext({viewport:{width:390,height:800},deviceScaleFactor:2,permissions:['notifications']}); const v=await vc.newPage();   /* 何もしないと「ブロック」の扱いになるので、許可できる状態にして開く */ v.on('pageerror',e=>errs.push('me:'+e.message));
   await v.goto('http://localhost:8787/me.html?t='+VT); await v.waitForTimeout(1800);
   ok('業者ページに通知の案内が出る（確かめ用のブラウザは通知を許可できないので「ブロックされています」になる）', await v.$eval('#pushBar',x=>!x.hidden&&(x.textContent.includes('通知を受け取る')||x.textContent.includes('通知がブロック'))).catch(()=>false));
   await v.screenshot({path:__dirname+'/notify1.png'});
+  await v.click('[data-m="help"]'); await v.waitForTimeout(400);
+  const hv=await v.$eval('#helpView',x=>({shown:!x.hidden,svg:x.querySelectorAll('svg').length,txt:x.textContent}));
+  ok('業者ページのメニューに「使い方」：最初にホーム画面に出す手順（図つき・iPhone と Android）と、発注・工程・完了報告・請求の使い方', hv.shown&&hv.svg===10&&['ホーム画面に出す','ホーム画面に追加','通知を受け取る','発注が届いたら','完了報告','請求する','困ったとき'].every(k=>hv.txt.includes(k)), hv.svg);
+  await v.screenshot({path:__dirname+'/manual1.png',fullPage:true});
+  await v.click('[data-hos="ios"]'); await v.waitForTimeout(200); ok('iPhone と Android を切り替えられる', await v.$eval('#hosIos',x=>!x.hidden)&&await v.$eval('#hosAnd',x=>x.hidden));
+  await (await v.$('#helpView .hsec')).screenshot({path:__dirname+'/manual2.png'});
   const r1=await v.evaluate(t=>sb.rpc('push_subscribe',{p_token:t,p_endpoint:'https://push.example.com/send/abc',p_p256dh:'KEY',p_auth:'AUTH',p_ua:'test'}).then(x=>x.data),VT);
   const r2=await v.evaluate(()=>sb.rpc('push_subscribe',{p_token:'wrong',p_endpoint:'https://push.example.com/send/zzz',p_p256dh:'KEY',p_auth:'AUTH',p_ua:'test'}).then(x=>x.data));
   const r3=await v.evaluate(t=>sb.rpc('push_subscribe',{p_token:t,p_endpoint:'http://evil.example.com/x',p_p256dh:'KEY',p_auth:'AUTH',p_ua:'test'}).then(x=>x.data),VT);

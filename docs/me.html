@@ -53,6 +53,15 @@ button.done:disabled{opacity:.5}
 .mode button{flex:1;padding:11px 4px;border:0;background:var(--card);font-size:15px;font-weight:700;color:var(--acc)}
 .mode button.on{background:var(--acc);color:#fff}
 .mode .cnt[hidden]{display:none}
+/* 使い方（操作マニュアル） */
+.hsec{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 14px 10px;margin:0 0 12px}
+.hsec h2{font-size:16px;margin:0 0 4px;display:flex;align-items:center;gap:8px}.hsec h2 i{font-style:normal;background:var(--acc);color:#fff;border-radius:999px;font-size:12px;padding:2px 10px}
+.hsec .lead{font-size:13px;color:var(--sub);margin:0 0 10px;line-height:1.7}
+.hos{display:flex;border:1px solid var(--acc);border-radius:10px;overflow:hidden;margin:0 0 12px}.hos button{flex:1;padding:9px 4px;border:0;background:var(--card);color:var(--acc);font-size:14px;font-weight:700}.hos button.on{background:var(--acc);color:#fff}
+.hstep{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}.hstep:first-of-type{border-top:0}
+.hstep svg{flex:0 0 108px;width:108px;height:auto}.hstep .t{flex:1;font-size:14px;line-height:1.75}.hstep .t b.n{display:inline-block;background:var(--acc);color:#fff;border-radius:999px;width:24px;height:24px;line-height:24px;text-align:center;font-size:13px;margin-right:6px}
+.hstep .t small{display:block;color:var(--sub);font-size:12.5px;line-height:1.65;margin-top:3px}
+.hlist{margin:0;padding:0 0 0 1.2em;font-size:14px;line-height:1.85}.hlist li{margin:0 0 4px}.hnote{background:var(--amber-bg);border-radius:8px;padding:9px 11px;font-size:13px;line-height:1.7;margin:8px 0 4px}
 .mode .cnt{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:10px;background:var(--warn);color:#fff;font-size:12px;line-height:20px}
 .ord{display:block;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:8px 0;color:var(--ink);text-decoration:none}
 .ord.wait{border-color:var(--warn);border-width:2px}
@@ -143,11 +152,12 @@ button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);backg
 <header><h1>発注と工程</h1><span class="who" id="who"></span><button id="reload" type="button">更新</button></header>
 <main>
   <div id="pushBar" class="pushbar" hidden></div>
-  <div class="mode"><button data-m="orders">発注<span class="cnt" id="waitCnt" hidden></span></button><button data-m="sched">工程</button><button data-m="bill">請求</button></div>
+  <div class="mode"><button data-m="orders">発注<span class="cnt" id="waitCnt" hidden></span></button><button data-m="sched">工程</button><button data-m="bill">請求</button><button data-m="help">使い方</button></div>
   <div id="billView" hidden><div id="blist"><div class="empty">読み込み中…</div></div>
     <p class="hint">完了報告を会社が承認すると、ここに締めの月ごとに並びます。「この月の請求書を発行する」で請求書ができます。<br>会社から支払明細書が届いたときも、ここに出ます。</p></div>
   <div id="ordersView" hidden><div id="olist"><div class="empty">読み込み中…</div></div>
-    <p class="hint">このページはあなた専用です。ほかの人に教えないでください。<br>スマホの「ホーム画面に追加」をしておくと、アプリのようにすぐ開けます。</p></div>
+    <p class="hint">このページはあなた専用です。ほかの人に教えないでください。<br>ホーム画面に出す手順と使い方は、上の「使い方」にあります。</p></div>
+  <div id="helpView" hidden></div>
   <div id="schedView">
   <div class="tabs"><button data-r="prev">先週</button><button data-r="week" class="on">今週</button><button data-r="next">来週</button><button data-r="month">今月</button></div>
   <div id="list"><div class="empty">読み込み中…</div></div>
@@ -225,7 +235,8 @@ async function loadOrders(){
 function setMode(m){ mode=m;
   document.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
   document.getElementById('ordersView').hidden=m!=='orders'; document.getElementById('schedView').hidden=m!=='sched';
-  document.getElementById('billView').hidden=m!=='bill'; if(m==='bill'&&ME)loadBill(); }
+  document.getElementById('billView').hidden=m!=='bill'; if(m==='bill'&&ME)loadBill();
+  const hv=document.getElementById('helpView'); hv.hidden=m!=='help'; if(m==='help'){ if(!hv.innerHTML)hv.innerHTML=helpHtml(); window.scrollTo(0,0); } }
 function span(){
   const t=new Date(); t.setHours(0,0,0,0);
   if(range==='month'){ const a=new Date(t.getFullYear(),t.getMonth(),1), b=new Date(t.getFullYear(),t.getMonth()+1,0); return [fmt(a),fmt(b)]; }
@@ -504,6 +515,50 @@ function openDoc(i){ const v=(BILL.invoices||[])[i]; if(!v)return; DOCI=v;
   document.getElementById('docBody').innerHTML=invoiceDoc(v,BILL.vendor);
   document.getElementById('docOk').hidden=!(v.kind==='支払明細書'&&v.st==='発行');
   document.getElementById('docm').hidden=false; }
+/* ---- 使い方（操作マニュアル）。図は絵（SVG）で描く：写真や外の画像は使わない ---- */
+function helpPhone(inner){ return `<svg viewBox="0 0 120 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="4" y="3" width="112" height="194" rx="14" fill="#fff" stroke="#1E2A32" stroke-width="2.5"/><rect x="46" y="8" width="28" height="5" rx="2.5" fill="#1E2A32"/>${inner}</svg>`; }
+const HL='#E0A21B', AC='#0F5E63';
+const hRing=(x,y,w,h)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="none" stroke="${HL}" stroke-width="3"/>`;
+const hTxt=(x,y,t,sz,fill,w)=>`<text x="${x}" y="${y}" font-size="${sz||8}" fill="${fill||'#1E2A32'}" font-weight="${w||400}" font-family="sans-serif">${t}</text>`;
+const hPage=`<rect x="12" y="22" width="96" height="14" rx="3" fill="${AC}"/>${hTxt(18,32,'発注と工程',7.5,'#fff',700)}<rect x="12" y="42" width="96" height="22" rx="4" fill="#F6F5F1"/><rect x="12" y="68" width="96" height="22" rx="4" fill="#F6F5F1"/>`;
+const hShare=(x,y)=>`<g stroke="${AC}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M${x} ${y+8}v9h14v-9"/><path d="M${x+7} ${y+12}V${y}"/><path d="M${x+3} ${y+4}l4-4 4 4"/></g>`;
+function helpHtml(){
+  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent);
+  const st=(n,svg,t,sub)=>`<div class="hstep">${svg}<div class="t"><b class="n">${n}</b>${t}${sub?`<small>${sub}</small>`:''}</div></div>`;
+  const iosSteps=[
+    st(1,helpPhone(hPage+`<rect x="12" y="168" width="96" height="20" rx="4" fill="#F6F5F1"/>${hShare(53,170)}${hRing(44,165,32,26)}`),'画面の下にある<b>「共有」ボタン</b>（四角から矢印が出ている印）を押す','ボタンが見えないときは、画面を少し下にずらすと出てきます。<br>LINE の中で開いているときは、先に右下の「…」→「Safari で開く」を押してください（LINE の中からはホーム画面に追加できません）。'),
+    st(2,helpPhone(`<rect x="8" y="70" width="104" height="124" rx="10" fill="#F6F5F1"/>${hTxt(18,90,'コピー',8)}${hTxt(18,110,'お気に入りに追加',8)}<rect x="12" y="118" width="96" height="20" rx="5" fill="#fff"/>${hTxt(18,131,'ホーム画面に追加',8.5,'#1E2A32',700)}<rect x="92" y="123" width="10" height="10" rx="2" fill="none" stroke="#1E2A32" stroke-width="1.4"/><path d="M97 125.5v5M94.5 128h5" stroke="#1E2A32" stroke-width="1.4"/>${hRing(10,116,100,24)}${hTxt(18,156,'マークアップ',8)}${hTxt(18,176,'プリント',8)}`),'出てきた一覧を上にずらして、<b>「ホーム画面に追加」</b>を押す'),
+    st(3,helpPhone(`${hTxt(14,32,'キャンセル',8,AC)}${hTxt(88,32,'追加',9,AC,700)}${hRing(82,20,30,18)}<rect x="12" y="46" width="96" height="34" rx="6" fill="#F6F5F1"/><rect x="18" y="52" width="22" height="22" rx="5" fill="${AC}"/>${hTxt(22,67,'AW',9,'#fff',700)}${hTxt(46,66,'業者ページ',8.5)}`),'右上の<b>「追加」</b>を押す'),
+    st(4,helpPhone(`<rect x="8" y="18" width="104" height="176" rx="10" fill="#DCE8E6"/>${[0,1,2,3].map(i=>`<rect x="${16+i*25}" y="30" width="18" height="18" rx="4" fill="#fff" opacity=".7"/>`).join('')}<rect x="16" y="60" width="18" height="18" rx="4" fill="${AC}"/>${hTxt(18.5,72.5,'AW',7.5,'#fff',700)}${hTxt(11,88,'業者ページ',6.5)}${hRing(8,55,36,38)}`),'ホーム画面にできた<b>「業者ページ」のアイコン</b>から開く','次からは、このアイコンを押すだけで開けます。'),
+    st(5,helpPhone(hPage.replace('<rect x="12" y="42" width="96" height="22" rx="4" fill="#F6F5F1"/>',`<rect x="12" y="42" width="96" height="22" rx="4" fill="#FFF7E0" stroke="${HL}" stroke-width="1"/>${hTxt(16,51,'発注が来たら通知…',6)}<rect x="62" y="53" width="42" height="9" rx="3" fill="${AC}"/>${hTxt(65,60,'通知を受け取る',5.4,'#fff',700)}${hRing(58,49,50,17)}`)),'上に出る<b>「通知を受け取る」</b>を押して、<b>「許可」</b>を選ぶ','これで、発注が来たときに携帯に通知が出ます。')].join('');
+  const andSteps=[
+    st(1,helpPhone(`<rect x="12" y="20" width="96" height="14" rx="3" fill="#F6F5F1"/>${hTxt(16,30,'and0102works…',6.5,'#55616B')}<circle cx="102" cy="23" r="1.4"/><circle cx="102" cy="27" r="1.4"/><circle cx="102" cy="31" r="1.4"/>${hRing(94,17,16,20)}`+hPage.replace(/y="22"/,'y="38"').replace('y="32"','y="48"').replace(/y="42"/,'y="58"').replace(/y="68"/,'y="84"')),'画面の右上にある<b>「︙」（点が3つ）</b>を押す','Chrome で開いてください。LINE の中で開いているときは、右上のメニューから「ほかのブラウザで開く」を選びます。'),
+    st(2,helpPhone(`<rect x="34" y="18" width="78" height="150" rx="8" fill="#F6F5F1"/>${hTxt(42,36,'新しいタブ',8)}${hTxt(42,56,'履歴',8)}${hTxt(42,76,'共有…',8)}<rect x="38" y="84" width="70" height="20" rx="5" fill="#fff"/>${hTxt(42,97,'ホーム画面に追加',7.6,'#1E2A32',700)}${hRing(36,82,74,24)}${hTxt(42,122,'設定',8)}`),'<b>「ホーム画面に追加」</b>を押す','「アプリをインストール」と出る機種もあります。どちらでも同じです。'),
+    st(3,helpPhone(`<rect x="14" y="62" width="92" height="74" rx="8" fill="#F6F5F1"/><rect x="22" y="72" width="20" height="20" rx="5" fill="${AC}"/>${hTxt(25,86,'AW',8,'#fff',700)}${hTxt(48,85,'業者ページ',8.5)}${hTxt(44,124,'キャンセル',7.5,'#55616B')}${hTxt(84,124,'追加',8.5,AC,700)}${hRing(78,112,26,18)}`),'<b>「追加」</b>を押す'),
+    st(4,helpPhone(`<rect x="8" y="18" width="104" height="176" rx="10" fill="#DCE8E6"/>${[0,1,2,3].map(i=>`<rect x="${16+i*25}" y="30" width="18" height="18" rx="9" fill="#fff" opacity=".7"/>`).join('')}<rect x="16" y="60" width="18" height="18" rx="9" fill="${AC}"/>${hTxt(18.5,72.5,'AW',7.5,'#fff',700)}${hTxt(11,88,'業者ページ',6.5)}${hRing(8,55,36,38)}`),'ホーム画面にできた<b>「業者ページ」のアイコン</b>から開く','次からは、このアイコンを押すだけで開けます。'),
+    st(5,helpPhone(hPage.replace('<rect x="12" y="42" width="96" height="22" rx="4" fill="#F6F5F1"/>',`<rect x="12" y="42" width="96" height="22" rx="4" fill="#FFF7E0" stroke="${HL}" stroke-width="1"/>${hTxt(16,51,'発注が来たら通知…',6)}<rect x="62" y="53" width="42" height="9" rx="3" fill="${AC}"/>${hTxt(65,60,'通知を受け取る',5.4,'#fff',700)}${hRing(58,49,50,17)}`)),'上に出る<b>「通知を受け取る」</b>を押して、<b>「許可」</b>を選ぶ','これで、発注が来たときに携帯に通知が出ます。')].join('');
+  return `<div class="hsec"><h2><i>最初に</i>ホーム画面に出す</h2>
+      <p class="lead">最初に1回だけ、このページを携帯のホーム画面に出してください。アプリのようにすぐ開けて、発注が来たときに通知も受け取れます。</p>
+      <div class="hos"><button type="button" data-hos="ios" class="${ios?'on':''}">iPhone</button><button type="button" data-hos="and" class="${ios?'':'on'}">Android</button></div>
+      <div id="hosIos"${ios?'':' hidden'}>${iosSteps}</div><div id="hosAnd"${ios?' hidden':''}>${andSteps}</div>
+      <div class="hnote">このページのリンクは<b>あなた専用</b>です。ほかの人に送らないでください。</div></div>
+    <div class="hsec"><h2><i>1</i>発注が届いたら</h2><ol class="hlist"><li>上の<b>「発注」</b>を押すと、届いた発注が並びます（赤い数字は、まだ返事をしていない件数）。</li>
+      <li>日程の相談（打診）が来ているときは、<b>「行ける」「行けない」</b>で返事をします。</li>
+      <li><b>「発注書を見て承諾する」</b>を押し、内容・金額・伝達事項を確かめて<b>「承諾」</b>を押します。</li></ol></div>
+    <div class="hsec"><h2><i>2</i>工程を見る</h2><ol class="hlist"><li>上の<b>「工程」</b>を押すと、自分の現場が日付の順に並びます。「今週」「来週」「今月」で切り替えられます。</li>
+      <li>現場を押すと、<b>住所（地図）・鍵の情報・工事の内容・写真</b>が見られます。</li></ol></div>
+    <div class="hsec"><h2><i>3</i>終わったら完了報告</h2><ol class="hlist"><li>工程の現場にある<b>「写真」</b>から、施工前・施工後の写真を送ります（選ぶとすぐ送られます）。</li>
+      <li><b>「完了報告」</b>を押し、完了日とコメントを入れて<b>「報告を送る」</b>を押します。</li>
+      <li>追加の作業があったときは、<b>追加金額と理由</b>を入れてください。会社が確かめて、認めた分が金額に足されます。</li>
+      <li>「差し戻し」と出たときは、理由を読んで、直してからもう一度送ります。</li></ol></div>
+    <div class="hsec"><h2><i>4</i>請求する</h2><ol class="hlist"><li>上の<b>「請求」</b>を押すと、会社が承認した完了報告が、締めの月ごとに並びます。</li>
+      <li><b>「この月の請求書を発行する」</b>を押すと、請求書ができて会社に届きます（金額は自動で入ります）。</li>
+      <li>会社から<b>支払明細書</b>が届いたときは、中身を見て「確認した」を押します。</li></ol></div>
+    <div class="hsec"><h2><i>?</i>困ったとき</h2><ul class="hlist"><li>新しい発注や変更が出てこないときは、右上の<b>「更新」</b>を押します。</li>
+      <li>通知が来ないときは、携帯の「設定」で、このページ（業者ページ）の通知が<b>許可</b>になっているか確かめます。</li>
+      <li>携帯を替えたときは、もう一度「ホーム画面に出す」と「通知を受け取る」をしてください。</li>
+      <li>分からないことは、担当者に連絡してください。</li></ul></div>`;
+}
 /* ---- 携帯の通知（発注が来たら知らせる）。このページで「通知を受け取る」を押した端末だけに出る ---- */
 const VAPID_PUB='BELYd5rvChbodV6XXeTiVCvcMuix3MuJo-Aj81xQkDpiCd8vPmKvVigOupKvNTQ4P7nQa3CN9eDnF7m3hc5WvDk';
 const b64u=s=>{ const p='='.repeat((4-s.length%4)%4), r=atob((s+p).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from(r,c=>c.charCodeAt(0)); };
@@ -513,7 +568,7 @@ async function pushInit(){
   const bar=document.getElementById('pushBar'); if(!bar||!token||!ME)return;
   const ios=/iPhone|iPad|iPod/.test(navigator.userAgent), alone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
   const can=('serviceWorker' in navigator)&&('PushManager' in window)&&('Notification' in window);
-  if(!can){ if(ios&&!alone){ bar.className='pushbar'; bar.hidden=false; bar.innerHTML='<div><b>発注が来たら、この携帯に通知を出せます</b><br>① 画面の「共有」ボタン → ②「ホーム画面に追加」 → ③ ホーム画面のアイコンから開く → ④「通知を受け取る」を押す</div>'; } return; }
+  if(!can){ if(ios&&!alone){ bar.className='pushbar'; bar.hidden=false; bar.innerHTML='<div><b>はじめに：このページをホーム画面に出してください</b><br>アプリのようにすぐ開けて、発注が来たときに通知も受け取れます。</div><button type="button" data-m="help">手順を見る</button>'; } return; }
   try{ SWR=await navigator.serviceWorker.register('sw.js'); }catch(e){ return; }
   let sub=null; try{ sub=await SWR.pushManager.getSubscription(); }catch(e){}
   bar.hidden=false;
@@ -540,6 +595,7 @@ async function start(){
 }
 document.addEventListener('click',async e=>{
   if(e.target.id==='pushOn'){ pushOn(); return; }
+  { const ho=e.target.closest&&e.target.closest('[data-hos]'); if(ho){ const i=ho.dataset.hos==='ios'; document.getElementById('hosIos').hidden=!i; document.getElementById('hosAnd').hidden=i; document.querySelectorAll('[data-hos]').forEach(b=>b.classList.toggle('on',b===ho)); return; } }
   if(e.target.id==='pushOff'){ pushOff(); return; }
   const mb=e.target.closest('[data-m]'); if(mb){ setMode(mb.dataset.m); return; }
   const an=e.target.closest('[data-ans]'); if(an){ const [pid,ok]=an.dataset.ans.split('|');
