@@ -52,3 +52,8 @@ alter table notify_log enable row level security;
 drop policy if exists sel_notify_log on notify_log; create policy sel_notify_log on notify_log for select using (my_role()='hq' or org=my_org());
 revoke all on notify_log from anon, authenticated;
 grant select on notify_log to authenticated;
+
+-- 通知を送るための鍵の置き場（Edge Function が service_role で読む。画面・ログインした人・ログイン無しの人からは読めない）
+create table if not exists app_secrets (name text primary key, value text not null default '', updated_at timestamptz default now());
+alter table app_secrets enable row level security;   -- 方針（policy）を1つも置かない＝service_role 以外は読み書きできない
+revoke all on app_secrets from anon, authenticated;

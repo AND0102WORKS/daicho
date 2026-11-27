@@ -1,7 +1,7 @@
 // 発注を業者に知らせる：携帯の通知（業者ページで「通知を受け取る」を押した端末）と、メール（協力業者に登録したアドレス）。
-// 呼び出しは台帳（ログインした人）から。POST {order_id}
+// 呼び出しは台帳（ログインした人）から。POST {order_id}。verify_jwt は切り、下で「呼んだ人の役割」を自分で確かめる（ログインしていなければ役割は none で断る）
 //   ・呼んだ人の権限で発注を読めること（RLS）、役割が 管理者／スタッフ であることを確かめる
-//   ・鍵は Supabase 側の環境変数だけ：VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY（携帯の通知）、RESEND_API_KEY / MAIL_FROM（メール。無ければメールは送らない）
+//   ・鍵は Supabase 側だけ：環境変数、無ければ表 app_secrets（service_role だけが読める）。VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY（携帯の通知）、RESEND_API_KEY / MAIL_FROM（メール。無ければメールは送らない）
 //   ・結果は notify_log に残す（台帳の発注書に「いつ・何で知らせたか」を出すため）
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
@@ -26,6 +26,7 @@ Deno.serve(async (req) => {
     if (o.st === "下書き" || !o.token) return json({ ok: false, reason: "draft" });
 
     const db = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    const sec = async (n: string) => Deno.env.get(n) || ((await db.from("app_secrets").select("value").eq("name", n).maybeSingle()).data?.value as string | undefined) || "";
     const { data: v } = await db.from("vendors").select("id,name,full_name,email,active").eq("org", o.org).eq("name", o.who).maybeSingle();
     if (!v || v.active === false) return json({ ok: false, reason: "no_vendor" });
     const { data: c } = await db.from("cases").select("prop").eq("id", o.case_id).maybeSingle();
@@ -37,9 +38,9 @@ Deno.serve(async (req) => {
 
     // ---- 携帯の通知 ----
     let pushSent = 0, pushTotal = 0;
-    const pub = Deno.env.get("VAPID_PUBLIC_KEY"), priv = Deno.env.get("VAPID_PRIVATE_KEY");
+    const pub = await sec("VAPID_PUBLIC_KEY"), priv = await sec("VAPID_PRIVATE_KEY");
     if (pub && priv) {
-      webpush.setVapidDetails(Deno.env.get("VAPID_SUBJECT") || "mailto:noreply@example.com", pub, priv);
+      webpush.setVapidDetails((await sec("VAPID_SUBJECT")) || "mailto:noreply@example.com", pub, priv);
       const { data: subs } = await db.from("vendor_push").select("id,endpoint,p256dh,auth").eq("vendor_id", v.id);
       pushTotal = (subs || []).length;
       const payload = JSON.stringify({ title: `${company}：発注書が届きました`, body: `${prop}${term ? "（" + term + "）" : ""}\n内容を確かめて「承諾」を押してください`, url: link });
@@ -57,7 +58,7 @@ Deno.serve(async (req) => {
 
     // ---- メール ----
     let mail = "not_set";
-    const key = Deno.env.get("RESEND_API_KEY"), from = Deno.env.get("MAIL_FROM");
+    const key = await sec("RESEND_API_KEY"), from = await sec("MAIL_FROM");
     if (key && from) {
       if (!v.email) mail = "no_address";
       else {
@@ -71,7 +72,7 @@ Deno.serve(async (req) => {
     }
     if (log.length) await db.from("notify_log").insert(log);
     return json({ ok: true, push: pushSent, pushTotal, mail });
-  } catch (_e) {
-    return json({ ok: false, reason: "failed" }, 500);
+  } catch (e) {
+    return json({ ok: false, reason: "failed", detail: String((e as Error)?.message || e).slice(0, 200) }, 500);
   }
 });

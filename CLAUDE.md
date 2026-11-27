@@ -11,7 +11,7 @@
 - `src/build4.py` … `app3.src.html` + `store4.js` + `config.json` → `docs/index.html`
 - `src/schema.sql` … DB の表・権限（RLS）・関数。変更は Supabase の migration として適用する
 - `src/functions/case-photos/` … 業者ページに案件の写真を渡す Edge Function（Supabase に deploy。service_role は Supabase 側の環境変数だけ。verify_jwt は切り、vendors.token で確かめる）
-- `src/functions/notify-order/` … 発注を業者に知らせる Edge Function（携帯の通知＝Web Push、メール＝Resend）。鍵（VAPID_PRIVATE_KEY・RESEND_API_KEY など）は Supabase 側の環境変数だけ。台帳のログイン（verify_jwt）で呼ぶ
+- `src/functions/notify-order/` … 発注を業者に知らせる Edge Function（携帯の通知＝Web Push、メール＝Resend）。鍵（VAPID_PRIVATE_KEY・RESEND_API_KEY など）は Supabase 側だけ（環境変数、または service_role だけが読める表 `app_secrets`）。verify_jwt は切り、呼んだ人の役割（管理者・スタッフ）を関数の中で確かめる
 - `docs/sw.js`・`docs/manifest.webmanifest`・`docs/icon-*.png` … 業者ページの通知（ホーム画面に追加・通知を受ける）の部品
 - `docs/vendor/` … 発注書・見積書をブラウザの中だけで読む部品（外に送らない）。`pdfjs/`＝PDF の文字（pdf.js 3.11.174・日本語用 cmaps つき）、`xlsx/`＝Excel・CSV（SheetJS 0.18.5）、`tesseract/`＝写真・スキャンの OCR（tesseract.js 5.1.1＋日本語データ）。いずれも Apache-2.0
 - `src/config.json` … Supabase の URL と公開キー（anon/publishable）。秘密鍵は置かない
