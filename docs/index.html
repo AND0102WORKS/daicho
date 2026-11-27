@@ -1342,7 +1342,7 @@ function mergeInboxRow(r,c){
   const memo=inboxMemo(r);
   c.recv=r.key; c.live=true;
   if(!c.client&&r.client)c.client=r.client;
-  if(!c.sales&&+r.net)c.sales=+r.net;
+  if(+r.net)c.sales=+r.net;   /* 依頼元の発注書が、受注額を確定させる（先に見込みで入れてあっても、発注書の金額にする） */
   if(!c.want&&r.plan)c.want=r.plan;
   if(!c.kisan&&r.moveIn)c.kisan=r.moveIn;   /* 次回入居日＝家賃の起算。財託は空で入ってくる */
   if(/鍵交換/.test(memo))c.keyx='有';
@@ -1416,28 +1416,33 @@ function inboxSheet(){
       :'<span class="vst late"><i></i>台帳に同じ物件が見つからない</span>';
     return `<div class="ibx" data-i="${i}"><div class="ibh"><b>${esc(inboxProp(r)||'（物件未入力）')}</b><span class="note" style="margin:0">${esc(r.client||'顧客なし')}${+r.net?'　受注額 '+yen(r.net)+'（税抜）':''}${r.plan?'　希望 '+md(r.plan):''}${(r.poLines||[]).length?'　明細 '+r.poLines.length+'行':''}</span><span class="grow"></span>${tag}</div>
       ${r.items||r.memo?`<div class="note" style="margin:2px 0 6px">${esc([r.items,r.memo].filter(Boolean).join(' / ')).slice(0,160)}</div>`:''}
-      <select class="ibsel">${cs.map(x=>`<option value="m:${esc(x.c.id)}">この案件の発注書：${esc(lab(x.c))}${x.sc===3?'':'　※名前が近い'}</option>`).join('')}
+      <select class="ibsel">${top&&!(top.sc===3&&top.sameCl)?'<option value="" selected>― 確かめて、選んでください ―</option>':''}${cs.map(x=>`<option value="m:${esc(x.c.id)}" data-sales="${+x.c.sales||0}">この案件の発注書：${esc(lab(x.c))}${x.sc===3?'':'　※名前が近い'}</option>`).join('')}
         <option value="new"${top?'':' selected'}>新しい案件として作る${top?'':'（立会依頼や一覧表から、まだ案件を立てていない物件）'}</option>
         <option value="later">あとで（今回は取り込まない）</option>
-        ${others.length?`<optgroup label="ほかの案件から選ぶ（${esc(r.client||'すべての顧客')}の進行中）">${others.map(x=>`<option value="m:${esc(x.id)}">${esc(lab(x))}</option>`).join('')}</optgroup>`:''}</select></div>`; };
+        ${others.length?`<optgroup label="ほかの案件から選ぶ（${esc(r.client||'すべての顧客')}の進行中）">${others.map(x=>`<option value="m:${esc(x.id)}" data-sales="${+x.sales||0}">${esc(lab(x))}</option>`).join('')}</optgroup>`:''}</select><div class="ibw note" data-net="${+r.net||0}" style="margin:4px 0 0;color:var(--warn)"></div></div>`; };
   el.innerHTML=`<div class="dlg" style="max-width:860px;width:95vw;max-height:90vh;overflow:auto"><h4>届いた発注書を、案件にくっつける（${rows.length}件）</h4>
     <p class="note" style="margin:0 0 10px">依頼元の発注書は、<b>いまある案件に金額と明細を確定させるもの</b>です。発注書ごとに、どの案件のものかを確かめてください。同じ物件の案件が台帳にあれば、最初からそれを選んであります。くっつけると、その案件に受注額・希望日・明細が入り、状態が「受注」に進みます。</p>
     ${rows.map(card).join('')}
     <div class="askbtn" style="margin-top:12px"><button class="btn small" id="askNo">やめる</button><span class="grow"></span><span class="note" id="ibsum" style="margin:0 8px 0 0"></span><button class="btn primary" id="askYes">この内容で取り込む</button></div></div>`;
   const sum=()=>{ const v=[...el.querySelectorAll('.ibsel')].map(x=>x.value), m=v.filter(x=>x.startsWith('m:')).length, n=v.filter(x=>x==='new').length, l=v.filter(x=>x==='later').length;
     const dup=v.filter(x=>x.startsWith('m:')).some((x,i,a)=>a.indexOf(x)!==i);
-    el.querySelector('#ibsum').innerHTML=`くっつける ${m}件・新しい案件 ${n}件${l?'・あとで '+l+'件':''}${dup?'　<b style="color:var(--warn)">同じ案件を2回選んでいます</b>':''}`; el.querySelector('#askYes').disabled=dup||!(m+n); };
+    const un=v.filter(x=>x==='').length;
+    el.querySelectorAll('.ibx').forEach(bx=>{ const sl=bx.querySelector('.ibsel'), o=sl.options[sl.selectedIndex], wn=bx.querySelector('.ibw'), net=+wn.dataset.net, old=o&&o.dataset?+o.dataset.sales||0:0;
+      wn.textContent=sl.value.startsWith('m:')&&net&&old&&old!==net?`この案件の受注額は ${yen(old)} で入っています。取り込むと、発注書の ${yen(net)} に変わります。`:''; });
+    el.querySelector('#ibsum').innerHTML=`くっつける ${m}件・新しい案件 ${n}件${l?'・あとで '+l+'件':''}${un?'　<b style="color:var(--warn)">まだ選んでいないものが '+un+'件</b>':''}${dup?'　<b style="color:var(--warn)">同じ案件を2回選んでいます</b>':''}`; el.querySelector('#askYes').disabled=dup||!!un||!(m+n); };
   el.addEventListener('change',e=>{ if(e.target.classList.contains('ibsel'))sum(); });
   el.addEventListener('click',e=>{ if(e.target.id==='askNo'){ el.remove(); return; } if(e.target.id!=='askYes')return;
     const picks=[...el.querySelectorAll('.ibsel')].map(x=>x.value); let add=0, mrg=0, adv=0;
     snap();
-    rows.forEach((r,i)=>{ const v=picks[i]; if(v==='later')return;
+    let gone=0;
+    rows.forEach((r,i)=>{ const v=picks[i]; if(v==='later'||v==='')return;
+      if(DB.cases.some(x=>x.recv===r.key)){ gone++; return; }   /* もう誰かが取り込んだ */
       if(v==='new'){ inboxNewCase(r); add++; return; }
       const c=DB.cases.find(x=>x.id===v.slice(2)); if(!c||c.recv)return;
       mergeInboxRow(r,c); mrg++;
       if(stIdx(c.st)<stIdx('受注')){ c.st='受注'; adv++; } });   /* 発注書が付いたら「受注」に進める（人が選び直さなくてよい） */
     el.remove(); save(); render();
-    toast(`発注書を取り込んだ：いまある案件にくっつけた ${mrg}件${adv?`（うち ${adv}件を「受注」に進めた）`:''}・新しい案件 ${add}件`, undo); });
+    toast(`発注書を取り込んだ：いまある案件にくっつけた ${mrg}件${adv?`（うち ${adv}件を「受注」に進めた）`:''}・新しい案件 ${add}件${gone?`（${gone}件は、ほかの人が先に取り込んでいた）`:''}`, undo); });
   document.body.appendChild(el); sum();
 }
 function inboxBanner(){

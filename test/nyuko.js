@@ -4,7 +4,7 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   const c=new Client({host:'localhost',user:'postgres',password:'pw',database:'aw'}); await c.connect(); const q=(s,p)=>c.query(s,p).then(r=>r.rows);
   const one=async(s,p)=>(await q(s,p))[0];
   // 岸本さんが先に立てた案件（立会依頼・一覧表の時点。まだ受注前）
-  await q("insert into cases(id,client,prop,kind,st,live,sales) values ('CN1','日本財託','見本ハイツ 201','清掃のみ','現調済',true,0),('CN2','日本財託','見本コーポ 102','工事一式','受付',true,0),('CN3','クレアスレント','見本ハイツ 201','清掃のみ','完工',true,0)");
+  await q("insert into cases(id,client,prop,kind,st,live,sales) values ('CN1','日本財託','見本ハイツ 201','清掃のみ','現調済',true,0),('CN2','日本財託','見本コーポ 102','工事一式','受付',true,70000),('CN3','クレアスレント','見本ハイツ 201','清掃のみ','完工',true,0)");
   await q("update cases set done=current_date where id='CN3'");
   // 依頼元の発注書（あとから届く）
   await q(`insert into inbox(key,case_no,client,prop,room,net,plan,items,po_lines) values
@@ -23,13 +23,16 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   await p.click('#impInbox'); await w();
   const cards=await p.$$eval('.ibx',a=>a.map(x=>({t:x.querySelector('.ibh').textContent.replace(/\s+/g,' '),v:x.querySelector('.ibsel').value,opts:[...x.querySelectorAll('.ibsel option')].map(o=>o.value)})));
   ok('ぴったり同じ物件：その案件を最初から選んである（完工済みの同名の案件は候補に出ない）', cards[0].v==='m:CN1'&&cards[0].t.includes('同じ物件の案件がある')&&cards[0].opts.indexOf('m:CN3')<0, cards[0]);
-  ok('名前が近い物件：候補に出して「確かめてください」', cards[1].v==='m:CN2'&&cards[1].t.includes('名前が近い案件がある'), cards[1]);
+  ok('名前が近い物件：候補に出すが、最初からは選ばない（人が選ぶまで取り込めない）', cards[1].v===''&&cards[1].opts.indexOf('m:CN2')>=0&&cards[1].t.includes('名前が近い案件がある')&&(await T('#ibsum')).includes('まだ選んでいないものが 1件')&&await p.$eval('#askYes',x=>x.disabled), cards[1]);
+  await p.selectOption('.ibx[data-i="1"] .ibsel','m:CN2'); await w();
+  ok('選ぶと、受注額が変わることを知らせる（台帳 ¥70,000 → 発注書 ¥80,000）', (await T('.ibx[data-i="1"] .ibw')).includes('¥70,000')&&(await T('.ibx[data-i="1"] .ibw')).includes('¥80,000')&&!(await p.$eval('#askYes',x=>x.disabled)));
   ok('見つからない物件：「新しい案件として作る」を選んであり、赤い印。ほかの案件からも選べる', cards[2].v==='new'&&cards[2].t.includes('台帳に同じ物件が見つからない')&&cards[2].opts.indexOf('m:CN1')>=0, cards[2]);
   await p.screenshot({path:__dirname+'/nyuko1.png'});
   // 同じ案件を2回選ぶと取り込めない
   await p.selectOption('.ibx[data-i="2"] .ibsel','m:CN1'); await w();
   ok('同じ案件を2回選ぶと、注意が出て取り込めない', (await T('#ibsum')).includes('同じ案件を2回選んでいます')&&await p.$eval('#askYes',x=>x.disabled));
   await p.selectOption('.ibx[data-i="2"] .ibsel','later'); await w();
+  // 窓を開いている間に、ほかの人が同じ発注書（KN1）を別の案件として取り込んだ場合
   await p.click('#askYes'); await saved();
   const c1=await one("select recv,sales,st,want::text w from cases where id='CN1'"), c2=await one("select recv,sales,st from cases where id='CN2'"), n1=(await one("select count(*)::int n from cases")).n;
   ok('くっつけた案件に、受注額・希望日が入り、状態が「受注」に進む', c1.recv==='KN1'&&c1.sales===45000&&c1.st==='受注'&&c1.w==='2026-12-10'&&c2.recv==='KN2'&&c2.sales===80000&&c2.st==='受注', {c1,c2});
