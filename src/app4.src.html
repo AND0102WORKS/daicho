@@ -1218,6 +1218,9 @@ function issues(){
     if(sales>0&&!c.bill) out.push({k:'請求月なし',c:c.id,t:`${c.prop}`,d:`売上 ${yen(sales)} が請求一覧に出てこない`});
     if(!c.done&&(c.bill||salesOf(c)>0)) out.push({k:'完工日なし',c:c.id,t:`${c.prop}`,
       d:'完工基準にしたので、完工日が入らないと売上がどの月にも乗らない'});
+    if(c.recv&&DB.cases.some(x=>x!==c&&x.recv===c.recv)) out.push({k:'発注書の重複',c:c.id,t:`${c.prop}`,d:`同じ依頼元の発注書（${c.caseNo||c.recv}）が、2つの案件に付いている。片方を消すか、発注書を付け直す`});
+    { const b=(DB.bills||[]).find(x=>x.st!=='取消'&&(x.items||[]).some(i=>i.case_id===c.id)), it=b&&b.items.find(i=>i.case_id===c.id);
+      if(it&&(+it.amt||0)!==salesEx(c)) out.push({k:'請求書と金額が違う',c:c.id,t:`${c.prop}`,d:`請求書 ${b.no} は ${yen(it.amt)} で出してあるが、いまの受注額は ${yen(salesEx(c))}。請求書を取り消して作り直すか、受注額を確かめる`}); }
     if(c.client&&!isClient(c.client)) out.push({k:'顧客マスタ外',c:c.id,t:`${c.prop}`,d:`「${c.client}」は顧客マスタに無い`});
     if(c.want&&c.plan&&c.plan>c.want&&!c.done) out.push({k:'希望日に遅れる',c:c.id,t:`${c.prop}`,
       d:`依頼元の希望 ${md(c.want)} に対して、弊社の完了予定が ${md(c.plan)}`});
@@ -1333,7 +1336,7 @@ const inboxProp=r=>[r.prop||'',r.room||''].filter(Boolean).join(' ').trim();
 const inboxMemo=r=>[r.memo||'', r.moveIn?('次回入居 '+r.moveIn):'', r.items?('削除/追加 '+r.items):''].filter(Boolean).join(' / ');
 function mergeInboxRow(r,c){
   const memo=inboxMemo(r);
-  c.recv=r.key; c.live=true;
+  c.recv=r.key; c.live=true; if(!c.caseNo&&r.caseNo)c.caseNo=r.caseNo;
   if(!c.client&&r.client)c.client=r.client;
   if(+r.net)c.sales=+r.net;   /* 依頼元の発注書が、受注額を確定させる（先に見込みで入れてあっても、発注書の金額にする） */
   if(!c.want&&r.plan)c.want=r.plan;
@@ -1431,7 +1434,7 @@ function inboxSheet(){
     rows.forEach((r,i)=>{ const v=picks[i]; if(v==='later'||v==='')return;
       if(DB.cases.some(x=>x.recv===r.key)){ gone++; return; }   /* もう誰かが取り込んだ */
       if(v==='new'){ inboxNewCase(r); add++; return; }
-      const c=DB.cases.find(x=>x.id===v.slice(2)); if(!c||c.recv)return;
+      const c=DB.cases.find(x=>x.id===v.slice(2)); if(!c||c.recv){ gone++; return; }
       mergeInboxRow(r,c); mrg++;
       if(stIdx(c.st)<stIdx('受注')){ c.st='受注'; adv++; } });   /* 発注書が付いたら「受注」に進める（人が選び直さなくてよい） */
     el.remove(); save(); render();
