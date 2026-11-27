@@ -44,6 +44,15 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
   // くっつけた案件で、依頼元の明細を取り込める
   await p.evaluate(()=>{ tab='order'; oFilter='すべて'; oCase='CN1'; render(); }); await w();
   ok('くっつけた案件の「見積・発注」で、依頼元の発注書の明細を取り込める', !!(await p.$('#impPO')));
+  // 連携：案件ページ・要確認・請求
+  ok('くっつけた案件に、受付の番号が残る', (await one("select coalesce(case_no,'') n from cases where id='CN1'")).n==='AW-2611-0101');
+  await q("insert into cases(id,client,prop,kind,st,live,sales,recv) values ('CN9','日本財託','見本だぶり 9','清掃のみ','受注',true,1000,'KN1')"); await p.evaluate(()=>dbResync('test')); await p.waitForTimeout(900);
+  ok('同じ発注書が2つの案件に付いたら、要確認に出る', await p.evaluate(()=>issues().filter(x=>x.k==='発注書の重複').length)===2);
+  await q("delete from cases where id='CN9'");
+  await q(`insert into bills(id,org,no,client,month,items,subtotal,tax,total,st) values ('BN1','hq','R-2611-009','日本財託','2026-11','[{"case_id":"CN2","prop":"見本コーポ 102","amt":70000}]',70000,7000,77000,'請求済')`); await p.evaluate(()=>dbResync('test')); await p.waitForTimeout(900);
+  ok('請求書を出したあとに受注額が変わった案件は、要確認に出る（請求書 ¥70,000／いま ¥80,000）', await p.evaluate(()=>issues().some(x=>x.k==='請求書と金額が違う'&&x.c==='CN2'&&x.d.includes('70,000')&&x.d.includes('80,000'))));
+  await p.evaluate(()=>{ tab='bill'; iMonth='2026-12'; bMode='month'; bView='case'; render(); }); await w();
+  ok('請求：くっつけた案件が、発注書の金額で出る', (await p.evaluate(()=>salesEx(DB.cases.find(x=>x.id==='CN1'))))===45000);
   ok('ページのエラーなし', errs.length===0, errs);
   console.log(res.every(Boolean)?'ALL OK':'SOME NG');
   await c.end(); await b.close(); srv.kill();
