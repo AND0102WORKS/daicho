@@ -370,6 +370,12 @@ table.ln .x{border:none;background:none;color:var(--warn);font-weight:900;cursor
 table.ln .x.pk{color:var(--sub);font-weight:600;font-size:11px;margin-left:3px;border:1px solid var(--line);border-radius:4px;padding:1px 4px;vertical-align:middle}
 table.ln .x.pk:hover{color:var(--ink);border-color:var(--ink)}
 table.ln tr.ghead td{background:#F3EFE7;border-top:2px solid var(--line);padding:3px 8px}
+/* 列の固定（ピン） */
+table.ln td.pinc{position:sticky;z-index:2;background:var(--card)}table.ln thead th.pinc{z-index:6}
+table.ln tr.cutln td.pinc{background:var(--warn-bg)}table.ln tbody tr.on td.pinc{background:var(--ok-bg)}
+table.ln .pinl{box-shadow:2px 0 0 #8E9AA0}
+table.ln.pinned tfoot td.lab{left:0;z-index:4}   /* 合計の見出しも左に残す */
+.pinb{display:inline-block;border:none;background:none;cursor:pointer;padding:0 2px;margin-left:4px;color:#B5BCC0;vertical-align:-2px;line-height:1}.pinb svg{width:13px;height:13px;display:block}.pinb.on{color:var(--acc)}.pinb:hover{color:var(--ink)}
 table.ln td.rn{color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;padding-right:4px}
 .ocol{display:inline-flex;gap:6px;flex-wrap:wrap;margin-left:6px}
 .ocell{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:12px;cursor:pointer}
@@ -1982,20 +1988,22 @@ function orderPanel(c){
     ${(n=>n?`<span class="note" style="margin:0;color:var(--warn)" title="取り消し線の行は、見積には出したが発注にならなかった項目（依頼元が落とした）。現場で改めて提案しないこと">取り消し線 ${n}行＝依頼元が落とした項目</span>`:'')(ls.filter(l=>!(+l.qty>0)).length)}</div>`;
   let rowNo=0;
   /* 表の形：見積＝販売と原価（予算）を並べて入れる／発注＝原価と区分・発注先／まとめ＝見るだけ。列のまとまりごとに色を分ける */
-  const M=oMode, W={見積:1380,発注:1320,まとめ:940}[M];
+  const M=oMode, W={見積:1590,発注:1550,まとめ:940}[M];
+  /* 列の固定：見出しのピンを押すと、その列までを左に固定する（もう一度押すと外れる。次に押すまでそのまま） */
+  const pinB=n=>`<button type="button" class="pinb${oPin===n?' on':''}" data-opin="${n}" title="${oPin===n?'固定を外す':'この列までを左に固定する（横に動かしても見えたままになる）'}"><svg viewBox="0 0 24 24" fill="${oPin===n?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 6 4 4v2H6v-2l4-4z"/><path d="M12 15v6"/></svg></button>`;
   const pct=(sv,cs)=>sv?Math.round((sv-cs)/sv*1000)/10+'%':'—';
   const H={
     見積:`<tr class="gh"><th colspan="5"></th><th colspan="4" class="gs">販売（お客様から）</th><th colspan="4" class="gc">原価（業者へ払う見込み）</th><th colspan="2" class="gp">粗利</th><th colspan="2"></th></tr>
-      <tr><th class="r" style="width:46px">No</th><th style="width:30px"></th><th style="width:100px">場所</th><th class="nmcol">名称</th><th style="width:100px">工程区分</th>
+      <tr><th class="r" style="width:46px">No</th><th style="width:30px"></th><th style="width:100px">場所${pinB(3)}</th><th class="nmcol">名称${pinB(4)}</th><th style="width:116px">工程区分${pinB(5)}</th>
       <th class="r gs" style="width:62px">数量</th><th class="gs" style="width:58px">単位</th><th class="r gs" style="width:88px">単価</th><th class="r gs" style="width:84px">金額</th>
       <th class="r gc" style="width:62px">数量</th><th class="gc" style="width:58px">単位</th><th class="r gc" style="width:108px">単価</th><th class="r gc" style="width:84px">金額</th>
-      <th class="r gp" style="width:78px">粗利</th><th class="r gp" style="width:54px">率</th><th style="width:120px">備考</th><th style="width:26px"></th></tr>`,
+      <th class="r gp" style="width:78px">粗利</th><th class="r gp" style="width:54px">率</th><th style="width:260px">備考</th><th style="width:26px"></th></tr>`,
     発注:`<tr class="gh"><th colspan="5"></th><th colspan="4" class="gs">販売（お客様から・見るだけ）</th><th colspan="4" class="gc">原価（業者へ。発注書に出る）</th><th colspan="2" class="gp">粗利</th><th colspan="2"></th></tr>
-      <tr><th class="r" style="width:46px">No</th><th style="width:30px"></th><th style="width:100px">場所</th><th class="nmcol">名称</th><th style="width:100px">工程区分</th>
+      <tr><th class="r" style="width:46px">No</th><th style="width:30px"></th><th style="width:100px">場所${pinB(3)}</th><th class="nmcol">名称${pinB(4)}</th><th style="width:116px">工程区分${pinB(5)}</th>
       <th class="r gs" style="width:52px">数量</th><th class="gs" style="width:44px">単位</th><th class="r gs" style="width:80px">単価</th><th class="r gs" style="width:84px">金額</th>
       <th class="r gc" style="width:62px">数量</th><th class="gc" style="width:58px">単位</th><th class="r gc" style="width:108px">単価</th><th class="r gc" style="width:84px">金額</th>
-      <th class="r gp" style="width:78px">粗利</th><th class="r gp" style="width:54px">率</th><th style="width:120px">備考</th><th style="width:26px"></th></tr>`,
-    まとめ:`<tr><th class="r" style="width:34px">No</th><th style="width:8px"></th><th style="width:110px">場所</th><th class="nmcol">名称</th><th style="width:100px">工程区分</th>
+      <th class="r gp" style="width:78px">粗利</th><th class="r gp" style="width:54px">率</th><th style="width:260px">備考</th><th style="width:26px"></th></tr>`,
+    まとめ:`<tr><th class="r" style="width:34px">No</th><th style="width:8px"></th><th style="width:110px">場所${pinB(3)}</th><th class="nmcol">名称${pinB(4)}</th><th style="width:116px">工程区分${pinB(5)}</th>
       <th class="r gs" style="width:96px">販売</th><th class="r gc" style="width:96px">原価</th><th class="r gp" style="width:90px">粗利</th><th class="r gp" style="width:60px">率</th><th style="width:150px">発注</th></tr>`}[M];
   const ncol={見積:17,発注:17,まとめ:10}[M];
   const row=l=>{const o=l.order?DB.orders.find(x=>x.id===l.order):null;
@@ -2371,6 +2379,16 @@ let cMonth=THIS_M, cWho='すべて', pendStart=null, pHide=false;
 let pCase=null, pFilter='発注前（未）', pQ='', pShift=0, kView='すべて', pSort='起算日が近い順';
 let mTab='事業者情報', mQ='';
 let oMode=(()=>{ try{ const v=localStorage.getItem('aw-omode'); return ['見積','発注','まとめ'].indexOf(v)>=0?v:'発注'; }catch(e){ return '発注'; } })();   /* 明細の表の形 */
+let oPin=(()=>{ try{ const v=+localStorage.getItem('aw-opin'); return [3,4,5].indexOf(v)>=0?v:0; }catch(e){ return 0; } })();   /* 明細の表：左に固定する列の数（0＝固定しない） */
+function pinApply(){
+  const t=document.querySelector('#main .lnw table.ln'); if(!t)return;
+  t.querySelectorAll('.pinc').forEach(c=>{ c.classList.remove('pinc','pinl'); c.style.left=''; }); t.classList.toggle('pinned',!!oPin);
+  if(!oPin)return;
+  const hr=t.querySelector('thead tr:last-child'); if(!hr)return; const x0=t.getBoundingClientRect().left, lefts=[...hr.children].slice(0,oPin).map(th=>Math.round(th.getBoundingClientRect().left-x0));   /* 表の左端からの位置（offsetLeft は基準がずれるので使わない） */
+  const mark=cells=>cells.forEach((c,i)=>{ if(i>=oPin)return; c.classList.add('pinc'); if(i===oPin-1)c.classList.add('pinl'); c.style.left=lefts[i]+'px'; });
+  mark([...hr.children]); t.querySelectorAll('tbody tr[data-l]').forEach(tr=>mark([...tr.children]));
+}
+window.addEventListener('resize',()=>{ if(oPin)pinApply(); });
 function setOMode(m){ oMode=m; try{ localStorage.setItem('aw-omode',m); }catch(e){} render(); }
 let oCase=null, oFilter='発注前（未）', oQ='', oSel={}, oView='make', oMonth=THIS_M, oSt='未完了';
 let oMemoOpen=false;   /* 発注画面の案件の備考を全部見せるか */
@@ -4766,7 +4784,7 @@ function render(){
   tipHide(); keepView();
   const mem=memView();
   withHidden(()=>{ renderTabs(); paint(); });
-  if(inOrder())fitLnw();
+  if(inOrder()){ fitLnw(); pinApply(); }
   if(inProc())fitProc();
   const hitBoard=restoreView(mem);
   if(inProc()){
@@ -5118,6 +5136,7 @@ document.addEventListener('click',e=>{
     if(kc&&t.id==='klRename'){ const nw=(prompt('新しい名前（案件・単価・請求書・入金の記録も一緒に変わる）',kc.name)||'').trim(); if(!nw||nw===kc.name)return;
       if(DB.clients.some(y=>y!==kc&&y.name===nw)){ toast(`「${nw}」は既にある`); return; } snap(); const old=kc.name; kc.name=nw; renameClient(old,nw); save(); render(); toast(`名前を ${nw} に変えた`); return; }
     if(!klId&&!c('button')&&(x=c('tr[data-kl]'))){ const cl=DB.clients.find(y=>y.id===x.dataset.kl)||clientOf(x.dataset.kn); if(cl){ if(!cl.id){ toast('保存中…少し待ってからもう一度'); return; } klId=cl.id; klTab='基本情報'; render(); window.scrollTo(0,0); } return; } }
+  { const pn=e.target.closest&&e.target.closest('[data-opin]'); if(pn){ const n=+pn.dataset.opin; oPin=oPin===n?0:n; try{ localStorage.setItem('aw-opin',String(oPin)); }catch(_){} render(); return; } }
   if(e.target.id==='pBank'){ payBankList(); return; }
   if(tab==='pay'){ const t=e.target, c=q=>t.closest&&t.closest(q); let x;
     if((x=c('[data-pmode]'))){ pMode=x.dataset.pmode; if(pMode==='range'&&pView==='year')pView='vendor'; render(); return; }

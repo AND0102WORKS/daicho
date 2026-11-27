@@ -369,6 +369,7 @@ table.ln tr.ghead td{background:#F3EFE7;border-top:2px solid var(--line);padding
 table.ln td.pinc{position:sticky;z-index:2;background:var(--card)}table.ln thead th.pinc{z-index:6}
 table.ln tr.cutln td.pinc{background:var(--warn-bg)}table.ln tbody tr.on td.pinc{background:var(--ok-bg)}
 table.ln .pinl{box-shadow:2px 0 0 #8E9AA0}
+table.ln.pinned tfoot td.lab{left:0;z-index:4}   /* 合計の見出しも左に残す */
 .pinb{display:inline-block;border:none;background:none;cursor:pointer;padding:0 2px;margin-left:4px;color:#B5BCC0;vertical-align:-2px;line-height:1}.pinb svg{width:13px;height:13px;display:block}.pinb.on{color:var(--acc)}.pinb:hover{color:var(--ink)}
 table.ln td.rn{color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;padding-right:4px}
 .ocol{display:inline-flex;gap:6px;flex-wrap:wrap;margin-left:6px}
@@ -1924,7 +1925,7 @@ function orderPanel(c){
     ${(n=>n?`<span class="note" style="margin:0;color:var(--warn)" title="取り消し線の行は、見積には出したが発注にならなかった項目（依頼元が落とした）。現場で改めて提案しないこと">取り消し線 ${n}行＝依頼元が落とした項目</span>`:'')(ls.filter(l=>!(+l.qty>0)).length)}</div>`;
   let rowNo=0;
   /* 表の形：見積＝販売と原価（予算）を並べて入れる／発注＝原価と区分・発注先／まとめ＝見るだけ。列のまとまりごとに色を分ける */
-  const M=oMode, W={見積:1520,発注:1460,まとめ:940}[M];
+  const M=oMode, W={見積:1590,発注:1550,まとめ:940}[M];
   /* 列の固定：見出しのピンを押すと、その列までを左に固定する（もう一度押すと外れる。次に押すまでそのまま） */
   const pinB=n=>`<button type="button" class="pinb${oPin===n?' on':''}" data-opin="${n}" title="${oPin===n?'固定を外す':'この列までを左に固定する（横に動かしても見えたままになる）'}"><svg viewBox="0 0 24 24" fill="${oPin===n?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 6 4 4v2H6v-2l4-4z"/><path d="M12 15v6"/></svg></button>`;
   const pct=(sv,cs)=>sv?Math.round((sv-cs)/sv*1000)/10+'%':'—';
@@ -2291,9 +2292,9 @@ let oMode=(()=>{ try{ const v=localStorage.getItem('aw-omode'); return ['見積'
 let oPin=(()=>{ try{ const v=+localStorage.getItem('aw-opin'); return [3,4,5].indexOf(v)>=0?v:0; }catch(e){ return 0; } })();   /* 明細の表：左に固定する列の数（0＝固定しない） */
 function pinApply(){
   const t=document.querySelector('#main .lnw table.ln'); if(!t)return;
-  t.querySelectorAll('.pinc').forEach(c=>{ c.classList.remove('pinc','pinl'); c.style.left=''; });
+  t.querySelectorAll('.pinc').forEach(c=>{ c.classList.remove('pinc','pinl'); c.style.left=''; }); t.classList.toggle('pinned',!!oPin);
   if(!oPin)return;
-  const hr=t.querySelector('thead tr:last-child'); if(!hr)return; const lefts=[...hr.children].slice(0,oPin).map(th=>th.offsetLeft);
+  const hr=t.querySelector('thead tr:last-child'); if(!hr)return; const x0=t.getBoundingClientRect().left, lefts=[...hr.children].slice(0,oPin).map(th=>Math.round(th.getBoundingClientRect().left-x0));   /* 表の左端からの位置（offsetLeft は基準がずれるので使わない） */
   const mark=cells=>cells.forEach((c,i)=>{ if(i>=oPin)return; c.classList.add('pinc'); if(i===oPin-1)c.classList.add('pinl'); c.style.left=lefts[i]+'px'; });
   mark([...hr.children]); t.querySelectorAll('tbody tr[data-l]').forEach(tr=>mark([...tr.children]));
 }
