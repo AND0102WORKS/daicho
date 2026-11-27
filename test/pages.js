@@ -29,6 +29,7 @@ const t2=await o2.innerText('#sheet');console.log('tax-exempt:',t2.includes('消
 // 業者ページ：送付済みの発注が一覧に出る（下書きは出ない）。開いて承諾 → 戻ると承諾済み
 const v=await b.newPage({viewport:{width:390,height:760},deviceScaleFactor:2});v.on('pageerror',e=>console.log('PAGEERR',e.message));
 await v.goto('http://localhost:8787/me.html?t='+VT2);await v.waitForTimeout(1500);
+await v.click('[data-m="orders"]');await v.waitForTimeout(600);   // ホームの「発注書の一覧を見る」
 const before=await v.$$eval('#olist .ord',a=>a.map(x=>x.querySelector('.no').textContent+':'+x.querySelector('.st').textContent));
 console.log('portal mode:',await v.$eval('[data-m].on',x=>x.dataset.m),'wait:',await v.$eval('#waitCnt',x=>x.textContent),'orders:',before.join(' | '));
 await v.screenshot({path:'portal.png'});

@@ -53,6 +53,31 @@ button.done:disabled{opacity:.5}
 .mode button{flex:1;padding:11px 4px;border:0;background:var(--card);font-size:15px;font-weight:700;color:var(--acc)}
 .mode button.on{background:var(--acc);color:#fff}
 .mode .cnt[hidden]{display:none}
+/* 下のメニュー */
+main{padding-bottom:96px}
+.bnav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding:4px 4px calc(6px + env(safe-area-inset-bottom));z-index:3}
+.bnav button{flex:1;max-width:128px;border:0;background:none;color:var(--sub);font-size:11.5px;font-weight:700;padding:5px 2px 3px;position:relative;font-family:inherit}
+.bnav svg{display:block;width:26px;height:26px;margin:0 auto 1px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.bnav button.on{color:var(--acc)}
+.bnav .cnt{position:absolute;top:0;left:54%;min-width:18px;padding:0 5px;border-radius:9px;background:var(--warn);color:#fff;font-size:11px;line-height:18px}.cnt[hidden]{display:none}
+/* ホーム：いま、やること */
+.hh{font-size:14px;color:var(--sub);font-weight:700;margin:16px 0 8px}.hh:first-child{margin-top:2px}
+.todo{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin:0 0 8px;font-family:inherit;color:var(--ink)}
+.todo .n{flex:0 0 40px;height:40px;border-radius:20px;color:#fff;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center}
+.todo .t{flex:1;font-size:15.5px;font-weight:700;line-height:1.45}.todo .t small{display:block;font-weight:400;color:var(--sub);font-size:12.5px}
+.todo .go{color:var(--acc);font-weight:800;font-size:20px}
+.c-red{background:var(--warn)}.c-amb{background:#C98A00}.c-grn{background:var(--ok)}.c-blu{background:#3D6DB5}.c-acc{background:var(--acc)}.c-gry{background:#8A949B}
+.linkb{display:block;width:100%;border:1px solid var(--line);background:var(--card);color:var(--sub);border-radius:10px;padding:10px;font-size:13.5px;margin:14px 0 0;font-family:inherit}
+/* 案件：状態ごと */
+.chips{display:flex;gap:6px;margin:0 0 10px}.chips button{flex:1;white-space:nowrap;border:1.5px solid var(--line);background:var(--card);border-radius:999px;padding:8px 4px;font-size:14px;font-weight:700;color:var(--sub);font-family:inherit}
+.chips button.on{background:var(--acc);border-color:var(--acc);color:#fff}.chips em{font-style:normal;background:var(--warn);color:#fff;border-radius:9px;font-size:11px;padding:0 5px;margin-left:4px}.chips button.on em{background:#fff;color:var(--acc)}
+.job.jc{border-left-width:6px}.jc .jtop{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--sub);margin-bottom:3px;flex-wrap:wrap}
+.jc .jst{font-size:12px;font-weight:800;border-radius:999px;padding:2px 10px;color:#fff}.jc .jamt{float:right;color:var(--ink);font-size:15px}
+.jc.k-ask,.jc.k-wait,.jc.k-back{border-left-color:var(--warn)}.jc.k-due,.jc.k-chk{border-left-color:#C98A00}.jc.k-now{border-left-color:#3D6DB5}
+.jc.k-soon,.jc.k-tent{border-left-color:var(--acc)}.jc.k-okd{border-left-color:var(--ok)}.jc.k-billed,.jc.k-paid,.jc.k-done{border-left-color:#8A949B}
+.jc .row{margin-top:9px}.jc .row .sub,.jc .row a.map{flex:1;text-align:center;white-space:nowrap;padding-left:6px;padding-right:6px}.jc .row button.done{flex-basis:100%}
+.cmon{display:flex;font-size:13px;font-weight:800;color:var(--sub);margin:14px 0 6px}.cmon span{margin-left:auto;font-weight:400}
+#cq{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:15px;margin:0 0 6px;font-family:inherit}
 /* 使い方（操作マニュアル） */
 .hsec{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 14px 10px;margin:0 0 12px}
 .hsec h2{font-size:16px;margin:0 0 4px;display:flex;align-items:center;gap:8px}.hsec h2 i{font-style:normal;background:var(--acc);color:#fff;border-radius:999px;font-size:12px;padding:2px 10px}
@@ -149,13 +174,14 @@ button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);backg
 </style>
 </head>
 <body>
-<header><h1>発注と工程</h1><span class="who" id="who"></span><button id="reload" type="button">更新</button></header>
+<header><h1 id="ttl">ホーム</h1><span class="who" id="who"></span><button id="reload" type="button">更新</button></header>
 <main>
   <div id="pushBar" class="pushbar" hidden></div>
-  <div class="mode"><button data-m="orders">発注<span class="cnt" id="waitCnt" hidden></span></button><button data-m="sched">工程</button><button data-m="bill">請求</button><button data-m="help">使い方</button></div>
+  <div id="homeView" hidden><div class="empty">読み込み中…</div></div>
+  <div id="casesView" hidden><div class="chips" id="cchips"></div><div id="clist"><div class="empty">読み込み中…</div></div></div>
   <div id="billView" hidden><div id="blist"><div class="empty">読み込み中…</div></div>
     <p class="hint">完了報告を会社が承認すると、ここに締めの月ごとに並びます。「この月の請求書を発行する」で請求書ができます。<br>会社から支払明細書が届いたときも、ここに出ます。</p></div>
-  <div id="ordersView" hidden><div id="olist"><div class="empty">読み込み中…</div></div>
+  <div id="ordersView" hidden><p class="sum" style="margin:0 0 8px"><b>発注書の一覧</b>　<span class="cnt" id="waitCnt" hidden></span></p><div id="olist"><div class="empty">読み込み中…</div></div>
     <p class="hint">このページはあなた専用です。ほかの人に教えないでください。<br>ホーム画面に出す手順と使い方は、上の「使い方」にあります。</p></div>
   <div id="helpView" hidden></div>
   <div id="schedView">
@@ -163,6 +189,13 @@ button.sub{padding:9px 12px;border-radius:8px;border:1px solid var(--line);backg
   <div id="list"><div class="empty">読み込み中…</div></div>
   </div>
 </main>
+<nav class="bnav">
+  <button type="button" data-m="home"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>ホーム<span class="cnt" id="nbHome" hidden></span></button>
+  <button type="button" data-m="cases"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>案件<span class="cnt" id="nbCases" hidden></span></button>
+  <button type="button" data-m="sched"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg>予定</button>
+  <button type="button" data-m="bill"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8l3 4 3-4M12 12v5M9 13h6M9 16h6"/></svg>請求<span class="cnt" id="nbBill" hidden></span></button>
+  <button type="button" data-m="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg>使い方</button>
+</nav>
 <div class="modal" id="rm" hidden><div class="msheet">
   <h3>完了報告</h3><div class="meta" id="rProp"></div>
   <label>完了日<input type="date" id="rDone"></label>
@@ -216,8 +249,8 @@ async function loadOrders(){
         :`<div class="meta">内容の詳しい明細は、発注書でお知らせします</div>`)(AI[a.proc_id]||[])}
       <button type="button" class="infob" data-info="${esc(a.proc_id)}">案件の詳細・写真を見る</button>
       <div class="askb"><button type="button" class="ok" data-ans="${esc(a.proc_id)}|1">受けられる</button><button type="button" class="ng" data-ans="${esc(a.proc_id)}|0">都合が悪い</button></div></div>`; }).join(''):'';
-  const c=document.getElementById('waitCnt'); c.hidden=!(wait.length+ASKS.length); c.textContent=wait.length+ASKS.length;
-  if(!rows.length){ el.innerHTML=askHtml+(ASKS.length?'':'<div class="empty">発注はまだありません</div>'); return rows; }
+  const c=document.getElementById('waitCnt'); c.hidden=!wait.length; c.textContent=wait.length?'承諾待ち '+wait.length+'件':'';
+  if(!rows.length){ el.innerHTML='<div class="empty">発注はまだありません</div>'; return rows; }
   const card=o=>{ const [lab,cls]=SLABEL[o.st]||[o.st,''], tax=o.taxable!==false, amt=tax?Math.round(o.amount*1.1):o.amount;
     const term=o.start_date?md(o.start_date)+(o.end_date&&String(o.end_date).slice(0,10)!==String(o.start_date).slice(0,10)?' 〜 '+md(o.end_date):''):'未定';
     return `<a class="ord ${o.st==='送付済'?'wait':''}" href="order.html?t=${encodeURIComponent(o.order_token)}&v=${encodeURIComponent(token)}">
@@ -227,16 +260,124 @@ async function loadOrders(){
       <div class="amt">${yen(amt)} <small>${tax?'（税込）':'（消費税なし）'}</small></div>
       <div class="go">${o.st==='送付済'?'発注書を見て承諾する':'発注書を見る'}</div></a>`; };
   const act=rows.filter(o=>o.st==='送付済'||o.st==='承諾'), past=rows.filter(o=>o.st!=='送付済'&&o.st!=='承諾');
-  el.innerHTML=askHtml+(wait.length?`<p class="sum">承諾待ちが <b>${wait.length}</b> 件あります</p>`:'')+
+  el.innerHTML=(wait.length?`<p class="sum">承諾待ちが <b>${wait.length}</b> 件あります</p>`:'')+
     (act.length?act.map(card).join(''):'<div class="empty">進行中の発注はありません</div>')+
     (past.length?`<div class="sec">完了した発注（${past.length}件）</div>`+past.slice(0,20).map(card).join(''):'');
   return rows;
 }
+const TTL={home:'ホーム',cases:'案件',sched:'予定',bill:'請求',help:'使い方',orders:'発注書'};
 function setMode(m){ mode=m;
-  document.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  document.querySelectorAll('.bnav [data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  document.getElementById('ttl').textContent=TTL[m]||'';
+  document.getElementById('homeView').hidden=m!=='home'; document.getElementById('casesView').hidden=m!=='cases';
+  if(m!=='home')document.getElementById('homeView').innerHTML=''; if(m!=='cases')document.getElementById('clist').innerHTML='';
+  if(m==='home'||m==='cases')drawAll();
   document.getElementById('ordersView').hidden=m!=='orders'; document.getElementById('schedView').hidden=m!=='sched';
   document.getElementById('billView').hidden=m!=='bill'; if(m==='bill'&&ME)loadBill();
   const hv=document.getElementById('helpView'); hv.hidden=m!=='help'; if(m==='help'){ if(!hv.innerHTML)hv.innerHTML=helpHtml(); window.scrollTo(0,0); } }
+/* ================= ホームと案件（状態ごと） =================
+   1つの工程（現場）が、いまどの段階かを決める：
+   ask＝日程の相談に返事待ち／wait＝発注書が届いて承諾待ち／soon＝承諾済みで作業日がまだ先／now＝作業日が今日（期間の途中）
+   due＝作業日を過ぎたのに完了報告がまだ／back＝差し戻し／chk＝報告済み（会社の確認待ち）／okd＝承認済み（請求できる）
+   billed＝請求書・支払明細書に載った／paid＝支払済み／done＝報告なしで完了になった／tent＝仮の予定 */
+let ALL=[], CTAB='', CQ='', AIT={};
+const JST={ask:['日程の相談','c-red'],wait:['承諾待ち','c-red'],soon:['これから','c-acc'],now:['作業中','c-blu'],due:['報告待ち','c-amb'],back:['差し戻し','c-red'],
+  chk:['確認待ち','c-amb'],okd:['承認済み','c-grn'],billed:['請求済み','c-gry'],paid:['支払済み','c-gry'],done:['完了','c-gry'],tent:['仮の予定','c-acc']};
+const CTABS=[['ans','返事する',['ask','wait']],['go','進行中',['now','soon','tent']],['rep','報告',['back','due','chk','okd']],['past','過去',['billed','paid','done']]];
+const tabOf=k=>CTABS.find(t=>t[2].indexOf(k)>=0)[0];
+async function loadAll(){
+  if(!token||!ME)return;
+  const t=new Date(), a=new Date(t), b=new Date(t); a.setDate(a.getDate()-400); b.setDate(b.getDate()+365);
+  const [rj,ro,ra,rb]=await Promise.all([sb.rpc('my_jobs',{p_token:token,p_from:fmt(a),p_to:fmt(b)}),sb.rpc('my_job_orders',{p_token:token}),sb.rpc('my_asks',{p_token:token}),sb.rpc('my_billing',{p_token:token})]);
+  if(rj.error){ document.getElementById('homeView').innerHTML='<div class="err">読み込めませんでした。電波の良いところで「更新」を押してください。</div>'; return; }
+  JO={}; (ro.data||[]).forEach(x=>{ JO[x.proc_id]=x; }); ASKS=ra.data||[];
+  AIT={}; if(ASKS.length){ const ri=await sb.rpc('my_ask_items',{p_token:token}); (ri.data||[]).forEach(x=>{ AIT[x.proc_id]=x.items||[]; }); }
+  const paidOf={}; ((rb.data&&rb.data.invoices)||[]).forEach(v=>(v.items||[]).forEach(i=>{ if(i.proc_id)paidOf[i.proc_id]=v; }));
+  const today=fmt(new Date()), asked={}; ASKS.forEach(x=>{ asked[x.proc_id]=1; });
+  const out=ASKS.map(x=>{ const s=String(x.start_date||'').slice(0,10), e=String(x.end_date||'').slice(0,10)||s; return {k:'ask',p:Object.assign({},x,{s,e:e<s?s:e})}; });
+  (rj.data||[]).forEach(p0=>{ if(asked[p0.proc_id])return; const o=JO[p0.proc_id]; if(o&&o.order_st==='下書き')return;
+    const s=String(p0.start_date||'').slice(0,10), e0=String(p0.end_date||'').slice(0,10)||s, p=Object.assign({},p0,{s,e:e0<s?s:e0}), r=p.rep, iv=paidOf[p.proc_id];
+    let k;
+    if(p.prog==='仮')k='tent';
+    else if(o&&o.order_st==='送付済')k='wait';
+    else if(r&&r.st==='差し戻し')k='back';
+    else if(r&&r.st==='報告済')k='chk';
+    else if(r&&r.st==='承認')k=(r.billed||iv)?(iv&&iv.st==='支払済'?'paid':'billed'):'okd';
+    else if(p.prog==='完了')k='done';
+    else k=!s||today<s?'soon':today<=p.e?'now':'due';
+    out.push({k,p,iv}); });
+  ALL=out; out.forEach(x=>{ ROWS[x.p.proc_id]=x.p; });
+  drawAll();
+}
+function jcard(x){
+  const p=x.p, [lab,col]=JST[x.k], pid=esc(p.proc_id), r=p.rep;
+  const when=p.s?md(p.s)+(p.e&&p.e!==p.s?' 〜 '+md(p.e):''):'日程未定';
+  const q=encodeURIComponent(p.addr||p.prop||''), map=q?`<a class="map" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${q}">地図</a>`:'';
+  const info=`<button type="button" class="sub" data-info="${pid}">詳細</button>`;
+  const sub={ask:'返事をお願いします',wait:'発注書が届いています',soon:JO[p.proc_id]?'承諾済み':'',now:p.s===p.e?'今日の現場':'作業の期間中',due:'作業日を過ぎています。完了報告をお願いします',
+    back:'直して、もう一度報告してください',chk:'会社の確認を待っています',okd:'請求できます',billed:x.iv?(x.iv.kind||'請求書')+'に載りました':'請求書に載りました',paid:x.iv&&x.iv.paid_date?md(x.iv.paid_date)+' に支払い':'',done:'',tent:'まだ確定していない予定です'}[x.k]||'';
+  let act='';
+  if(x.k==='ask'){ const its=AIT[p.proc_id]||[];
+    act=(its.length?`<div class="aits"><b>内容（${its.length}件）</b>${its.slice(0,6).map(i=>`<div>・${esc((i.spec?i.spec+' ':'')+i.name)}　${esc(String(+i.qty))}${esc(i.unit||'')}</div>`).join('')}${its.length>6?`<div>ほか ${its.length-6}件</div>`:''}</div>`:'')
+      +`<div class="row">${info}</div><div class="askb"><button type="button" class="ok" data-ans="${pid}|1">受けられる</button><button type="button" class="ng" data-ans="${pid}|0">都合が悪い</button></div>`; }
+  else if(x.k==='wait') act=ordLink(p)+`<div class="row">${info}${map}</div>`;
+  else if(x.k==='soon'||x.k==='tent') act=(p.key_info?`<div class="key"><b>鍵</b>${esc(p.key_info)}</div>`:'')+ordLink(p)+`<div class="row">${info}${map}</div>`;
+  else if(x.k==='now'||x.k==='due'||x.k==='back'||x.k==='chk'||x.k==='okd')
+    act=(x.k==='now'&&p.addr?`<div class="addr">${esc(p.addr)}</div>`:'')+(x.k==='now'&&p.key_info?`<div class="key"><b>鍵</b>${esc(p.key_info)}</div>`:'')
+      +`<div class="row">${info}${x.k==='now'?map:''}<button class="sub" type="button" data-photo="1">写真</button>${repBox(p)}</div>`;
+  else act=`<div class="row">${info}</div>`;
+  const amt=+p.amt||0, ex=r&&+r.extra?`<small style="color:var(--sub)">（追加 ${yen(r.extra)}${r.st==='承認'?'':'・申請中'}）</small>`:'';
+  return `<div class="job jc k-${x.k}${x.k==='ask'?' askc':''}" data-id="${pid}"><div class="jtop"><span class="jst ${col}">${lab}</span>${esc(sub)}</div>
+    <div class="prop">${esc(p.prop)}</div><div class="meta">${when}　<span class="tag">${esc(p.kind||'工程')}</span>${amt&&x.k!=='ask'?`<b class="jamt">${yen(amt)}</b>`:''} ${ex}</div>${act}</div>`;
+}
+function drawAll(){
+  const n=k=>ALL.filter(x=>x.k===k).length, today=fmt(new Date()), tmr=(d=>{ d.setDate(d.getDate()+1); return fmt(d); })(new Date());
+  const ans=n('ask')+n('wait'), repN=n('due')+n('back'), okd=ALL.filter(x=>x.k==='okd'), okSum=okd.reduce((a,x)=>a+(+((x.p.rep||{}).base)||+x.p.amt||0),0);
+  const badge=(id,v)=>{ const el=document.getElementById(id); if(el){ el.hidden=!v; el.textContent=v||''; } };
+  badge('nbHome',ans+repN); badge('nbCases',ans+repN); badge('nbBill',ME&&ME.type!=='専属'?okd.length:0);
+  /* ---- ホーム ---- */
+  const hv=document.getElementById('homeView');
+  if(!hv.hidden){
+    const first=k=>(ALL.find(x=>x.k===k)||{p:{}}).p, more=(k,c)=>c>1?' ほか':'';
+    const todo=(c,col,t,sm,go)=>c?`<button type="button" class="todo" ${go}><span class="n ${col}">${c}</span><span class="t">${t}<small>${sm}</small></span><span class="go">›</span></button>`:'';
+    const asks=ALL.filter(x=>x.k==='ask');
+    const tds=(asks.length>3?todo(asks.length,'c-red','日程の相談に返事をする','全部で '+asks.length+'件','data-ctab="ans"'):'')
+      +todo(n('wait'),'c-red','発注書を見て承諾する',esc(first('wait').prop||'')+more('wait',n('wait')),'data-ctab="ans"')
+      +todo(n('back'),'c-red','差し戻された報告を直す',esc(first('back').prop||'')+more('back',n('back')),'data-ctab="rep"')
+      +todo(n('due'),'c-amb','完了報告を出す',esc(first('due').prop||'')+(first('due').e?'（'+md(first('due').e)+' に作業）':'')+more('due',n('due')),'data-ctab="rep"')
+      +(ME&&ME.type!=='専属'&&okd.length?`<button type="button" class="todo" data-m="bill"><span class="n c-grn">¥</span><span class="t">請求できます<small>${okd.length}件　${yen(okSum)}（税抜）</small></span><span class="go">›</span></button>`:'');
+    const near=ALL.filter(x=>['now','soon','wait','tent'].indexOf(x.k)>=0&&x.p.s&&x.p.s<=tmr&&x.p.e>=today).sort((a,b)=>a.p.s.localeCompare(b.p.s));
+    const next=near.length?[]:ALL.filter(x=>['soon','wait'].indexOf(x.k)>=0&&x.p.s&&x.p.s>tmr).sort((a,b)=>a.p.s.localeCompare(b.p.s)).slice(0,2);
+    hv.innerHTML=`<div class="hh">いま、やること</div>${asks.length?`<div class="sec" style="margin-top:0">日程の相談（${asks.length}件）　お返事ください</div>`+asks.slice(0,3).map(jcard).join(''):''}${tds||(asks.length?'':'<div class="job" style="text-align:center;color:var(--sub);font-size:14.5px">いま、やることはありません</div>')}
+      <div class="hh">今日・明日の現場</div>${near.map(jcard).join('')||'<div class="empty" style="padding:14px 0">今日・明日の現場はありません</div>'}
+      ${next.length?`<div class="hh">次の現場</div>`+next.map(jcard).join(''):''}
+      <button type="button" class="linkb" data-m="orders">発注書の一覧を見る</button>`;
+  }
+  /* ---- 案件 ---- */
+  const cv=document.getElementById('casesView');
+  if(!cv.hidden){
+    if(!CTAB)CTAB=ans?'ans':repN?'rep':'go';
+    const cnt={ans:ans,rep:repN};
+    document.getElementById('cchips').innerHTML=CTABS.map(([k,l])=>`<button type="button" class="${CTAB===k?'on':''}" data-ctab="${k}">${l}${cnt[k]?`<em>${cnt[k]}</em>`:''}</button>`).join('');
+    const ks=CTABS.find(t=>t[0]===CTAB)[2]; let l=ALL.filter(x=>ks.indexOf(x.k)>=0), html='';
+    const ord=k=>ks.indexOf(k);
+    if(CTAB==='past'){
+      const q=CQ.trim().toLowerCase(); if(q)l=l.filter(x=>String(x.p.prop||'').toLowerCase().includes(q));
+      l.sort((a,b)=>String(b.p.e||'').localeCompare(String(a.p.e||'')));
+      html=`<input type="search" id="cq" placeholder="物件名で探す" value="${esc(CQ)}">`; let last='';
+      l.slice(0,80).forEach(x=>{ const m=String(x.p.e||'').slice(0,7); if(m!==last){ last=m; const g=l.filter(y=>String(y.p.e||'').slice(0,7)===m);
+        html+=`<div class="cmon">${m?m.slice(0,4)+'年 '+(+m.slice(5,7))+'月':'日付なし'}<span>${g.length}件　${yen(g.reduce((a,y)=>a+(+y.p.amt||0),0))}</span></div>`; } html+=jcard(x); });
+      if(!l.length)html+='<div class="empty">終わった現場はまだありません</div>'; if(l.length>80)html+='<p class="hint">古いものは、物件名で探してください。</p>';
+    } else {
+      l.sort((a,b)=>ord(a.k)-ord(b.k)||String(a.p.s||'9').localeCompare(String(b.p.s||'9')));
+      html=l.map(jcard).join('')||`<div class="empty">${{ans:'返事の要るものはありません',go:'進行中の現場はありません',rep:'報告の要る現場・報告した現場はありません'}[CTAB]}</div>`;
+      html+=`<p class="hint">${{ans:'日程の相談（受けられる・都合が悪い）と、届いた発注書の承諾。',go:'承諾した現場。作業日になると「作業中」になり、作業日を過ぎると「報告」に移ります。',rep:'作業日を過ぎた現場の完了報告と、出した報告の状況。承認されると請求できます。'}[CTAB]}</p>`;
+    }
+    const keep=document.activeElement&&document.activeElement.id==='cq';
+    document.getElementById('clist').innerHTML=html;
+    if(keep){ const i=document.getElementById('cq'); if(i){ i.focus(); i.setSelectionRange(i.value.length,i.value.length); } }
+  }
+}
 function span(){
   const t=new Date(); t.setHours(0,0,0,0);
   if(range==='month'){ const a=new Date(t.getFullYear(),t.getMonth(),1), b=new Date(t.getFullYear(),t.getMonth()+1,0); return [fmt(a),fmt(b)]; }
@@ -287,7 +428,8 @@ async function load(){
         ${tent?'<span class="meta">まだ確定していない予定です</span>':`<button class="sub" type="button" data-photo="1">写真</button>`+repBox(p)}</div></div>`;
   });
   list.innerHTML=html;
-  ROWS={}; rows.forEach(p=>{ ROWS[p.proc_id]=p; });
+  rows.forEach(p=>{ ROWS[p.proc_id]=p; });
+  loadAll();   /* ホーム・案件も同じ中身に合わせる */
 }
 /* ---- 検査：ボリューム（間取り＋自社施工）・その日の件数・回る順番 ---- */
 let INS={};
@@ -552,16 +694,16 @@ function helpHtml(){
       <div class="hos"><button type="button" data-hos="ios" class="${ios?'on':''}">iPhone</button><button type="button" data-hos="and" class="${ios?'':'on'}">Android</button></div>
       <div id="hosIos"${ios?'':' hidden'}>${iosSteps}</div><div id="hosAnd"${ios?' hidden':''}>${andSteps}</div>
       <div class="hnote">このページのリンクは<b>あなた専用</b>です。ほかの人に送らないでください。</div></div>
-    <div class="hsec"><h2><i>1</i>発注が届いたら</h2><ol class="hlist"><li>上の<b>「発注」</b>を押すと、届いた発注が並びます（赤い数字は、まだ返事をしていない件数）。</li>
+    <div class="hsec"><h2><i>1</i>発注が届いたら</h2><ol class="hlist"><li><b>「ホーム」</b>の「いま、やること」に、返事の要るものが出ます（下のメニューの赤い数字は、その件数）。押すと一覧が開きます。</li>
       <li>日程の相談（打診）が来ているときは、<b>「行ける」「行けない」</b>で返事をします。</li>
       <li><b>「発注書を見て承諾する」</b>を押し、内容・金額・伝達事項を確かめて<b>「承諾」</b>を押します。</li></ol></div>
-    <div class="hsec"><h2><i>2</i>工程を見る</h2><ol class="hlist"><li>上の<b>「工程」</b>を押すと、自分の現場が日付の順に並びます。「今週」「来週」「今月」で切り替えられます。</li>
+    <div class="hsec"><h2><i>2</i>現場を見る</h2><ol class="hlist"><li>下の<b>「案件」</b>で、現場を「返事する・進行中・報告・過去」に分けて見られます。下の<b>「予定」</b>では、日付の順に「今週」「来週」「今月」で見られます。</li>
       <li>現場を押すと、<b>住所（地図）・鍵の情報・工事の内容・写真</b>が見られます。</li></ol></div>
     <div class="hsec"><h2><i>3</i>終わったら完了報告</h2><ol class="hlist"><li>工程の現場にある<b>「写真」</b>から、施工前・施工後の写真を送ります（選ぶとすぐ送られます）。</li>
       <li><b>「完了報告」</b>を押し、完了日とコメントを入れて<b>「報告を送る」</b>を押します。</li>
       <li>追加の作業があったときは、<b>追加金額と理由</b>を入れてください。会社が確かめて、認めた分が金額に足されます。</li>
       <li>「差し戻し」と出たときは、理由を読んで、直してからもう一度送ります。</li></ol></div>
-    <div class="hsec"><h2><i>4</i>請求する</h2><ol class="hlist"><li>上の<b>「請求」</b>を押すと、会社が承認した完了報告が、締めの月ごとに並びます。</li>
+    <div class="hsec"><h2><i>4</i>請求する</h2><ol class="hlist"><li>下の<b>「請求」</b>を押すと、会社が承認した完了報告が、締めの月ごとに並びます。</li>
       <li><b>「この月の請求書を発行する」</b>を押すと、請求書ができて会社に届きます（金額は自動で入ります）。</li>
       <li>会社から<b>支払明細書</b>が届いたときは、中身を見て「確認した」を押します。</li></ol></div>
     <div class="hsec"><h2><i>?</i>困ったとき</h2><ul class="hlist"><li>新しい発注や変更が出てこないときは、右上の<b>「更新」</b>を押します。</li>
@@ -599,15 +741,15 @@ async function start(){
   ME=data[0]; document.getElementById('who').textContent=ME.name+' さん';
   /* 業者がこのページを開いたことを記録する（台帳の「利用中」）。台帳から確かめに開いたとき（&s=1）は記録しない。失敗しても先へ進む */
   if(new URLSearchParams(location.search).get('s')!=='1'){ try{ sb.rpc('vendor_seen',{p_token:token}).then(()=>{},()=>{}); }catch(e){} pushInit().then(()=>{},()=>{}); }
-  const rows=await loadOrders();
-  setMode(ASKS.length||(rows&&rows.some(o=>o.st==='送付済'))?'orders':(rows&&rows.length&&ME.type==='外注'?'orders':'sched'));
+  setMode('home'); loadOrders();
   load();
 }
 document.addEventListener('click',async e=>{
   if(e.target.id==='pushOn'){ pushOn(); return; }
   { const ho=e.target.closest&&e.target.closest('[data-hos]'); if(ho){ const i=ho.dataset.hos==='ios'; document.getElementById('hosIos').hidden=!i; document.getElementById('hosAnd').hidden=i; document.querySelectorAll('[data-hos]').forEach(b=>b.classList.toggle('on',b===ho)); return; } }
   if(e.target.id==='pushOff'){ pushOff(); return; }
-  const mb=e.target.closest('[data-m]'); if(mb){ setMode(mb.dataset.m); return; }
+  const ct=e.target.closest('[data-ctab]'); if(ct){ CTAB=ct.dataset.ctab; setMode('cases'); window.scrollTo(0,0); return; }
+  const mb=e.target.closest('[data-m]'); if(mb){ setMode(mb.dataset.m); window.scrollTo(0,0); return; }
   const an=e.target.closest('[data-ans]'); if(an){ const [pid,ok]=an.dataset.ans.split('|');
     const a=ASKS.find(x=>x.proc_id===pid)||{};
     if(!confirm(ok==='1'?`${a.prop||''}\n${md(a.start_date)} ${a.kind||''}\nを受けます。よろしいですか？`:`${a.prop||''}\n${md(a.start_date)} ${a.kind||''}\nは都合が悪いと返事します。よろしいですか？`))return;
@@ -615,7 +757,7 @@ document.addEventListener('click',async e=>{
     sb.rpc('answer_ask',{p_token:token,p_proc:pid,p_ok:ok==='1'}).then(({data,error})=>{
       if(error||data==='ng'){ alert('送れませんでした。もう取り消されたか、電波が弱い可能性があります。「更新」を押してください。'); }
       else alert(ok==='1'?'受けると返事しました。工程に入りました。':'都合が悪いと返事しました。');
-      loadOrders(); });
+      loadOrders(); load(); });
     return; }
   if(e.target.id==='reload'){ loadOrders(); load(); if(mode==='bill')loadBill(); return; }
   /* 完了報告 */
@@ -643,7 +785,7 @@ document.addEventListener('click',async e=>{
     if(!confirm(mlab(mon)+'締めの請求書を発行しますか？\n承認済みの完了報告がまとまります。発行後は取り消せません（誤りは会社にご連絡ください）。'))return;
     busy=true; ib.disabled=true; const {error}=await sb.rpc('issue_invoice',{p_token:token,p_month:mon}); busy=false;
     if(error)alert('発行できませんでした：'+(/empty/.test(error.message)?'この月に請求できる完了報告がありません':error.message));
-    await loadBill(); if(!error)openDoc(0); return; }
+    await loadBill(); loadAll(); if(!error)openDoc(0); return; }
   const db2=e.target.closest('[data-doc]'); if(db2){ openDoc(+db2.dataset.doc); return; }
   if(e.target.id==='docClose'){ document.getElementById('docm').hidden=true; document.getElementById('docPrint').hidden=false; return; }
   const infb=e.target.closest('[data-info]'); if(infb){ openInfo(infb.dataset.info); return; }
@@ -652,6 +794,7 @@ document.addEventListener('click',async e=>{
     if(error||data!==true)alert('記録できませんでした。会社に確認してください。'); document.getElementById('docm').hidden=true; loadBill(); return; }
   const t=e.target.closest('[data-r]'); if(t){ range=t.dataset.r; document.querySelectorAll('[data-r]').forEach(b=>b.classList.toggle('on',b===t)); load(); return; }
 });
+document.addEventListener('input',e=>{ if(e.target.id==='cq'){ CQ=e.target.value; drawAll(); } });
 document.addEventListener('change',e=>{ if(e.target.id==='pFiles'&&PS){
   const fs=Array.from(e.target.files||[]); e.target.value='';
   const ph=PHASED.indexOf(PS.cat)>=0?PS.phase:'';
