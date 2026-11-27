@@ -374,6 +374,7 @@ table.ln tr.ghead td{background:#F3EFE7;border-top:2px solid var(--line);padding
 table.ln td.pinc{position:sticky;z-index:2;background:var(--card)}table.ln thead th.pinc{z-index:6}
 table.ln tr.cutln td.pinc{background:var(--warn-bg)}table.ln tbody tr.on td.pinc{background:var(--ok-bg)}
 table.ln .pinl{box-shadow:2px 0 0 #8E9AA0}
+table.ln tr.ghead td.pinc{background:#F3EFE7}table.ln .pinbar{position:sticky}
 table.ln.pinned tfoot td.lab{left:0;z-index:4}   /* 合計の見出しも左に残す */
 .pinb{display:inline-block;border:none;background:none;cursor:pointer;padding:0 2px;margin-left:4px;color:#B5BCC0;vertical-align:-2px;line-height:1}.pinb svg{width:13px;height:13px;display:block}.pinb.on{color:var(--acc)}.pinb:hover{color:var(--ink)}
 table.ln td.rn{color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;padding-right:4px}
@@ -1993,12 +1994,12 @@ function orderPanel(c){
   const pinB=n=>`<button type="button" class="pinb${oPin===n?' on':''}" data-opin="${n}" title="${oPin===n?'固定を外す':'この列までを左に固定する（横に動かしても見えたままになる）'}"><svg viewBox="0 0 24 24" fill="${oPin===n?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 6 4 4v2H6v-2l4-4z"/><path d="M12 15v6"/></svg></button>`;
   const pct=(sv,cs)=>sv?Math.round((sv-cs)/sv*1000)/10+'%':'—';
   const H={
-    見積:`<tr class="gh"><th colspan="5"></th><th colspan="4" class="gs">販売（お客様から）</th><th colspan="4" class="gc">原価（業者へ払う見込み）</th><th colspan="2" class="gp">粗利</th><th colspan="2"></th></tr>
+    見積:`<tr class="gh">${oPin&&oPin<5?`<th colspan="${oPin}" class="pinh"></th><th colspan="${5-oPin}"></th>`:`<th colspan="5" class="pinh"></th>`}<th colspan="4" class="gs">販売（お客様から）</th><th colspan="4" class="gc">原価（業者へ払う見込み）</th><th colspan="2" class="gp">粗利</th><th colspan="2"></th></tr>
       <tr><th class="r" style="width:46px">No</th><th style="width:30px"></th><th style="width:100px">場所${pinB(3)}</th><th class="nmcol">名称${pinB(4)}</th><th style="width:116px">工程区分${pinB(5)}</th>
       <th class="r gs" style="width:62px">数量</th><th class="gs" style="width:58px">単位</th><th class="r gs" style="width:88px">単価</th><th class="r gs" style="width:84px">金額</th>
       <th class="r gc" style="width:62px">数量</th><th class="gc" style="width:58px">単位</th><th class="r gc" style="width:108px">単価</th><th class="r gc" style="width:84px">金額</th>
       <th class="r gp" style="width:78px">粗利</th><th class="r gp" style="width:54px">率</th><th style="width:260px">備考</th><th style="width:26px"></th></tr>`,
-    発注:`<tr class="gh"><th colspan="5"></th><th colspan="4" class="gs">販売（お客様から・見るだけ）</th><th colspan="4" class="gc">原価（業者へ。発注書に出る）</th><th colspan="2" class="gp">粗利</th><th colspan="2"></th></tr>
+    発注:`<tr class="gh">${oPin&&oPin<5?`<th colspan="${oPin}" class="pinh"></th><th colspan="${5-oPin}"></th>`:`<th colspan="5" class="pinh"></th>`}<th colspan="4" class="gs">販売（お客様から・見るだけ）</th><th colspan="4" class="gc">原価（業者へ。発注書に出る）</th><th colspan="2" class="gp">粗利</th><th colspan="2"></th></tr>
       <tr><th class="r" style="width:46px">No</th><th style="width:30px"></th><th style="width:100px">場所${pinB(3)}</th><th class="nmcol">名称${pinB(4)}</th><th style="width:116px">工程区分${pinB(5)}</th>
       <th class="r gs" style="width:52px">数量</th><th class="gs" style="width:44px">単位</th><th class="r gs" style="width:80px">単価</th><th class="r gs" style="width:84px">金額</th>
       <th class="r gc" style="width:62px">数量</th><th class="gc" style="width:58px">単位</th><th class="r gc" style="width:108px">単価</th><th class="r gc" style="width:84px">金額</th>
@@ -2383,10 +2384,16 @@ let oPin=(()=>{ try{ const v=+localStorage.getItem('aw-opin'); return [3,4,5].in
 function pinApply(){
   const t=document.querySelector('#main .lnw table.ln'); if(!t)return;
   t.querySelectorAll('.pinc').forEach(c=>{ c.classList.remove('pinc','pinl'); c.style.left=''; }); t.classList.toggle('pinned',!!oPin);
+  t.querySelectorAll('.pinbar').forEach(b=>{ b.classList.remove('pinbar'); b.style.left=''; b.style.width=''; });
   if(!oPin)return;
   const hr=t.querySelector('thead tr:last-child'); if(!hr)return; const x0=t.getBoundingClientRect().left, lefts=[...hr.children].slice(0,oPin).map(th=>Math.round(th.getBoundingClientRect().left-x0));   /* 表の左端からの位置（offsetLeft は基準がずれるので使わない） */
   const mark=cells=>cells.forEach((c,i)=>{ if(i>=oPin)return; c.classList.add('pinc'); if(i===oPin-1)c.classList.add('pinl'); c.style.left=lefts[i]+'px'; });
   mark([...hr.children]); t.querySelectorAll('tbody tr[data-l]').forEach(tr=>mark([...tr.children]));
+  /* 上の見出し（販売・原価・粗利の帯）の左の空きと、区分ごとの見出しの行も、左に残す */
+  const gh=t.querySelector('thead tr.gh th.pinh'); if(gh){ gh.classList.add('pinc','pinl'); gh.style.left='0px'; }
+  const w=t.closest('.lnw'), vw=w?w.clientWidth:0;
+  t.querySelectorAll('tbody tr.ghead').forEach(tr=>{ const cs=[...tr.children]; mark(cs.slice(0,2)); cs.slice(0,2).forEach(c=>c.classList.remove('pinl'));
+    const bar=cs[2]&&cs[2].querySelector('.bar'); if(bar&&vw){ bar.classList.add('pinbar'); bar.style.left=(lefts[2]||0)+'px'; bar.style.width=Math.max(300,vw-(lefts[2]||0)-18)+'px'; } });
 }
 window.addEventListener('resize',()=>{ if(oPin)pinApply(); });
 function setOMode(m){ oMode=m; try{ localStorage.setItem('aw-omode',m); }catch(e){} render(); }

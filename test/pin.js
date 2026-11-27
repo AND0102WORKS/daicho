@@ -17,7 +17,7 @@ const {chromium}=require('playwright');const {spawn}=require('child_process');co
     return {pin:[...tr.children].map(td=>td.classList.contains('pinc')).join(','), nameX:Math.round(tr.children[3].getBoundingClientRect().left-r.left), kindX:Math.round(tr.children[4].getBoundingClientRect().left-r.left),
       headPin:document.querySelectorAll('.lnw thead .pinc').length, on:!!document.querySelector('.lnw [data-opin="4"].on'), scrolled:w.scrollLeft}; });
   let s=await st();
-  ok('名称のピンを押すと、名称までの4列が左に固定され、横に動かしても見えたまま（工程区分は名称の下にもぐる）', s.pin.startsWith('true,true,true,true,false')&&s.scrolled>100&&s.nameX>=0&&s.nameX<260&&s.kindX<s.nameX+200&&s.headPin===4&&s.on, s);
+  ok('名称のピンを押すと、名称までの4列が左に固定され、横に動かしても見えたまま（工程区分は名称の下にもぐる）', s.pin.startsWith('true,true,true,true,false')&&s.scrolled>100&&s.nameX>=0&&s.nameX<260&&s.kindX<s.nameX+200&&s.headPin===5&&s.on, s);
   await p.screenshot({path:__dirname+'/pin1.png'});
   await p.reload(); await p.waitForTimeout(1500); await open(); s=await st();
   ok('開き直しても固定のまま（次に押すまで変わらない）', s.pin.startsWith('true,true,true,true,false')&&s.on, s);
