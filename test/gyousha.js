@@ -55,7 +55,15 @@ const VT='aa11bb22cc33dd44ee55ff66';
   await v.screenshot({path:__dirname+'/gyousha4.png'});
   // ほかのメニュー
   await v.click('.bnav [data-m="sched"]'); await w(); ok('予定：今までの日付順の一覧', (await T('#list')).includes('見本きょう 101'));
-  await v.click('.bnav [data-m="bill"]'); await v.waitForTimeout(900); ok('請求：承認済みの分が出る', (await T('#blist')).includes('見本しょうにん 606'));
+  await v.click('.bnav [data-m="bill"]'); await v.waitForTimeout(900); t=await T('#blist');
+  ok('請求：請求できる金額が大きく出て、ボタン1つで請求書（承認済みだけ。確認待ち・差し戻しは「まだ入っていない」）', t.includes('請求できる金額（1件）')&&t.includes('¥38,500')&&t.includes('この内容で請求書を作る')&&t.includes('見本しょうにん 606')&&t.includes('まだ入っていない')&&t.includes('会社の確認待ち')&&t.includes('差し戻し 1件'), t.slice(0,300));
+  ok('請求：出した請求書に「支払済み」と日付が出る', (await T('#blist .bst.ok')).includes('支払済み'));
+  await v.screenshot({path:__dirname+'/gyousha5.png',fullPage:true});
+  await q("update vendors set pay_m=2, pay_d=10 where id='V1'"); await v.click('#blist [data-issue]'); await v.waitForTimeout(2500);
+  const iv=(await q("select total,st from invoices where who='長沼俊介' and st<>'支払済'"))[0];
+  ok('ボタンを押すと請求書ができ、書面が開く', !!iv&&iv.total===38500&&await v.$eval('#docm',x=>!x.hidden), iv);
+  await v.click('#docClose'); await v.waitForTimeout(400); await v.click('#reload'); await v.waitForTimeout(1500);
+  ok('出した請求書に、会社が決めた支払日（翌々月10日）で「支払予定」が出る', /支払予定 \d+\/10/.test(await T('#blist .bst.wait')), await T('#blist .bst.wait'));
   await v.click('.bnav [data-m="home"]'); await w(); await v.click('[data-m="orders"]'); await w();
   ok('ホームの下から「発注書の一覧」も見られる', (await T('#olist')).includes('AW-H0901'));
   ok('ページのエラーなし', errs.length===0, errs);
